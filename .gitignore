@@ -7,3 +7,7 @@
 
 # Surovy zaznam spiku -- obsahuje session id a ceny, nie je to zdroj pravdy.
 tools/spike_control.log
+
+# Vysledky zostavenia.
+build/
+bin/
