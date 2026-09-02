@@ -59,7 +59,8 @@ PROTO_SRCS := $(PROTO_PURE_SRCS) src/proto/session.cpp
 # testovat bez okna -- co je vacsina toho, preco maju tie testy cenu.
 MODEL_SRCS := src/model/utf.cpp src/model/transcript.cpp src/model/bookmarks.cpp
 
-UI_SRCS := src/ui/session_pane.cpp src/ui/main_window.cpp src/ui/speech.cpp
+UI_SRCS := src/ui/session_pane.cpp src/ui/main_window.cpp src/ui/speech.cpp \
+           src/ui/status_bar.cpp
 
 APP_SRCS := $(WIN_SRCS) $(PROTO_SRCS) $(MODEL_SRCS) $(UI_SRCS) src/main.cpp
 APP_OBJS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(APP_SRCS))

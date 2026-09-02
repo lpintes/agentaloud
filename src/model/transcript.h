@@ -47,6 +47,12 @@ bool IsMechanism(BlockKind kind);
 const wchar_t* KindLabel(BlockKind kind);
 
 struct Block {
+  // Assigned once and never changed.  The index of a block DOES change: a tool
+  // result is inserted next to the call it belongs to, which pushes everything
+  // after it down one.  Anything that has to name a block across time -- a
+  // bookmark, the start of a turn -- names this and not the index.
+  size_t id = 0;
+
   BlockKind kind = BlockKind::AssistantText;
   bool collapsed = false;
   // False when there is nothing behind the summary -- a tool result of one
@@ -83,14 +89,22 @@ class Transcript {
   // put it a round trip away.
   Edit AppendUserPrompt(const std::wstring& text);
 
-  // Zero or more blocks.  An assistant message with thinking, text and a tool
-  // call yields three; system/init yields none.
-  Edit Append(const proto::Event& event);
+  // Zero or more blocks, and therefore zero or more edits: a record carrying
+  // two tool results for two calls made in parallel writes into two different
+  // places, and an Edit is one contiguous range by design -- the view needs
+  // the minimal range to put the caret back.
+  std::vector<Edit> Append(const proto::Event& event);
 
   Edit SetCollapsed(size_t index, bool collapsed);
 
   const std::wstring& Text() const { return text_; }
   const std::vector<Block>& blocks() const { return blocks_; }
+
+  // The id the next block to be created will get.  Everything made from here
+  // on has an id at least this large, which is how "the blocks of this turn"
+  // is expressed without holding indices that move.
+  size_t nextBlockId() const { return nextBlockId_; }
+  std::optional<size_t> IndexOfId(size_t id) const;
 
   // Which block an offset falls in.  Blocks tile the buffer, so this always
   // answers unless the transcript is empty.
@@ -137,11 +151,18 @@ class Transcript {
 
  private:
   Edit AppendBlocks(std::vector<Block> blocks);
+  // `at` is the index to insert before; past the end means append.
+  Edit InsertBlocks(size_t at, std::vector<Block> blocks);
+  // Where a result for this tool_use_id belongs: right behind the call.
+  // Empty when the call is not in the transcript, which happens when a tool
+  // was started before we attached to the session.
+  std::optional<size_t> PlaceForResult(const std::string& toolUseId) const;
   std::wstring Render(const Block& block) const;
   void NoteUnknown(const proto::Event& event);
 
   std::wstring text_;
   std::vector<Block> blocks_;
+  size_t nextBlockId_ = 1;
   size_t unknownCount_ = 0;
   std::vector<std::string> unknownTypes_;
 };

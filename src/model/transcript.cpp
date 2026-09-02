@@ -266,6 +266,7 @@ Edit Transcript::AppendBlocks(std::vector<Block> blocks) {
   if (blocks.empty()) return edit;
 
   for (Block& block : blocks) {
+    block.id = nextBlockId_++;
     const std::wstring rendered = Render(block);
     block.start = text_.size() + edit.inserted.size();
     block.length = rendered.size();
@@ -274,6 +275,52 @@ Edit Transcript::AppendBlocks(std::vector<Block> blocks) {
   }
   text_ += edit.inserted;
   return edit;
+}
+
+Edit Transcript::InsertBlocks(size_t at, std::vector<Block> blocks) {
+  if (blocks.empty()) return Edit{text_.size(), 0, {}};
+  if (at >= blocks_.size()) return AppendBlocks(std::move(blocks));
+
+  Edit edit;
+  edit.start = blocks_[at].start;
+  std::vector<Block> made;
+  size_t offset = edit.start;
+  for (Block& block : blocks) {
+    block.id = nextBlockId_++;
+    const std::wstring rendered = Render(block);
+    block.start = offset;
+    block.length = rendered.size();
+    offset += rendered.size();
+    edit.inserted += rendered;
+    made.push_back(std::move(block));
+  }
+
+  text_.insert(edit.start, edit.inserted);
+  for (size_t i = at; i < blocks_.size(); ++i) {
+    blocks_[i].start += edit.inserted.size();
+  }
+  blocks_.insert(blocks_.begin() + static_cast<ptrdiff_t>(at), made.begin(),
+                 made.end());
+  return edit;
+}
+
+std::optional<size_t> Transcript::PlaceForResult(
+    const std::string& toolUseId) const {
+  if (toolUseId.empty()) return std::nullopt;
+  for (size_t i = blocks_.size(); i-- > 0;) {
+    if (blocks_[i].kind == BlockKind::ToolUse &&
+        blocks_[i].toolUseId == toolUseId) {
+      return i + 1;
+    }
+  }
+  return std::nullopt;
+}
+
+std::optional<size_t> Transcript::IndexOfId(size_t id) const {
+  for (size_t i = 0; i < blocks_.size(); ++i) {
+    if (blocks_[i].id == id) return i;
+  }
+  return std::nullopt;
 }
 
 Edit Transcript::AppendUserPrompt(const std::wstring& text) {
@@ -295,7 +342,7 @@ void Transcript::NoteUnknown(const proto::Event& event) {
   unknownTypes_.push_back(type);
 }
 
-Edit Transcript::Append(const proto::Event& event) {
+std::vector<Edit> Transcript::Append(const proto::Event& event) {
   std::vector<Block> made;
 
   switch (event.kind) {
@@ -367,7 +414,36 @@ Edit Transcript::Append(const proto::Event& event) {
       break;
   }
 
-  return AppendBlocks(std::move(made));
+  // A tool result goes behind the call it answers, not at the end.  Claude
+  // runs tools in parallel, so the results come back in whatever order they
+  // finish, and appended in arrival order the transcript reads as: a call, an
+  // output, another call, a third call, two outputs.  Which output belonged to
+  // which command was then something the reader had to guess -- reported from
+  // use, and the reason this exists.
+  std::vector<Edit> edits;
+  std::vector<Block> atEnd;
+  auto flush = [this, &edits, &atEnd]() {
+    if (atEnd.empty()) return;
+    edits.push_back(AppendBlocks(std::move(atEnd)));
+    atEnd.clear();
+  };
+  for (Block& block : made) {
+    const std::optional<size_t> place =
+        block.kind == BlockKind::ToolResult ? PlaceForResult(block.toolUseId)
+                                            : std::nullopt;
+    if (!place.has_value() || *place >= blocks_.size()) {
+      atEnd.push_back(std::move(block));
+      continue;
+    }
+    // Anything already waiting for the end goes first, so that blocks made
+    // from one record keep the order the record had them in.
+    flush();
+    std::vector<Block> one;
+    one.push_back(std::move(block));
+    edits.push_back(InsertBlocks(*place, std::move(one)));
+  }
+  flush();
+  return edits;
 }
 
 Edit Transcript::SetCollapsed(size_t index, bool collapsed) {

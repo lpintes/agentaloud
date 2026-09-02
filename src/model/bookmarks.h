@@ -6,8 +6,9 @@
 // A mark is NOT an offset.  Offsets move the moment a block above them
 // collapses or expands, and a bookmark that quietly slides three lines is
 // worse than no bookmark at all -- the reader would have no way of telling.
-// A block index does not move: blocks are only ever appended, never removed or
-// reordered.  So a mark is that index plus how far into the block it sat, and
+// Nor is it an index: an index moves too, because a tool result is inserted
+// behind the call it answers rather than at the end.  What does not move is
+// Block::id.  So a mark is that id plus how far into the block it sat, and
 // coming back clamps that distance into the block as it stands now.
 //
 // Slot 0 is not the reader's.  It is where they were standing when something
@@ -25,7 +26,7 @@ namespace model {
 
 struct Mark {
   bool set = false;
-  size_t block = 0;
+  size_t blockId = 0;
   size_t offset = 0;  // characters from the start of that block
 };
 
@@ -47,7 +48,8 @@ Mark MarkAt(const Transcript& transcript, size_t offset);
 
 // And back again, clamped into the block as it now stands.  Empty when the
 // slot was never set or the block is gone -- which cannot happen today, but
-// restoring a session (claude-gui-lkk.7) will make it possible.
+// restoring a session (claude-gui-lkk.7) will make it possible.  The block is
+// looked up by id, so an insertion anywhere above it changes nothing here.
 std::optional<size_t> OffsetOf(const Transcript& transcript, const Mark& mark);
 
 }  // namespace model

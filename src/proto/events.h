@@ -41,6 +41,26 @@ struct Event {
 
 Event Classify(Json record);
 
+// What the CLI says about how close we are to a rate limit.  Field names and
+// the set of allowed values are the wire's; they were read out of the CLI
+// binary, because a rate limit is not something one can produce on demand to
+// watch it go past.  Everything but `status` is optional there, so everything
+// but `status` is optional here.
+struct RateLimit {
+  std::string status;         // allowed | allowed_warning | rejected
+  std::string limitType;      // five_hour | seven_day | seven_day_opus | ...
+  double utilization = -1;    // 0..1, negative when the record did not say
+  long long resetsAt = 0;     // unix seconds, 0 when the record did not say
+  // The same three numbers per window, when the record carries them.  Shown in
+  // preference to the single utilization above: "five hours 42 %, seven days
+  // 13 %" is what a person actually wants to know.
+  double fiveHourUtilization = -1;
+  double sevenDayUtilization = -1;
+};
+
+// False when the record is not a rate_limit_event or carries no usable info.
+bool ParseRateLimit(const Json& record, RateLimit* out);
+
 // For logs and for the "unknown record type" case, where the name is the whole
 // of what we can say about it.
 const char* KindName(EventKind kind);

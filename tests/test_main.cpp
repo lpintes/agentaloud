@@ -275,6 +275,84 @@ void TestErrorNavigationAndFirstLine() {
   CHECK(transcript.FirstLine(1).find(L", rozbalené") != std::wstring::npos);
 }
 
+void TestToolResultsSitBehindTheirCall() {
+  TEST("transcript: vysledok stoji za svojim volanim, nie na konci");
+  model::Transcript transcript;
+  std::string problem;
+  transcript.AppendUserPrompt(L"sprav dve veci naraz");
+
+  // Dve volania v jednej sprave -- tak Claude spusta nastroje paralelne.
+  proto::Json calls = proto::Json::parse(R"({
+    "type": "assistant",
+    "message": {"content": [
+      {"type": "tool_use", "id": "toolu_A", "name": "Bash",
+       "input": {"command": "prve"}},
+      {"type": "tool_use", "id": "toolu_B", "name": "Read",
+       "input": {"file_path": "druhy.txt"}}
+    ]}
+  })");
+  transcript.Append(proto::Classify(calls));
+  CHECK(transcript.CheckInvariants(&problem));
+  CHECK_EQ(transcript.blocks().size(), size_t{3});
+
+  // A vysledky pridu v opacnom poradi, lebo druhy nastroj skoncil skor.
+  proto::Json second = proto::Json::parse(R"({
+    "type": "user",
+    "message": {"content": [
+      {"type": "tool_result", "tool_use_id": "toolu_B",
+       "content": "obsah suboru\nna dvoch riadkoch"}
+    ]}
+  })");
+  const std::vector<model::Edit> edits =
+      transcript.Append(proto::Classify(second));
+  CHECK_EQ(edits.size(), size_t{1});
+  CHECK(transcript.CheckInvariants(&problem));
+
+  // Vlozilo sa DOPROSTRED: uprava nezacina na konci bufferu.
+  CHECK(edits[0].start < transcript.Text().size() - edits[0].inserted.size() +
+                             1);
+  CHECK_EQ(edits[0].removed, size_t{0});
+
+  proto::Json first = proto::Json::parse(R"({
+    "type": "user",
+    "message": {"content": [
+      {"type": "tool_result", "tool_use_id": "toolu_A", "content": "hotovo"}
+    ]}
+  })");
+  transcript.Append(proto::Classify(first));
+  CHECK(transcript.CheckInvariants(&problem));
+
+  // Ziadane poradie: prompt, volanie A, vysledok A, volanie B, vysledok B.
+  const std::vector<model::Block>& blocks = transcript.blocks();
+  CHECK_EQ(blocks.size(), size_t{5});
+  CHECK_EQ(blocks[1].toolUseId, std::string("toolu_A"));
+  CHECK_EQ(blocks[2].toolUseId, std::string("toolu_A"));
+  CHECK(blocks[2].kind == model::BlockKind::ToolResult);
+  CHECK_EQ(blocks[3].toolUseId, std::string("toolu_B"));
+  CHECK_EQ(blocks[4].toolUseId, std::string("toolu_B"));
+  CHECK(blocks[4].kind == model::BlockKind::ToolResult);
+
+  // Id sa pridelili v poradi vzniku, teda NIE v poradi, v akom bloky stoja.
+  // Prave to drzi zalozky a 'bloky tohto tahu' na mieste pri vkladani.
+  CHECK(blocks[4].id < blocks[2].id);
+  CHECK_EQ(transcript.IndexOfId(blocks[2].id).value(), size_t{2});
+  CHECK_EQ(transcript.IndexOfId(blocks[4].id).value(), size_t{4});
+
+  // Vysledok bez zodpovedajuceho volania nema kam patrit a ide na koniec.
+  proto::Json orphan = proto::Json::parse(R"({
+    "type": "user",
+    "message": {"content": [
+      {"type": "tool_result", "tool_use_id": "toolu_NEEXISTUJE",
+       "content": "sirota"}
+    ]}
+  })");
+  transcript.Append(proto::Classify(orphan));
+  CHECK(transcript.CheckInvariants(&problem));
+  CHECK_EQ(transcript.blocks().size(), size_t{6});
+  CHECK_EQ(transcript.blocks()[5].toolUseId,
+           std::string("toolu_NEEXISTUJE"));
+}
+
 void TestBookmarksSurviveCollapsing() {
   TEST("bookmarks: znacka prezije zbalenie bloku nad nou aj pod nou");
   model::Transcript transcript;
@@ -294,7 +372,7 @@ void TestBookmarksSurviveCollapsing() {
                         transcript.FirstLine(2).size() + 1;
   const model::Mark mark = model::MarkAt(transcript, inside);
   CHECK(mark.set);
-  CHECK_EQ(mark.block, size_t{2});
+  CHECK_EQ(mark.blockId, transcript.blocks()[2].id);
   const std::wstring line = transcript.LineAt(inside);
   CHECK_EQ(line, std::wstring(L"riadkoch"));
 
@@ -308,10 +386,11 @@ void TestBookmarksSurviveCollapsing() {
 
   // A ked sa blok pod znackou zbali tak, ze do neho uz nesiaha, znacka ostane
   // v nom -- pristat o blok dalej by bolo horsie nez pristat na zlom riadku.
-  const model::Mark deep = {true, 2, 10000};
+  const model::Mark deep = {true, transcript.blocks()[2].id, 10000};
   const auto clamped = model::OffsetOf(transcript, deep);
   CHECK(clamped.has_value());
-  CHECK_EQ(model::MarkAt(transcript, *clamped).block, size_t{2});
+  CHECK_EQ(model::MarkAt(transcript, *clamped).blockId,
+           transcript.blocks()[2].id);
 
   // Nenastaveny slot nema kam skocit.
   model::Bookmarks bookmarks;
@@ -319,7 +398,60 @@ void TestBookmarksSurviveCollapsing() {
   CHECK(!model::OffsetOf(transcript, bookmarks.Get(5)).has_value());
   bookmarks.Set(5, mark);
   CHECK(bookmarks.Get(5).set);
-  CHECK_EQ(bookmarks.Get(5).block, size_t{2});
+  CHECK_EQ(bookmarks.Get(5).blockId, transcript.blocks()[2].id);
+}
+
+void TestRateLimitParsing() {
+  TEST("events: rate_limit_event");
+  // Tvar NIE JE vymysleny a nie je ani odpozorovany: v korpuse ziadny
+  // rate_limit_event nie je -- limit sa neda vyrobit na poziadanie. Polia su
+  // odpisane zo schemy vo vnutri CLI (grep cez binarku, viz bd memory
+  // 'ked-treba-zistit-ako-sa-claude-cli-sprava'): status je povinny, vsetko
+  // ostatne volitelne. Preto sa tu testuje hlavne to, ze chybajuce pole nic
+  // nerozbije.
+  proto::Json full = proto::Json::parse(R"({
+    "type": "rate_limit_event",
+    "rate_limit_info": {
+      "status": "allowed_warning",
+      "rateLimitType": "five_hour",
+      "utilization": 0.42,
+      "resetsAt": 1700000000,
+      "unifiedWindows": {
+        "five_hour": {"utilization": 0.42, "resetsAt": 1700000000},
+        "seven_day": {"utilization": 0.13, "resetsAt": 1700400000}
+      }
+    }
+  })");
+  proto::RateLimit limit;
+  CHECK(proto::ParseRateLimit(full, &limit));
+  CHECK_EQ(limit.status, std::string("allowed_warning"));
+  CHECK_EQ(limit.limitType, std::string("five_hour"));
+  CHECK_EQ(limit.resetsAt, 1700000000LL);
+  CHECK(limit.fiveHourUtilization > 0.41 && limit.fiveHourUtilization < 0.43);
+  CHECK(limit.sevenDayUtilization > 0.12 && limit.sevenDayUtilization < 0.14);
+
+  // Holy zaznam: len status. Vsetko ostatne musi zostat na 'nepovedali'.
+  proto::Json bare = proto::Json::parse(R"({
+    "type": "rate_limit_event",
+    "rate_limit_info": {"status": "rejected"}
+  })");
+  proto::RateLimit minimal;
+  CHECK(proto::ParseRateLimit(bare, &minimal));
+  CHECK_EQ(minimal.status, std::string("rejected"));
+  CHECK(minimal.utilization < 0);
+  CHECK(minimal.fiveHourUtilization < 0);
+  CHECK_EQ(minimal.resetsAt, 0LL);
+
+  // Iny typ zaznamu a zaznam bez info nie su chyba, len nie su rate limit.
+  proto::RateLimit ignored;
+  CHECK(!proto::ParseRateLimit(proto::Json::parse(R"({"type": "result"})"),
+                               &ignored));
+  CHECK(!proto::ParseRateLimit(
+      proto::Json::parse(R"({"type": "rate_limit_event"})"), &ignored));
+  CHECK(!proto::ParseRateLimit(
+      proto::Json::parse(
+          R"({"type": "rate_limit_event", "rate_limit_info": {}})"),
+      &ignored));
 }
 
 void TestNewlinesAreOneCharacter() {
@@ -601,7 +733,9 @@ int main(int argc, char** argv) {
   TestRangeMap();
   TestBlockAtAndNavigation();
   TestErrorNavigationAndFirstLine();
+  TestToolResultsSitBehindTheirCall();
   TestBookmarksSurviveCollapsing();
+  TestRateLimitParsing();
   TestNewlinesAreOneCharacter();
   TestEmptyBlocksAreDropped();
   TestSpeakerPrefix();

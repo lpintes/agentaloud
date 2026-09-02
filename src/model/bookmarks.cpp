@@ -17,16 +17,16 @@ Mark MarkAt(const Transcript& transcript, size_t offset) {
   const std::optional<size_t> block = transcript.BlockAt(offset);
   if (!block.has_value()) return mark;  // empty transcript: nothing to mark
   mark.set = true;
-  mark.block = *block;
+  mark.blockId = transcript.blocks()[*block].id;
   mark.offset = offset - transcript.blocks()[*block].start;
   return mark;
 }
 
 std::optional<size_t> OffsetOf(const Transcript& transcript, const Mark& mark) {
-  if (!mark.set || mark.block >= transcript.blocks().size()) {
-    return std::nullopt;
-  }
-  const Block& block = transcript.blocks()[mark.block];
+  if (!mark.set) return std::nullopt;
+  const std::optional<size_t> index = transcript.IndexOfId(mark.blockId);
+  if (!index.has_value()) return std::nullopt;
+  const Block& block = transcript.blocks()[*index];
   // The block may have been collapsed since, and then the remembered distance
   // points past its end.  Clamping keeps the mark inside the block it named,
   // which is the part of it that was meant; landing in the next block would be

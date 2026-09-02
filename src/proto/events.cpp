@@ -45,6 +45,49 @@ Event Classify(Json record) {
   return event;
 }
 
+bool ParseRateLimit(const Json& record, RateLimit* out) {
+  if (StringField(record, "type") != "rate_limit_event") return false;
+  auto info = record.find("rate_limit_info");
+  if (info == record.end() || !info->is_object()) return false;
+
+  RateLimit limit;
+  limit.status = StringField(*info, "status");
+  limit.limitType = StringField(*info, "rateLimitType");
+  if (info->contains("utilization") && (*info)["utilization"].is_number()) {
+    limit.utilization = (*info)["utilization"].get<double>();
+  }
+  if (info->contains("resetsAt") && (*info)["resetsAt"].is_number()) {
+    limit.resetsAt = (*info)["resetsAt"].get<long long>();
+  }
+
+  auto windows = info->find("unifiedWindows");
+  if (windows != info->end() && windows->is_object()) {
+    const std::pair<const char*, double*> wanted[] = {
+        {"five_hour", &limit.fiveHourUtilization},
+        {"seven_day", &limit.sevenDayUtilization},
+    };
+    for (const auto& [name, into] : wanted) {
+      auto window = windows->find(name);
+      if (window == windows->end() || !window->is_object()) continue;
+      auto value = window->find("utilization");
+      if (value != window->end() && value->is_number()) {
+        *into = value->get<double>();
+      }
+      // The window's own resetsAt is more precise than the top-level one when
+      // both are there, and the top level may not be there at all.
+      auto resets = window->find("resetsAt");
+      if (limit.resetsAt == 0 && resets != window->end() &&
+          resets->is_number()) {
+        limit.resetsAt = resets->get<long long>();
+      }
+    }
+  }
+
+  if (limit.status.empty()) return false;
+  *out = limit;
+  return true;
+}
+
 const char* KindName(EventKind kind) {
   switch (kind) {
     case EventKind::SystemInit: return "system/init";

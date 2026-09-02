@@ -24,6 +24,7 @@
 #include "model/transcript.h"
 #include "proto/session.h"
 #include "ui/speech.h"
+#include "ui/status_bar.h"
 
 namespace ui {
 
@@ -38,6 +39,10 @@ constexpr UINT kMsgPermission = WM_APP + 2;
 class SessionPane {
  public:
   bool Create(HWND host, HINSTANCE instance);
+  // The bar belongs to the window, not to the pane -- with tabs there will be
+  // several panes and one bar (claude-gui-lkk.7).  May stay null; everything
+  // here works without it, it just has nowhere to put the four facts.
+  void SetStatusBar(StatusBar* bar) { statusBar_ = bar; }
   void Layout(int width, int height);
   bool Start(const proto::Session::Options& options);
 
@@ -81,6 +86,9 @@ class SessionPane {
 
   void Apply(const model::Edit& edit);
   void SetStatus(std::wstring text);
+  // Model, permission mode and the like, out of system/init.
+  void ShowSessionFacts(const proto::Event& event);
+  void ShowRateLimit(const proto::Event& event);
   // Puts the caret at the start of a block and says which line that is.
   void GoToBlock(size_t index);
   // Says something, or beeps when there is no screen reader to say it to.
@@ -100,13 +108,16 @@ class SessionPane {
   HWND prompt_ = nullptr;
   HFONT font_ = nullptr;
 
+  StatusBar* statusBar_ = nullptr;
   model::Transcript model_;
   model::Bookmarks bookmarks_;
   proto::Session session_;
   Speech speech_;
-  // Where this turn's blocks begin, so that when it ends we know which of the
-  // answers is the new one to read out.
-  size_t turnFirstBlock_ = 0;
+  // The id this turn's blocks start from, so that when it ends we know which
+  // of the answers is the new one to read out.  An id and not an index: a tool
+  // result is inserted behind its call, so the turn's blocks are not the tail
+  // of the vector.
+  size_t turnFirstId_ = 0;
   // Where Send() last put the caret.  If it is still there when the next
   // prompt goes out, nobody has moved it and the caret is ours to move; if it
   // has moved, the reader is reading and it is theirs.
@@ -117,7 +128,10 @@ class SessionPane {
   bool drainPosted_ = false;
 
   bool busy_ = false;
-  std::wstring status_ = L"pripravené";
+  std::wstring status_;
+  // The folder name, kept because the bar is rewritten field by field and the
+  // project one has to be put back after anything that clears it.
+  std::wstring project_;
 };
 
 }  // namespace ui

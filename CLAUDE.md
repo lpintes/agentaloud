@@ -146,7 +146,7 @@ soakom, nie čítaním dokumentácie.
 
 ## Invarianty
 
-Tri pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
+Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
 
 1. **Stdin JE control kanál.** Zavrieť ho pred koncom ťahu spôsobí
    `"Tool permission request failed: AbortError: Stream closed"` s
@@ -160,7 +160,14 @@ Tri pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho
    rozbalení bloku, ani pri pripísaní obsahu na koniec. Hýbu sa tri veci a
    všetky tri treba obnoviť: kurzor, výber a prvý viditeľný riadok. Postup je
    v `ui::ApplyEdit` — `EM_EXGETSEL` + `EM_GETFIRSTVISIBLELINE`, zmena
-   s vypnutým `WM_SETREDRAW`, potom `EM_EXSETSEL` + `EM_LINESCROLL` späť.
+   s vypnutým `WM_SETREDRAW`, potom nastavenie späť.
+
+   „Nehýbe sa" znamená **zostane pri tom istom texte**, nie „zostane na tom
+   istom čísle". Úprava môže pristáť aj nad čitateľom — výsledok nástroja sa
+   vkladá za svoje volanie — a vtedy sa každá pozícia musí posunúť o rozdiel
+   (`ui::MoveOffset`). Prvý viditeľný riadok sa preto pamätá ako znakový offset
+   (`EM_LINEINDEX` pred, `EM_EXLINEFROMCHAR` po), nie ako číslo riadku: riadkov
+   nad ním práve pribudlo.
 
    Pravidlo je o texte, ktorý **prichádza**, nie o akciách používateľa.
    Odoslanie promptu kurzor zámerne presunie na koniec prepisu — inak by si
@@ -171,7 +178,13 @@ Tri pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho
    vo widgete. Výstup nástrojov `\r\n` obsahuje — sú to windowsové programy.
    Normalizuje `model::NormalizeNewlines`, ktorým prechádza **každý** text
    vstupujúci do bloku, vrátane promptu z editačného poľa.
-5. **NVDA neohlási posun kurzora, ktorý nespravila sama.** Overené skúšaním.
+5. **Index bloku sa hýbe, `Block::id` nie.** Výsledok nástroja sa vkladá za
+   svoje volanie, nie na koniec — Claude volá nástroje paralelne a v poradí
+   príchodu sa nedá zistiť, ktorý výstup patrí ku ktorému príkazu. Vloženie
+   doprostred posunie indexy všetkých blokov za ním. Čokoľvek, čo pomenúva blok
+   naprieč časom — záložka, začiatok ťahu — preto drží `id`, nie index. Indexy
+   sú platné len v rámci jednej obsluhy.
+6. **NVDA neohlási posun kurzora, ktorý nespravila sama.** Overené skúšaním.
    Každá akcia, ktorej jedinou odozvou mal byť presun kurzora — skok na blok,
    zbalenie, návrat na záložku — musí prehovoriť sama, cez
    `ui::SessionPane::Announce`. Bez toho odpovedá klávesa tichom, čo sa nedá

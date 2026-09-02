@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "ui/session_pane.h"
+#include "ui/status_bar.h"
 #include "win/window.h"
 
 namespace ui {
@@ -20,6 +21,13 @@ class MainWindow : public win::Window {
   LRESULT HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) override;
 
  private:
+  // Status bar along the bottom, pane above it.
+  void Arrange(int width, int height);
+
+ private:
+  // Below the pane and outside it: with tabs there will be several panes and
+  // still one bar.
+  StatusBar status_;
   std::unique_ptr<SessionPane> pane_;
 };
 

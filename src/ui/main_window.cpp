@@ -10,10 +10,12 @@ bool MainWindow::Open(HINSTANCE instance,
   }
   pane_ = std::make_unique<SessionPane>();
   if (!pane_->Create(hwnd_, instance)) return false;
+  if (!status_.Create(hwnd_, instance)) return false;
+  pane_->SetStatusBar(&status_);
 
   RECT client = {};
   GetClientRect(hwnd_, &client);
-  pane_->Layout(client.right, client.bottom);
+  Arrange(client.right, client.bottom);
 
   if (!pane_->Start(options)) return false;
   Show(SW_SHOW);
@@ -21,10 +23,17 @@ bool MainWindow::Open(HINSTANCE instance,
   return true;
 }
 
+void MainWindow::Arrange(int width, int height) {
+  // The bar first: it decides its own height from the font, and what is left
+  // is what the pane may have.
+  const int barHeight = status_.Resize(width);
+  if (pane_) pane_->Layout(width, height - barHeight);
+}
+
 LRESULT MainWindow::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
   switch (message) {
     case WM_SIZE:
-      if (pane_) pane_->Layout(LOWORD(lParam), HIWORD(lParam));
+      Arrange(LOWORD(lParam), HIWORD(lParam));
       return 0;
 
     case WM_SETFOCUS:

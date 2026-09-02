@@ -3,6 +3,8 @@
 #include <commctrl.h>
 #include <richedit.h>
 
+#include <ctime>
+
 #include "model/utf.h"
 
 namespace ui {
@@ -34,17 +36,38 @@ int TextLength(HWND edit) {
                    reinterpret_cast<WPARAM>(&request), 0));
 }
 
+// Where an offset ends up after an edit.  Everything after the replaced range
+// slides by the difference; everything before it stays.  An offset inside the
+// replaced range has nowhere to be, so it goes to the start of it.
+LONG MoveOffset(LONG offset, size_t start, size_t removed, size_t inserted) {
+  const LONG from = static_cast<LONG>(start);
+  const LONG to = static_cast<LONG>(start + removed);
+  if (offset <= from) return offset;
+  if (offset < to) return from;
+  return offset + static_cast<LONG>(inserted) - static_cast<LONG>(removed);
+}
+
 // Replace a range without disturbing the reader.
 //
 // This is invariant 3 from CLAUDE.md and the reason the model hands back a
 // minimal Edit rather than the whole text.  Three things move if left alone
-// and all three are restored here: the caret, the selection, and the first
+// and all three are put back here: the caret, the selection, and the first
 // visible line.  Redrawing is off across the change so none of it is seen.
+//
+// "Put back" is not the same as "restored to the number it had".  An edit that
+// lands ABOVE the reader -- which is what inserting a tool result behind its
+// call does -- pushes their line down, and holding the old offset would leave
+// them staring at different text.  So every position is carried through
+// MoveOffset, and the first visible line is carried as the character it starts
+// at rather than as a line number, since the lines above it have just changed
+// in number.
 void ApplyEdit(HWND edit, size_t start, size_t removed,
                const std::wstring& inserted) {
   CHARRANGE saved = {};
   SendMessageW(edit, EM_EXGETSEL, 0, reinterpret_cast<LPARAM>(&saved));
   const LRESULT firstVisible = SendMessageW(edit, EM_GETFIRSTVISIBLELINE, 0, 0);
+  const LRESULT firstVisibleChar =
+      SendMessageW(edit, EM_LINEINDEX, static_cast<WPARAM>(firstVisible), 0);
 
   SendMessageW(edit, WM_SETREDRAW, FALSE, 0);
   CHARRANGE target = {static_cast<LONG>(start),
@@ -52,12 +75,22 @@ void ApplyEdit(HWND edit, size_t start, size_t removed,
   SendMessageW(edit, EM_EXSETSEL, 0, reinterpret_cast<LPARAM>(&target));
   SendMessageW(edit, EM_REPLACESEL, FALSE,
                reinterpret_cast<LPARAM>(inserted.c_str()));
-  SendMessageW(edit, EM_EXSETSEL, 0, reinterpret_cast<LPARAM>(&saved));
 
-  const LRESULT nowVisible = SendMessageW(edit, EM_GETFIRSTVISIBLELINE, 0, 0);
-  if (nowVisible != firstVisible) {
-    SendMessageW(edit, EM_LINESCROLL, 0,
-                 static_cast<LPARAM>(firstVisible - nowVisible));
+  CHARRANGE moved = {
+      MoveOffset(saved.cpMin, start, removed, inserted.size()),
+      MoveOffset(saved.cpMax, start, removed, inserted.size())};
+  SendMessageW(edit, EM_EXSETSEL, 0, reinterpret_cast<LPARAM>(&moved));
+
+  if (firstVisibleChar >= 0) {
+    const LONG wanted = MoveOffset(static_cast<LONG>(firstVisibleChar), start,
+                                   removed, inserted.size());
+    const LRESULT wantedLine =
+        SendMessageW(edit, EM_EXLINEFROMCHAR, 0, static_cast<LPARAM>(wanted));
+    const LRESULT nowVisible = SendMessageW(edit, EM_GETFIRSTVISIBLELINE, 0, 0);
+    if (nowVisible != wantedLine) {
+      SendMessageW(edit, EM_LINESCROLL, 0,
+                   static_cast<LPARAM>(wantedLine - nowVisible));
+    }
   }
   SendMessageW(edit, WM_SETREDRAW, TRUE, 0);
   InvalidateRect(edit, nullptr, TRUE);
@@ -207,6 +240,12 @@ void SessionPane::Layout(int width, int height) {
 void SessionPane::Apply(const model::Edit& edit) {
   if (edit.empty()) return;
   ApplyEdit(transcript_, edit.start, edit.removed, edit.inserted);
+  // The anchor is an offset like any other, and an edit above it moves it.
+  // Left behind, it would make the next prompt compare the caret against a
+  // stale number, decide the reader had moved it, and stop following.
+  anchor_ = static_cast<size_t>(MoveOffset(static_cast<LONG>(anchor_),
+                                           edit.start, edit.removed,
+                                           edit.inserted.size()));
 
   // The one invariant that cannot be unit tested: that the widget agrees with
   // the map.  If RichEdit ever counts a character differently -- a line break
@@ -219,6 +258,19 @@ void SessionPane::Apply(const model::Edit& edit) {
 }
 
 bool SessionPane::Start(const proto::Session::Options& options) {
+  // The folder name in the bar, the whole path in the title.  The bar is read
+  // out in one breath along with three other fields, and a path of eight
+  // components there buries everything after it; the title is announced when
+  // the window takes focus and nowhere else, which is exactly the right place
+  // for the answer to "which checkout is this".
+  std::wstring path = options.workingDir;
+  while (!path.empty() && (path.back() == L'\\' || path.back() == L'/')) {
+    path.pop_back();
+  }
+  const size_t slash = path.find_last_of(L"\\/");
+  project_ = slash == std::wstring::npos ? path : path.substr(slash + 1);
+  if (statusBar_) statusBar_->Set(StatusBar::kProject, L"projekt " + project_);
+  SetWindowTextW(host_, (L"ClaudeLens — " + path).c_str());
   return session_.Start(
       options,
       [this](const proto::Event& event) {
@@ -258,13 +310,24 @@ void SessionPane::OnDrain() {
   const size_t blocksBefore = model_.blocks().size();
 
   for (const proto::Event& event : events) {
-    Apply(model_.Append(event));
+    for (const model::Edit& edit : model_.Append(event)) Apply(edit);
     if (event.kind == proto::EventKind::Result) {
       busy_ = false;
-      SetStatus(L"hotové");
+      // Empty, not "done".  Done says nothing a reader can use -- what was
+      // done, and when?  The field is there to answer "is it working right
+      // now", and the answer to that, once the turn is over, is nothing.
+      SetStatus(L"");
       SpeakAnswer();
     } else if (event.kind == proto::EventKind::SystemInit) {
-      SetStatus(L"pripravené");
+      // The turn field is NOT touched here.  system/init arrives at the start
+      // of every turn, not once per session -- there are four of them in
+      // tests/fixtures/basic.jsonl, one before each result -- so clearing the
+      // field here wiped out the "pracujem" that Send had just written, and
+      // the bar stayed blank for the whole turn.  Only Send and Result know
+      // whether anything is running.
+      ShowSessionFacts(event);
+    } else if (event.kind == proto::EventKind::RateLimit) {
+      ShowRateLimit(event);
     }
   }
 
@@ -300,11 +363,15 @@ void SessionPane::SpeakAnswer() {
   // Only what this turn produced, and only the answers -- not the thinking,
   // not the tool calls.  Those are mechanism; the reader asked for the answer.
   std::wstring answer;
-  const std::vector<model::Block>& blocks = model_.blocks();
-  for (size_t i = turnFirstBlock_; i < blocks.size(); ++i) {
-    if (blocks[i].kind != model::BlockKind::AssistantText) continue;
+  for (const model::Block& block : model_.blocks()) {
+    // Chosen by id, not by position: a tool result lands behind its call, so
+    // this turn's blocks are no longer a tail of the vector.  Ids are handed
+    // out in the order blocks are made, so this is exactly the set made since
+    // the prompt went out.
+    if (block.id < turnFirstId_) continue;
+    if (block.kind != model::BlockKind::AssistantText) continue;
     if (!answer.empty()) answer += L'\n';
-    answer += blocks[i].body;
+    answer += block.body;
   }
 
   if (!answer.empty() && speech_.available()) {
@@ -449,7 +516,68 @@ void SessionPane::ToggleBlockAtCaret() {
 
 void SessionPane::SetStatus(std::wstring text) {
   status_ = std::move(text);
-  SetWindowTextW(host_, (L"ClaudeLens — " + status_).c_str());
+  // Into the bar and not into the title any more.  The title is announced when
+  // the window takes focus and never again, so a turn that ends while you are
+  // reading would not have been heard there anyway -- and the bar can be asked
+  // at any time with NVDA+End.
+  if (statusBar_) statusBar_->Set(StatusBar::kTurn, status_);
+}
+
+void SessionPane::ShowSessionFacts(const proto::Event& event) {
+  if (!statusBar_) return;
+  const auto text = [&event](const char* name) -> std::wstring {
+    auto found = event.raw.find(name);
+    if (found == event.raw.end() || !found->is_string()) return {};
+    return model::Utf16FromUtf8(found->get<std::string>());
+  };
+
+  // Model and permission mode in one field.  The design said "model and
+  // effort", but system/init carries no effort -- and the permission mode is
+  // the more useful of the two anyway: it decides whether anything will be put
+  // to you at all.
+  // Every field says what it is.  Read out one after another they are four
+  // bare values otherwise, and "claude-opus-5, pokus, 5 h 83 %" is a riddle.
+  std::wstring facts = L"model " + text("model");
+  const std::wstring mode = text("permissionMode");
+  if (!mode.empty() && mode != L"default") facts += L", režim " + mode;
+  statusBar_->Set(StatusBar::kModel, facts);
+}
+
+void SessionPane::ShowRateLimit(const proto::Event& event) {
+  proto::RateLimit limit;
+  if (!statusBar_ || !proto::ParseRateLimit(event.raw, &limit)) return;
+
+  const auto percent = [](double share) {
+    return std::to_wstring(static_cast<int>(share * 100 + 0.5)) + L" %";
+  };
+  std::wstring text;
+  if (limit.fiveHourUtilization >= 0) {
+    text = L"5 h " + percent(limit.fiveHourUtilization);
+  }
+  if (limit.sevenDayUtilization >= 0) {
+    if (!text.empty()) text += L", ";
+    text += L"7 d " + percent(limit.sevenDayUtilization);
+  }
+  if (text.empty() && limit.utilization >= 0) {
+    text = percent(limit.utilization);
+  }
+  if (limit.status == "rejected") {
+    text = text.empty() ? L"limit vyčerpaný" : L"limit vyčerpaný, " + text;
+  } else if (limit.status == "allowed_warning") {
+    text = text.empty() ? L"blízko limitu" : L"blízko limitu, " + text;
+  }
+  if (limit.resetsAt > 0) {
+    const std::time_t when = static_cast<std::time_t>(limit.resetsAt);
+    std::tm local = {};
+    if (localtime_s(&local, &when) == 0) {
+      wchar_t stamp[32] = {};
+      // Day and time, not just time: a seven-day window resets on some other
+      // day, and "resets at 6:00" would be read as this morning.
+      std::wcsftime(stamp, 32, L"%#d.%#m. %H:%M", &local);
+      text += (text.empty() ? L"" : L", ") + std::wstring(L"obnova ") + stamp;
+    }
+  }
+  statusBar_->Set(StatusBar::kLimit, text.empty() ? text : L"limit " + text);
 }
 
 void SessionPane::FocusPrompt() const { SetFocus(prompt_); }
@@ -476,7 +604,7 @@ void SessionPane::Send() {
   const bool following = !HasSelection(transcript_) &&
                          (caret >= model_.Text().size() || caret == anchor_);
 
-  turnFirstBlock_ = model_.blocks().size();
+  turnFirstId_ = model_.nextBlockId();
   Apply(model_.AppendUserPrompt(text));
   if (following) {
     PutCaretAtEnd(transcript_);
