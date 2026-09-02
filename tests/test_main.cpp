@@ -236,7 +236,7 @@ void TestErrorNavigationAndFirstLine() {
   })");
   transcript.Append(proto::Classify(denied));
 
-  // Predikat, ktory pouziva ui::SessionPane::Navigate pre '!'.
+  // Predikat, ktory pouziva ui::SessionPane::Navigate pre 'e' / 'E'.
   const model::Transcript::BlockPredicate trouble =
       [](const model::Block& block) {
         return block.isError ||

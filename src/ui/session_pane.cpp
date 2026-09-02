@@ -146,11 +146,12 @@ bool IsBlank(const std::wstring& text) {
 // to look at what the last tool did does not cost the prompt being typed.  It
 // has to be read as a key and not as a character: Ctrl with a letter arrives
 // in WM_CHAR as a control code, with nothing left to switch on.  The VK codes
-// for these five letters sit where the US layout puts them on the Slovak one
+// for these six letters sit where the US layout puts them on the Slovak one
 // too -- QWERTZ moves only Y and Z.
 bool IsJumpChord(WPARAM key) {
   if (GetKeyState(VK_CONTROL) >= 0 || GetKeyState(VK_SHIFT) >= 0) return false;
-  return key == 'T' || key == 'R' || key == 'P' || key == 'A' || key == 'K';
+  return key == 'T' || key == 'R' || key == 'P' || key == 'A' || key == 'K' ||
+         key == 'E';
 }
 
 // Ctrl+<digit> and Ctrl+Shift+<digit>, read as keys for the same reason -- and
@@ -408,6 +409,11 @@ bool SessionPane::Navigate(wchar_t key) {
     case L'p': ofKind(model::BlockKind::UserPrompt); break;
     case L'a': ofKind(model::BlockKind::AssistantText); break;
     case L'k': ofKind(model::BlockKind::Thinking); break;
+    case L'e':
+    // '!' stays as a silent alias forwards: it is one case in this switch, it
+    // is already in the fingers, and dropping it would gain nothing.  It is
+    // not documented any more, because it cannot go backwards -- there is no
+    // capital '!' -- and on the Slovak layout it is not on Shift+1 at all.
     case L'!':
       // Not a kind: trouble is either a denied tool or a tool result the CLI
       // marked as an error, and the stream has no one type for the two.
