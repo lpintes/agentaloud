@@ -120,6 +120,21 @@ bool IsJumpChord(WPARAM key) {
   return key == 'T' || key == 'R' || key == 'P' || key == 'A' || key == 'K';
 }
 
+// Ctrl+<digit> and Ctrl+Shift+<digit>, read as keys for the same reason -- and
+// with more force here, because the Slovak top row does not produce digits at
+// all without Shift.  VK_0..VK_9 are positional and do.
+//
+// The numeric keypad is deliberately not accepted: NVDA's desktop layout owns
+// it, and a bookmark that works or not depending on the screen reader's layout
+// is worse than one key too few.
+constexpr size_t kNoSlot = static_cast<size_t>(-1);
+
+size_t BookmarkSlot(WPARAM key) {
+  if (GetKeyState(VK_CONTROL) >= 0) return kNoSlot;
+  if (key < '0' || key > '9') return kNoSlot;
+  return static_cast<size_t>(key - '0');
+}
+
 }  // namespace
 
 bool SessionPane::Create(HWND host, HINSTANCE instance) {
@@ -235,6 +250,13 @@ void SessionPane::OnDrain() {
     events.swap(queue_);
     drainPosted_ = false;
   }
+  // Where the reader is standing at the moment this batch arrives.  Taken
+  // before anything is applied, and kept only if the batch really did add
+  // something -- a drain that produced no block is not "new arrived", and
+  // overwriting slot 0 with it would cost the reader the place they wanted.
+  const model::Mark reading = model::MarkAt(model_, CaretOffset(transcript_));
+  const size_t blocksBefore = model_.blocks().size();
+
   for (const proto::Event& event : events) {
     Apply(model_.Append(event));
     if (event.kind == proto::EventKind::Result) {
@@ -245,6 +267,8 @@ void SessionPane::OnDrain() {
       SetStatus(L"pripravené");
     }
   }
+
+  if (model_.blocks().size() != blocksBefore) bookmarks_.Set(0, reading);
 }
 
 LRESULT SessionPane::OnPermission(LPARAM pointer) {
@@ -344,15 +368,52 @@ bool SessionPane::Navigate(wchar_t key) {
   return true;
 }
 
+void SessionPane::SetBookmark(size_t slot) {
+  if (slot >= model::Bookmarks::kSlots) return;
+  if (slot == 0) {
+    Announce(L"nultá záložka sa nenastavuje, píše ju aplikácia");
+    return;
+  }
+  const model::Mark mark = model::MarkAt(model_, CaretOffset(transcript_));
+  if (!mark.set) {
+    Announce(L"prepis je prázdny");
+    return;
+  }
+  bookmarks_.Set(slot, mark);
+  // The slot number and the line, in that order.  The number alone leaves the
+  // reader wondering what they just marked; the line alone leaves them
+  // wondering whether the key arrived.
+  Announce(L"záložka " + std::to_wstring(slot) + L": " +
+           model_.LineAt(CaretOffset(transcript_)));
+}
+
+void SessionPane::GoToBookmark(size_t slot) {
+  const model::Mark& mark = bookmarks_.Get(slot);
+  const std::optional<size_t> offset = model::OffsetOf(model_, mark);
+  if (!offset.has_value()) {
+    // Slot 0 is empty until something arrives while you are reading, which is
+    // the only situation it is for -- so it says something different.
+    Announce(slot == 0 ? L"odvtedy nič nepribudlo"
+                       : L"záložka " + std::to_wstring(slot) + L" je prázdna");
+    return;
+  }
+  GoToOffset(*offset);
+}
+
+void SessionPane::GoToOffset(size_t offset) {
+  PutCaret(transcript_, offset);
+  Announce(model_.LineAt(offset));
+}
+
 void SessionPane::GoToBlock(size_t index) {
   const std::vector<model::Block>& blocks = model_.blocks();
   if (index >= blocks.size()) return;
-  PutCaret(transcript_, blocks[index].start);
-  // anchor_ is deliberately left alone.  It records where Send() put the
-  // caret, and its whole purpose is to tell "nobody has touched this" from
-  // "the reader is reading".  A jump is the reader reading, so from here on
-  // the caret is theirs and the next prompt must not drag it to the end.
-  Announce(model_.FirstLine(index));
+  // anchor_ is deliberately left alone, here and in GoToOffset.  It records
+  // where Send() put the caret, and its whole purpose is to tell "nobody has
+  // touched this" from "the reader is reading".  A jump is the reader reading,
+  // so from here on the caret is theirs and the next prompt must not drag it
+  // to the end.
+  GoToOffset(blocks[index].start);
 }
 
 void SessionPane::Announce(const std::wstring& text) {
@@ -442,6 +503,15 @@ LRESULT CALLBACK SessionPane::PromptProc(HWND window, UINT message,
       pane->Navigate(static_cast<wchar_t>(wParam - 'A' + L'a'));
       return 0;
     }
+    const size_t slot = BookmarkSlot(wParam);
+    if (slot != kNoSlot) {
+      if (GetKeyState(VK_SHIFT) < 0) {
+        pane->SetBookmark(slot);
+      } else {
+        pane->GoToBookmark(slot);
+      }
+      return 0;
+    }
     if (wParam == VK_TAB) {
       // Two controls, so Tab is a toggle.  Done here rather than through
       // IsDialogMessage because win::RunMessageLoop is shared with another
@@ -472,6 +542,19 @@ LRESULT CALLBACK SessionPane::TranscriptProc(HWND window, UINT message,
   if (message == WM_KEYDOWN && IsJumpChord(wParam)) {
     pane->Navigate(static_cast<wchar_t>(wParam - 'A' + L'a'));
     return 0;
+  }
+  // Bookmarks reach the transcript the same way, and for the same reason: the
+  // reader should not have to know which box has the focus.
+  if (message == WM_KEYDOWN) {
+    const size_t slot = BookmarkSlot(wParam);
+    if (slot != kNoSlot) {
+      if (GetKeyState(VK_SHIFT) < 0) {
+        pane->SetBookmark(slot);
+      } else {
+        pane->GoToBookmark(slot);
+      }
+      return 0;
+    }
   }
   // The bare letters, as characters rather than as keys: which key produces
   // "!" is a question about the layout, and on the Slovak one it is not

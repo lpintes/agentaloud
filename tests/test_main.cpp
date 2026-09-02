@@ -26,6 +26,7 @@
 #include <string>
 #include <vector>
 
+#include "model/bookmarks.h"
 #include "model/transcript.h"
 #include "model/utf.h"
 #include "proto/events.h"
@@ -272,6 +273,53 @@ void TestErrorNavigationAndFirstLine() {
   CHECK(transcript.FirstLine(1).find(L", rozbalené") == std::wstring::npos);
   transcript.SetCollapsed(1, false);
   CHECK(transcript.FirstLine(1).find(L", rozbalené") != std::wstring::npos);
+}
+
+void TestBookmarksSurviveCollapsing() {
+  TEST("bookmarks: znacka prezije zbalenie bloku nad nou aj pod nou");
+  model::Transcript transcript;
+  transcript.AppendUserPrompt(L"prompt");
+  proto::Json assistant = proto::Json::parse(R"({
+    "type": "assistant",
+    "message": {"content": [
+      {"type": "thinking", "thinking": "riadok jeden\nriadok dva\nriadok tri"},
+      {"type": "text", "text": "odpoved na dvoch\nriadkoch"}
+    ]}
+  })");
+  transcript.Append(proto::Classify(assistant));
+  CHECK_EQ(transcript.blocks().size(), size_t{3});
+
+  // Kurzor na druhom riadku odpovede, teda vnutri bloku a nie na jeho zaciatku.
+  const size_t inside = transcript.blocks()[2].start +
+                        transcript.FirstLine(2).size() + 1;
+  const model::Mark mark = model::MarkAt(transcript, inside);
+  CHECK(mark.set);
+  CHECK_EQ(mark.block, size_t{2});
+  const std::wstring line = transcript.LineAt(inside);
+  CHECK_EQ(line, std::wstring(L"riadkoch"));
+
+  // Rozbalenie premyslania nad nou posunie offsety o kus -- znacka na to nesmie
+  // reagovat, lebo blok aj miesto v nom su tie iste.
+  CHECK(!transcript.SetCollapsed(1, false).empty());
+  const auto moved = model::OffsetOf(transcript, mark);
+  CHECK(moved.has_value());
+  CHECK(*moved != inside);  // offset sa posunul
+  CHECK_EQ(transcript.LineAt(*moved), line);  // riadok je ten isty
+
+  // A ked sa blok pod znackou zbali tak, ze do neho uz nesiaha, znacka ostane
+  // v nom -- pristat o blok dalej by bolo horsie nez pristat na zlom riadku.
+  const model::Mark deep = {true, 2, 10000};
+  const auto clamped = model::OffsetOf(transcript, deep);
+  CHECK(clamped.has_value());
+  CHECK_EQ(model::MarkAt(transcript, *clamped).block, size_t{2});
+
+  // Nenastaveny slot nema kam skocit.
+  model::Bookmarks bookmarks;
+  CHECK(!bookmarks.Get(5).set);
+  CHECK(!model::OffsetOf(transcript, bookmarks.Get(5)).has_value());
+  bookmarks.Set(5, mark);
+  CHECK(bookmarks.Get(5).set);
+  CHECK_EQ(bookmarks.Get(5).block, size_t{2});
 }
 
 void TestNewlinesAreOneCharacter() {
@@ -553,6 +601,7 @@ int main(int argc, char** argv) {
   TestRangeMap();
   TestBlockAtAndNavigation();
   TestErrorNavigationAndFirstLine();
+  TestBookmarksSurviveCollapsing();
   TestNewlinesAreOneCharacter();
   TestEmptyBlocksAreDropped();
   TestSpeakerPrefix();

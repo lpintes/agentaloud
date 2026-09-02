@@ -111,6 +111,10 @@ class Transcript {
   std::optional<size_t> NextOfKind(size_t offset, BlockKind kind) const;
   std::optional<size_t> PreviousOfKind(size_t offset, BlockKind kind) const;
 
+  // The whole line an offset falls in, without its newline.  What a screen
+  // reader would read out if the reader had arrowed onto that line themselves.
+  std::wstring LineAt(size_t offset) const;
+
   // The first line of a block as it stands on screen -- the heading of a
   // collapsed one, "..., rozbalene" when it is open, the speaker prefix and
   // the opening line of an answer.  It is what a screen reader would read out

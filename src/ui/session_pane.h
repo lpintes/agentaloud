@@ -20,6 +20,7 @@
 #include <string>
 #include <vector>
 
+#include "model/bookmarks.h"
 #include "model/transcript.h"
 #include "proto/session.h"
 #include "ui/speech.h"
@@ -61,6 +62,12 @@ class SessionPane {
   // PromptProc about why one arrives as a character and the other as a key.
   bool Navigate(wchar_t key);
 
+  // Ctrl+Shift+<digit> marks, Ctrl+<digit> comes back.  Digit 0 is not
+  // markable: it is where the reader was standing when new blocks arrived, and
+  // the application writes it.
+  void SetBookmark(size_t slot);
+  void GoToBookmark(size_t slot);
+
   const std::wstring& statusLine() const { return status_; }
   bool busy() const { return busy_; }
 
@@ -80,6 +87,8 @@ class SessionPane {
   // Never silent: a key that answers with nothing is indistinguishable from a
   // key that did not arrive.
   void Announce(const std::wstring& text);
+  // Puts the caret at an offset and says the line it landed on.
+  void GoToOffset(size_t offset);
   // Reads out what this turn answered, or beeps when there was no text answer
   // or no screen reader listening.
   void SpeakAnswer();
@@ -92,6 +101,7 @@ class SessionPane {
   HFONT font_ = nullptr;
 
   model::Transcript model_;
+  model::Bookmarks bookmarks_;
   proto::Session session_;
   Speech speech_;
   // Where this turn's blocks begin, so that when it ends we know which of the

@@ -438,12 +438,21 @@ std::optional<size_t> Transcript::PreviousOfKind(size_t offset,
       offset, [kind](const Block& block) { return block.kind == kind; });
 }
 
+std::wstring Transcript::LineAt(size_t offset) const {
+  if (offset > text_.size()) offset = text_.size();
+  // From offset - 1, not from offset: standing on a newline means standing at
+  // the end of the line it closes, not at the start of the next one.
+  const size_t previous =
+      offset == 0 ? std::wstring::npos : text_.rfind(L'\n', offset - 1);
+  const size_t begin = previous == std::wstring::npos ? 0 : previous + 1;
+  const size_t end = text_.find(L'\n', begin);
+  const size_t stop = end == std::wstring::npos ? text_.size() : end;
+  return text_.substr(begin, stop - begin);
+}
+
 std::wstring Transcript::FirstLine(size_t index) const {
   if (index >= blocks_.size()) return {};
-  const Block& block = blocks_[index];
-  const size_t end = text_.find(L'\n', block.start);
-  const size_t stop = end == std::wstring::npos ? text_.size() : end;
-  return text_.substr(block.start, stop - block.start);
+  return LineAt(blocks_[index].start);
 }
 
 bool Transcript::CheckInvariants(std::string* problem) const {

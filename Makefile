@@ -57,7 +57,7 @@ PROTO_SRCS := $(PROTO_PURE_SRCS) src/proto/session.cpp
 
 # Transkript a jeho mapa rozsahov.  Nevie o windows.h, a prave preto sa da
 # testovat bez okna -- co je vacsina toho, preco maju tie testy cenu.
-MODEL_SRCS := src/model/utf.cpp src/model/transcript.cpp
+MODEL_SRCS := src/model/utf.cpp src/model/transcript.cpp src/model/bookmarks.cpp
 
 UI_SRCS := src/ui/session_pane.cpp src/ui/main_window.cpp src/ui/speech.cpp
 
