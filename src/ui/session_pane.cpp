@@ -318,12 +318,22 @@ void SessionPane::OnDrain() {
       // done, and when?  The field is there to answer "is it working right
       // now", and the answer to that, once the turn is over, is nothing.
       SetStatus(L"");
-      // A turn the reader stopped by hand ends silently.  Reading out the
-      // half of the answer that got through would be doing the one thing Esc
-      // was pressed to prevent, and the beep would announce the end of
-      // something the reader already knows they ended.
+      // A turn the reader stopped by hand does not read its answer out.  Not
+      // because the answer is worthless -- whatever arrived, arrived whole,
+      // since partial messages are not asked for -- but because Esc was
+      // pressed to make it stop, and the A key is there for reading it back.
+      //
+      // Silence is not an option either.  "Prerušujem" answers the key; this
+      // answers the turn, and without it the reader cannot tell a turn that
+      // stopped from one that never got the request.  It arrived on its own,
+      // so it queues rather than cutting in -- invariant 7.
       if (interrupted_) {
         interrupted_ = false;
+        if (speech_.available()) {
+          speech_.Say(L"prerušené", false);
+        } else {
+          MessageBeep(MB_OK);
+        }
       } else {
         SpeakAnswer();
       }
