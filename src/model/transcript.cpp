@@ -188,10 +188,14 @@ Block MakeToolResult(const proto::Json& blockJson) {
   const std::wstring label = block.isError ? L"chyba" : L"výstup";
   const size_t lines = CountLines(block.body);
   if (lines <= 1 && block.body.size() <= kInlineResultLimit) {
-    // A one-line result is shorter than the summary describing it, so it is
-    // the summary.
+    // A one-line result is shorter than the sentence describing it, so it is
+    // shown whole and there is nothing to expand.  Marking it uncollapsible
+    // rather than merely expanded matters: otherwise pressing the toggle key
+    // on it would rewrite the line into a header and a copy of itself.
     block.summary = label + (block.body.empty() ? L" (prázdny)"
                                                 : L": " + block.body);
+    block.collapsible = false;
+    block.collapsed = false;
   } else {
     block.summary = label + L" (" + Count(lines) + L")";
   }
@@ -227,7 +231,17 @@ const wchar_t* KindLabel(BlockKind kind) {
 }
 
 std::wstring Transcript::Render(const Block& block) const {
-  return (block.collapsed ? block.summary : block.body) + L'\n';
+  if (block.collapsed) return block.summary + L'\n';
+  // An expanded mechanism block keeps its heading.  Without it there is no
+  // way to tell, reading line by line, where a tool's output starts, where it
+  // ends, or whether what you are in is expanded at all -- the collapsed form
+  // describes itself and the expanded form used to be bare text.  Content
+  // blocks get no heading: a prompt and an answer are what the reader came
+  // for and a label above every one of them is a line of noise per turn.
+  if (IsMechanism(block.kind) && block.collapsible) {
+    return block.summary + L", rozbalené\n" + block.body + L'\n';
+  }
+  return block.body + L'\n';
 }
 
 Edit Transcript::AppendBlocks(std::vector<Block> blocks) {
@@ -344,7 +358,7 @@ Edit Transcript::SetCollapsed(size_t index, bool collapsed) {
   Edit edit;
   if (index >= blocks_.size()) return edit;
   Block& block = blocks_[index];
-  if (block.collapsed == collapsed) return edit;
+  if (!block.collapsible || block.collapsed == collapsed) return edit;
 
   block.collapsed = collapsed;
   const std::wstring rendered = Render(block);

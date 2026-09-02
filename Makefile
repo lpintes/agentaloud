@@ -59,7 +59,7 @@ PROTO_SRCS := $(PROTO_PURE_SRCS) src/proto/session.cpp
 # testovat bez okna -- co je vacsina toho, preco maju tie testy cenu.
 MODEL_SRCS := src/model/utf.cpp src/model/transcript.cpp
 
-UI_SRCS := src/ui/session_pane.cpp src/ui/main_window.cpp
+UI_SRCS := src/ui/session_pane.cpp src/ui/main_window.cpp src/ui/speech.cpp
 
 APP_SRCS := $(WIN_SRCS) $(PROTO_SRCS) $(MODEL_SRCS) $(UI_SRCS) src/main.cpp
 APP_OBJS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(APP_SRCS))
@@ -73,7 +73,13 @@ TEST_OBJS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(TEST_SRCS)) \
 
 .PHONY: all app spike test check clean
 all: app spike test
-app: $(BIN)/claudelens.exe
+# Aplikacia potrebuje DLL vedla seba, nie na PATH: LoadLibrary ho hlada najprv
+# v adresari .exe.  Kopiruje sa, nelinkuje -- je pod LGPL, kym ClaudeLens je
+# pod MIT, a nacitanie za behu tie dve licencie drzi oddelene.
+app: $(BIN)/claudelens.exe $(BIN)/nvdaControllerClient.dll
+
+$(BIN)/nvdaControllerClient.dll: vendor/nvda/nvdaControllerClient.dll | $(BIN)
+	cp $< $@
 spike: $(BIN)/spike_console.exe
 test: $(BIN)/tests.exe
 
@@ -106,4 +112,7 @@ $(BIN):
 clean:
 	rm -rf $(BUILD) $(BIN)
 
--include $(SPIKE_OBJS:.o=.d)
+# VSETKY objekty, nielen spike.  Kym tu bol len $(SPIKE_OBJS), zmena hlavicky
+# neprelozila nic z app/ ani z testov a pouzil sa zastaraly objekt -- presne
+# to, comu ma -MMD predchadzat.
+-include $(sort $(APP_OBJS:.o=.d) $(SPIKE_OBJS:.o=.d) $(TEST_OBJS:.o=.d))

@@ -48,6 +48,10 @@ const wchar_t* KindLabel(BlockKind kind);
 struct Block {
   BlockKind kind = BlockKind::AssistantText;
   bool collapsed = false;
+  // False when there is nothing behind the summary -- a tool result of one
+  // short line is already shown whole, and offering to expand it would be
+  // offering nothing.  SetCollapsed does nothing to such a block.
+  bool collapsible = true;
   std::wstring summary;  // the single line shown when collapsed, no newline
   std::wstring body;     // the whole thing, may be many lines, no newline
   std::string toolUseId; // ties ToolUse to its ToolResult; empty otherwise

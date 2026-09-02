@@ -22,6 +22,7 @@
 
 #include "model/transcript.h"
 #include "proto/session.h"
+#include "ui/speech.h"
 
 namespace ui {
 
@@ -67,6 +68,9 @@ class SessionPane {
 
   void Apply(const model::Edit& edit);
   void SetStatus(std::wstring text);
+  // Reads out what this turn answered, or beeps when there was no text answer
+  // or no screen reader listening.
+  void SpeakAnswer();
 
   HWND host_ = nullptr;
   HWND transcriptLabel_ = nullptr;
@@ -77,6 +81,10 @@ class SessionPane {
 
   model::Transcript model_;
   proto::Session session_;
+  Speech speech_;
+  // Where this turn's blocks begin, so that when it ends we know which of the
+  // answers is the new one to read out.
+  size_t turnFirstBlock_ = 0;
 
   std::mutex queueMutex_;
   std::vector<proto::Event> queue_;

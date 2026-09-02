@@ -146,6 +146,8 @@ bool SessionPane::Create(HWND host, HINSTANCE instance) {
   // silent truncation of a transcript is the worst failure this can have.
   SendMessageW(transcript_, EM_EXLIMITTEXT, 0, 0x7FFFFFFF);
 
+  speech_.Open();
+
   SetWindowSubclass(prompt_, PromptProc, kIdPrompt,
                     reinterpret_cast<DWORD_PTR>(this));
   SetWindowSubclass(transcript_, TranscriptProc, kIdTranscript,
@@ -219,12 +221,7 @@ void SessionPane::OnDrain() {
     if (event.kind == proto::EventKind::Result) {
       busy_ = false;
       SetStatus(L"hotové");
-      // Docasne, kym krok 5 neprinesie rec (claude-gui-lkk.5).  Titulok okna
-      // ziadna citacka sama necita, takze bez tohto niet ako zistit, ze tah
-      // skoncil, inak nez sa chodit pozerat.  MessageBeep, nie vlastny ton:
-      // ide cez systemove zvuky, takze sa da stisit tam, kde uzivatel stisuje
-      // vsetko ostatne.
-      MessageBeep(MB_OK);
+      SpeakAnswer();
     } else if (event.kind == proto::EventKind::SystemInit) {
       SetStatus(L"pripravené");
     }
@@ -256,20 +253,58 @@ LRESULT SessionPane::OnPermission(LPARAM pointer) {
   return 0;
 }
 
+void SessionPane::SpeakAnswer() {
+  // Only what this turn produced, and only the answers -- not the thinking,
+  // not the tool calls.  Those are mechanism; the reader asked for the answer.
+  std::wstring answer;
+  const std::vector<model::Block>& blocks = model_.blocks();
+  for (size_t i = turnFirstBlock_; i < blocks.size(); ++i) {
+    if (blocks[i].kind != model::BlockKind::AssistantText) continue;
+    if (!answer.empty()) answer += L'\n';
+    answer += blocks[i].body;
+  }
+
+  if (!answer.empty() && speech_.available()) {
+    // No interrupt: this arrived on its own and must not cut across whatever
+    // the reader was having read to them.
+    speech_.Say(answer, false);
+    return;
+  }
+  // Either there was no text answer -- a turn can end on a tool alone -- or
+  // there is no screen reader listening.  A sound is then the only way to
+  // know the turn is over without going to look.  MessageBeep rather than a
+  // tone of our own: it goes through the system sounds, so it can be silenced
+  // where everything else is.
+  MessageBeep(MB_OK);
+}
+
 void SessionPane::ToggleBlockAtCaret() {
   const std::optional<size_t> index = model_.BlockAt(CaretOffset(transcript_));
   if (!index.has_value()) return;
 
-  const bool collapsed = model_.blocks()[*index].collapsed;
+  const model::Block& before = model_.blocks()[*index];
+  if (!before.collapsible) {
+    // Nothing behind the summary.  Say the line rather than saying nothing,
+    // so a press is never answered with silence.
+    speech_.Say(before.summary, true);
+    return;
+  }
+
+  const bool collapsed = before.collapsed;
   Apply(model_.SetCollapsed(*index, !collapsed));
 
   // To the start of the block, always.  Collapsing can leave the caret past
   // the block's new end, and even when it does not, the line the reader wants
-  // after pressing this is the one they acted on.  The move is also the only
-  // feedback there is until step 5 brings speech: a screen reader announces
-  // the line the caret lands on, so it says either the summary or the first
-  // line of what just appeared.
-  PutCaret(transcript_, model_.blocks()[*index].start);
+  // after pressing this is the one they acted on.
+  const model::Block& after = model_.blocks()[*index];
+  PutCaret(transcript_, after.start);
+
+  // NVDA does not announce a caret it did not move itself -- confirmed by
+  // trying it -- so moving the caret is no feedback at all.  Without this the
+  // key answers with silence.  Interrupting is right here: the reader pressed
+  // something and wants the answer to that press.
+  speech_.Say(after.collapsed ? after.summary : after.summary + L", rozbalené",
+              true);
 }
 
 void SessionPane::SetStatus(std::wstring text) {
@@ -284,6 +319,7 @@ void SessionPane::Send() {
   const std::wstring text = GetText(prompt_);
   if (IsBlank(text)) return;
 
+  turnFirstBlock_ = model_.blocks().size();
   Apply(model_.AppendUserPrompt(text));
   // Past the prompt that was just added, so the answer arrives directly under
   // the caret.
