@@ -205,6 +205,13 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    odlíšiť od klávesy, ktorá nedošla. Hovorí sa riadok, na ktorom kurzor
    skutočne stojí (`model::Transcript::FirstLine`), nie zhrnutie bloku — inak
    by sa ohlásilo niečo iné, než čo si čitateľ prečíta ďalej.
+
+   Akcia, ktorá sa nedokončí hneď, sa musí ohlásiť **dvakrát**: raz, že sa
+   začala, a raz, že skončila. Esc povie „prerušujem" (odozva na klávesu,
+   prerušuje) a koniec ťahu povie „prerušené" (odozva na ťah, ide do fronty).
+   Kým tam druhá hláška nebola, prerušenie, ktoré prešlo, znelo rovnako ako
+   prerušenie, ktoré neprešlo — ticho. Stavový riadok to nezachráni, ten NVDA
+   sám nečíta.
 7. **Reč, ktorá prišla sama, sa neprerušuje.** `interrupt=true` v `Speech::Say`
    patrí výlučne odozve na klávesu (`ui::SessionPane::Announce`); čokoľvek, čo
    prišlo zo streamu, ide do fronty a čaká. Dôvod nie je zdvorilosť:
