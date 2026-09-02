@@ -109,6 +109,17 @@ bool IsBlank(const std::wstring& text) {
   return true;
 }
 
+// Ctrl+Shift+<letter> reaches the same jump from the prompt box, so that going
+// to look at what the last tool did does not cost the prompt being typed.  It
+// has to be read as a key and not as a character: Ctrl with a letter arrives
+// in WM_CHAR as a control code, with nothing left to switch on.  The VK codes
+// for these five letters sit where the US layout puts them on the Slovak one
+// too -- QWERTZ moves only Y and Z.
+bool IsJumpChord(WPARAM key) {
+  if (GetKeyState(VK_CONTROL) >= 0 || GetKeyState(VK_SHIFT) >= 0) return false;
+  return key == 'T' || key == 'R' || key == 'P' || key == 'A' || key == 'K';
+}
+
 }  // namespace
 
 bool SessionPane::Create(HWND host, HINSTANCE instance) {
@@ -286,33 +297,93 @@ void SessionPane::SpeakAnswer() {
   MessageBeep(MB_OK);
 }
 
+bool SessionPane::Navigate(wchar_t key) {
+  // A capital letter means backwards.  Reading the case rather than asking for
+  // the shift state is what makes this work on any layout: by the time a
+  // character arrives, the system has already applied the keyboard.
+  const bool backwards = key >= L'A' && key <= L'Z';
+  const wchar_t lower =
+      backwards ? static_cast<wchar_t>(key - L'A' + L'a') : key;
+
+  model::Transcript::BlockPredicate match;
+  std::wstring what;
+  auto ofKind = [&match, &what](model::BlockKind kind) {
+    match = [kind](const model::Block& block) { return block.kind == kind; };
+    what = model::KindLabel(kind);
+  };
+  switch (lower) {
+    case L't': ofKind(model::BlockKind::ToolUse); break;
+    case L'r': ofKind(model::BlockKind::ToolResult); break;
+    case L'p': ofKind(model::BlockKind::UserPrompt); break;
+    case L'a': ofKind(model::BlockKind::AssistantText); break;
+    case L'k': ofKind(model::BlockKind::Thinking); break;
+    case L'!':
+      // Not a kind: trouble is either a denied tool or a tool result the CLI
+      // marked as an error, and the stream has no one type for the two.
+      match = [](const model::Block& block) {
+        return block.isError ||
+               block.kind == model::BlockKind::PermissionDenied;
+      };
+      what = L"chyba";
+      break;
+    default:
+      return false;
+  }
+
+  const size_t caret = CaretOffset(transcript_);
+  const std::optional<size_t> found = backwards
+                                          ? model_.PreviousWhere(caret, match)
+                                          : model_.NextWhere(caret, match);
+  if (!found.has_value()) {
+    Announce((backwards ? L"žiadny predchádzajúci výskyt: "
+                        : L"žiadny ďalší výskyt: ") +
+             what);
+    return true;
+  }
+  GoToBlock(*found);
+  return true;
+}
+
+void SessionPane::GoToBlock(size_t index) {
+  const std::vector<model::Block>& blocks = model_.blocks();
+  if (index >= blocks.size()) return;
+  PutCaret(transcript_, blocks[index].start);
+  // anchor_ is deliberately left alone.  It records where Send() put the
+  // caret, and its whole purpose is to tell "nobody has touched this" from
+  // "the reader is reading".  A jump is the reader reading, so from here on
+  // the caret is theirs and the next prompt must not drag it to the end.
+  Announce(model_.FirstLine(index));
+}
+
+void SessionPane::Announce(const std::wstring& text) {
+  // Interrupting is right here: the reader pressed a key and wants the answer
+  // to that press, not the tail of the previous one.
+  if (speech_.available()) {
+    speech_.Say(text, true);
+    return;
+  }
+  MessageBeep(MB_OK);
+}
+
 void SessionPane::ToggleBlockAtCaret() {
   const std::optional<size_t> index = model_.BlockAt(CaretOffset(transcript_));
   if (!index.has_value()) return;
 
-  const model::Block& before = model_.blocks()[*index];
-  if (!before.collapsible) {
+  if (!model_.blocks()[*index].collapsible) {
     // Nothing behind the summary.  Say the line rather than saying nothing,
     // so a press is never answered with silence.
-    speech_.Say(before.summary, true);
+    Announce(model_.FirstLine(*index));
     return;
   }
 
-  const bool collapsed = before.collapsed;
-  Apply(model_.SetCollapsed(*index, !collapsed));
+  Apply(model_.SetCollapsed(*index, !model_.blocks()[*index].collapsed));
 
   // To the start of the block, always.  Collapsing can leave the caret past
   // the block's new end, and even when it does not, the line the reader wants
-  // after pressing this is the one they acted on.
-  const model::Block& after = model_.blocks()[*index];
-  PutCaret(transcript_, after.start);
-
-  // NVDA does not announce a caret it did not move itself -- confirmed by
-  // trying it -- so moving the caret is no feedback at all.  Without this the
-  // key answers with silence.  Interrupting is right here: the reader pressed
-  // something and wants the answer to that press.
-  speech_.Say(after.collapsed ? after.summary : after.summary + L", rozbalené",
-              true);
+  // after pressing this is the one they acted on.  GoToBlock says which line
+  // that now is -- NVDA does not announce a caret it did not move itself,
+  // confirmed by trying it, so without that the key answers with silence.
+  GoToBlock(*index);
 }
 
 void SessionPane::SetStatus(std::wstring text) {
@@ -367,6 +438,10 @@ LRESULT CALLBACK SessionPane::PromptProc(HWND window, UINT message,
       pane->Send();
       return 0;
     }
+    if (IsJumpChord(wParam)) {
+      pane->Navigate(static_cast<wchar_t>(wParam - 'A' + L'a'));
+      return 0;
+    }
     if (wParam == VK_TAB) {
       // Two controls, so Tab is a toggle.  Done here rather than through
       // IsDialogMessage because win::RunMessageLoop is shared with another
@@ -390,6 +465,21 @@ LRESULT CALLBACK SessionPane::TranscriptProc(HWND window, UINT message,
   }
   if (message == WM_KEYDOWN && wParam == VK_RETURN) {
     pane->ToggleBlockAtCaret();
+    return 0;
+  }
+  // The chord works here too.  Which of the two boxes the focus is in is not
+  // something a reader should have to remember before pressing a key.
+  if (message == WM_KEYDOWN && IsJumpChord(wParam)) {
+    pane->Navigate(static_cast<wchar_t>(wParam - 'A' + L'a'));
+    return 0;
+  }
+  // The bare letters, as characters rather than as keys: which key produces
+  // "!" is a question about the layout, and on the Slovak one it is not
+  // Shift+1.  Swallowed whether they navigated or not -- this box is
+  // read-only, so a character that falls through is answered with a beep and
+  // nothing else, which reads as "that key is broken".
+  if (message == WM_CHAR && wParam >= L' ') {
+    pane->Navigate(static_cast<wchar_t>(wParam));
     return 0;
   }
   if (message == WM_DESTROY) RemoveWindowSubclass(window, TranscriptProc, id);

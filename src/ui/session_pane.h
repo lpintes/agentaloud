@@ -55,6 +55,12 @@ class SessionPane {
   // unreachable on screen -- a hole, not a missing convenience.
   void ToggleBlockAtCaret();
 
+  // One of t/r/p/a/k/! (capital letter meaning backwards).  Returns false when
+  // the character is none of them, so the caller can pass the key on.  Public
+  // because both the transcript and the prompt reach it -- see the note on
+  // PromptProc about why one arrives as a character and the other as a key.
+  bool Navigate(wchar_t key);
+
   const std::wstring& statusLine() const { return status_; }
   bool busy() const { return busy_; }
 
@@ -68,6 +74,12 @@ class SessionPane {
 
   void Apply(const model::Edit& edit);
   void SetStatus(std::wstring text);
+  // Puts the caret at the start of a block and says which line that is.
+  void GoToBlock(size_t index);
+  // Says something, or beeps when there is no screen reader to say it to.
+  // Never silent: a key that answers with nothing is indistinguishable from a
+  // key that did not arrive.
+  void Announce(const std::wstring& text);
   // Reads out what this turn answered, or beeps when there was no text answer
   // or no screen reader listening.
   void SpeakAnswer();

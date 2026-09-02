@@ -216,6 +216,64 @@ void TestBlockAtAndNavigation() {
              .has_value());
 }
 
+void TestErrorNavigationAndFirstLine() {
+  TEST("transcript: klavesa ! a riadok, na ktorom kurzor pristane");
+  model::Transcript transcript;
+  transcript.AppendUserPrompt(L"prompt");
+  // Vysledok nastroja s is_error: chyba, ktora nie je vlastnym druhom bloku.
+  proto::Json failed = proto::Json::parse(R"({
+    "type": "user",
+    "message": {"content": [
+      {"type": "tool_result", "tool_use_id": "toolu_1", "is_error": true,
+       "content": "prvy riadok\ndruhy riadok\ntreti riadok"}
+    ]}
+  })");
+  transcript.Append(proto::Classify(failed));
+  proto::Json denied = proto::Json::parse(R"({
+    "type": "system", "subtype": "permission_denied",
+    "tool_name": "Bash", "tool_input": {"command": "rm -rf /"}
+  })");
+  transcript.Append(proto::Classify(denied));
+
+  // Predikat, ktory pouziva ui::SessionPane::Navigate pre '!'.
+  const model::Transcript::BlockPredicate trouble =
+      [](const model::Block& block) {
+        return block.isError ||
+               block.kind == model::BlockKind::PermissionDenied;
+      };
+  CHECK_EQ(transcript.blocks().size(), size_t{3});
+  const auto firstTrouble = transcript.NextWhere(0, trouble);
+  CHECK(firstTrouble.has_value());
+  CHECK_EQ(*firstTrouble, size_t{1});  // chybny vysledok, nie zamietnutie
+  // Zamietnutie je druha chyba, hoci nema is_error -- prave preto je to
+  // predikat a nie druh bloku.
+  const auto secondTrouble =
+      transcript.NextWhere(transcript.blocks()[1].start, trouble);
+  CHECK(secondTrouble.has_value());
+  CHECK_EQ(*secondTrouble, size_t{2});
+  const auto lastTrouble =
+      transcript.PreviousWhere(transcript.Text().size() - 1, trouble);
+  CHECK(lastTrouble.has_value());
+  CHECK_EQ(*lastTrouble, size_t{1});
+
+  // FirstLine je presne to, co je v bufferi po zaciatok prveho zlomu -- to,
+  // co by citatel pocul, keby na ten riadok prisiel sipkou sam.
+  for (size_t i = 0; i < transcript.blocks().size(); ++i) {
+    const std::wstring line = transcript.FirstLine(i);
+    CHECK(line.find(L'\n') == std::wstring::npos);
+    CHECK_EQ(transcript.Text().substr(transcript.blocks()[i].start,
+                                      line.size()),
+             line);
+  }
+  CHECK_EQ(transcript.FirstLine(0), std::wstring(L"you: prompt"));
+
+  // Rozbalenim sa riadok zmeni, a FirstLine to musi ukazat -- inak by skok
+  // ohlasil zbaleny tvar bloku, ktory je otvoreny.
+  CHECK(transcript.FirstLine(1).find(L", rozbalené") == std::wstring::npos);
+  transcript.SetCollapsed(1, false);
+  CHECK(transcript.FirstLine(1).find(L", rozbalené") != std::wstring::npos);
+}
+
 void TestNewlinesAreOneCharacter() {
   TEST("transcript: kazdy zlom riadku je prave jeden znak");
   // RichEdit pocita odstavcovy zlom ako jeden znak.  Keby text s "\r\n"
@@ -494,6 +552,7 @@ int main(int argc, char** argv) {
   TestUtfRoundTrip();
   TestRangeMap();
   TestBlockAtAndNavigation();
+  TestErrorNavigationAndFirstLine();
   TestNewlinesAreOneCharacter();
   TestEmptyBlocksAreDropped();
   TestSpeakerPrefix();

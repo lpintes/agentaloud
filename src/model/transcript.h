@@ -21,6 +21,7 @@
 // below, which navigation and bookmarks need anyway, so it is paid for once.
 
 #include <cstddef>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -95,10 +96,27 @@ class Transcript {
   // answers unless the transcript is empty.
   std::optional<size_t> BlockAt(size_t offset) const;
 
-  // Navigation for the single-letter keys.  Both take a caret offset and
+  // Navigation for the single-letter keys.  All four take a caret offset and
   // return a block index, skipping the block the caret is already in.
+  //
+  // The predicate pair exists because one of the keys does not select a kind:
+  // "!" looks for trouble, and trouble is either a PermissionDenied block or a
+  // tool result with is_error set.  Rather than invent a kind that the stream
+  // does not have, the caller says what it is looking for.
+  using BlockPredicate = std::function<bool(const Block&)>;
+  std::optional<size_t> NextWhere(size_t offset,
+                                  const BlockPredicate& match) const;
+  std::optional<size_t> PreviousWhere(size_t offset,
+                                      const BlockPredicate& match) const;
   std::optional<size_t> NextOfKind(size_t offset, BlockKind kind) const;
   std::optional<size_t> PreviousOfKind(size_t offset, BlockKind kind) const;
+
+  // The first line of a block as it stands on screen -- the heading of a
+  // collapsed one, "..., rozbalene" when it is open, the speaker prefix and
+  // the opening line of an answer.  It is what a screen reader would read out
+  // if the reader had arrowed onto that line themselves, and since NVDA says
+  // nothing about a caret it did not move, every jump has to say it instead.
+  std::wstring FirstLine(size_t index) const;
 
   // Records we did not recognise.  Not an error and not shown: Claude Code
   // gains record types between releases, and an application that stopped at

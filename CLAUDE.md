@@ -171,6 +171,13 @@ Tri pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho
    vo widgete. Výstup nástrojov `\r\n` obsahuje — sú to windowsové programy.
    Normalizuje `model::NormalizeNewlines`, ktorým prechádza **každý** text
    vstupujúci do bloku, vrátane promptu z editačného poľa.
+5. **NVDA neohlási posun kurzora, ktorý nespravila sama.** Overené skúšaním.
+   Každá akcia, ktorej jedinou odozvou mal byť presun kurzora — skok na blok,
+   zbalenie, návrat na záložku — musí prehovoriť sama, cez
+   `ui::SessionPane::Announce`. Bez toho odpovedá klávesa tichom, čo sa nedá
+   odlíšiť od klávesy, ktorá nedošla. Hovorí sa riadok, na ktorom kurzor
+   skutočne stojí (`model::Transcript::FirstLine`), nie zhrnutie bloku — inak
+   by sa ohlásilo niečo iné, než čo si čitateľ prečíta ďalej.
 
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa

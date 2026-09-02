@@ -406,24 +406,44 @@ std::optional<size_t> Transcript::BlockAt(size_t offset) const {
   return blocks_.size() - 1;
 }
 
-std::optional<size_t> Transcript::NextOfKind(size_t offset,
-                                             BlockKind kind) const {
+std::optional<size_t> Transcript::NextWhere(
+    size_t offset, const BlockPredicate& match) const {
   const std::optional<size_t> here = BlockAt(offset);
   const size_t from = here.has_value() ? *here + 1 : 0;
   for (size_t i = from; i < blocks_.size(); ++i) {
-    if (blocks_[i].kind == kind) return i;
+    if (match(blocks_[i])) return i;
   }
   return std::nullopt;
 }
 
-std::optional<size_t> Transcript::PreviousOfKind(size_t offset,
-                                                 BlockKind kind) const {
+std::optional<size_t> Transcript::PreviousWhere(
+    size_t offset, const BlockPredicate& match) const {
   const std::optional<size_t> here = BlockAt(offset);
   if (!here.has_value() || *here == 0) return std::nullopt;
   for (size_t i = *here; i-- > 0;) {
-    if (blocks_[i].kind == kind) return i;
+    if (match(blocks_[i])) return i;
   }
   return std::nullopt;
+}
+
+std::optional<size_t> Transcript::NextOfKind(size_t offset,
+                                             BlockKind kind) const {
+  return NextWhere(offset,
+                   [kind](const Block& block) { return block.kind == kind; });
+}
+
+std::optional<size_t> Transcript::PreviousOfKind(size_t offset,
+                                                 BlockKind kind) const {
+  return PreviousWhere(
+      offset, [kind](const Block& block) { return block.kind == kind; });
+}
+
+std::wstring Transcript::FirstLine(size_t index) const {
+  if (index >= blocks_.size()) return {};
+  const Block& block = blocks_[index];
+  const size_t end = text_.find(L'\n', block.start);
+  const size_t stop = end == std::wstring::npos ? text_.size() : end;
+  return text_.substr(block.start, stop - block.start);
 }
 
 bool Transcript::CheckInvariants(std::string* problem) const {
