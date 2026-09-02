@@ -318,7 +318,15 @@ void SessionPane::OnDrain() {
       // done, and when?  The field is there to answer "is it working right
       // now", and the answer to that, once the turn is over, is nothing.
       SetStatus(L"");
-      SpeakAnswer();
+      // A turn the reader stopped by hand ends silently.  Reading out the
+      // half of the answer that got through would be doing the one thing Esc
+      // was pressed to prevent, and the beep would announce the end of
+      // something the reader already knows they ended.
+      if (interrupted_) {
+        interrupted_ = false;
+      } else {
+        SpeakAnswer();
+      }
     } else if (event.kind == proto::EventKind::SystemInit) {
       // The turn field is NOT touched here.  system/init arrives at the start
       // of every turn, not once per session -- there are four of them in
@@ -619,8 +627,30 @@ void SessionPane::Send() {
 
   session_.SendPrompt(model::Utf8FromUtf16(text));
   SetWindowTextW(prompt_, L"");
+  interrupted_ = false;
   busy_ = true;
   SetStatus(L"pracujem");
+}
+
+void SessionPane::Interrupt() {
+  if (!busy_) {
+    Announce(L"nič nebeží");
+    return;
+  }
+  if (!session_.Interrupt()) {
+    // The session and the pane disagree about whether a turn is running.  Say
+    // so rather than pretending: the reader is about to wait for something to
+    // stop that nobody is stopping.
+    Announce(L"prerušenie sa nepodarilo poslať");
+    return;
+  }
+  // Not busy_ = false.  The turn ends when the CLI says it does, with a
+  // Result like any other turn; until then something is still coming and the
+  // status line must not claim otherwise.
+  interrupted_ = true;
+  SetStatus(L"prerušujem");
+  Apply(model_.AppendInterrupted());
+  Announce(L"prerušujem");
 }
 
 LRESULT CALLBACK SessionPane::PromptProc(HWND window, UINT message,
@@ -631,6 +661,12 @@ LRESULT CALLBACK SessionPane::PromptProc(HWND window, UINT message,
     const bool control = GetKeyState(VK_CONTROL) < 0;
     if (wParam == VK_RETURN && control) {
       pane->Send();
+      return 0;
+    }
+    // Esc costs nothing here: a plain edit control does nothing with it, and
+    // this window is not a dialog, so nothing is waiting to be closed by it.
+    if (wParam == VK_ESCAPE) {
+      pane->Interrupt();
       return 0;
     }
     if (IsJumpChord(wParam)) {
@@ -669,6 +705,12 @@ LRESULT CALLBACK SessionPane::TranscriptProc(HWND window, UINT message,
   }
   if (message == WM_KEYDOWN && wParam == VK_RETURN) {
     pane->ToggleBlockAtCaret();
+    return 0;
+  }
+  // The same key in both boxes, for the same reason as the chords below: the
+  // reader should not have to know where the focus is to stop a turn.
+  if (message == WM_KEYDOWN && wParam == VK_ESCAPE) {
+    pane->Interrupt();
     return 0;
   }
   // The chord works here too.  Which of the two boxes the focus is in is not

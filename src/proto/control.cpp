@@ -41,6 +41,13 @@ Json MakeInitialize(const std::string& requestId) {
                                {"hooks", Json::object()}}}};
 }
 
+Json MakeInterrupt(const std::string& requestId) {
+  return Json{{"type", "control_request"},
+              {"request_id", requestId},
+              {"request", Json{{"subtype", "interrupt"},
+                               {"reason", "interrupt"}}}};
+}
+
 Json MakeAllow(const PermissionRequest& request, const Json& updatedInput) {
   return Envelope(request.requestId,
                   Json{{"behavior", "allow"},

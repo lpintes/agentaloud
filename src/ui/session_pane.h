@@ -61,7 +61,13 @@ class SessionPane {
   // unreachable on screen -- a hole, not a missing convenience.
   void ToggleBlockAtCaret();
 
-  // One of t/r/p/a/k/! (capital letter meaning backwards).  Returns false when
+  // Esc, from either box.  Stops the turn in flight and writes a mark into
+  // the transcript where it was stopped.  Says so out loud in both cases,
+  // including the case where nothing was running: a key that answers with
+  // silence cannot be told from a key that never arrived.
+  void Interrupt();
+
+  // One of t/r/p/a/k/e (capital letter meaning backwards).  Returns false when
   // the character is none of them, so the caller can pass the key on.  Public
   // because both the transcript and the prompt reach it -- see the note on
   // PromptProc about why one arrives as a character and the other as a key.
@@ -128,6 +134,9 @@ class SessionPane {
   bool drainPosted_ = false;
 
   bool busy_ = false;
+  // Set by Esc, cleared by the Result that follows it and by the next prompt.
+  // Its whole job is to keep that one Result quiet -- see OnDrain.
+  bool interrupted_ = false;
   std::wstring status_;
   // The folder name, kept because the bar is rewritten field by field and the
   // project one has to be put back after anything that clears it.

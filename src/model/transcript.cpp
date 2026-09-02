@@ -226,6 +226,7 @@ bool IsMechanism(BlockKind kind) {
     case BlockKind::UserPrompt:
     case BlockKind::AssistantText:
     case BlockKind::PermissionDenied:
+    case BlockKind::Interrupted:
       return false;
   }
   return false;
@@ -236,6 +237,7 @@ const wchar_t* KindLabel(BlockKind kind) {
     case BlockKind::UserPrompt: return L"prompt";
     case BlockKind::AssistantText: return L"odpoveď";
     case BlockKind::PermissionDenied: return L"zamietnuté";
+    case BlockKind::Interrupted: return L"prerušenie";
     case BlockKind::Thinking: return L"premýšľanie";
     case BlockKind::ToolUse: return L"nástroj";
     case BlockKind::ToolResult: return L"výstup";
@@ -330,6 +332,20 @@ Edit Transcript::AppendUserPrompt(const std::wstring& text) {
   // back "\r\n"; it needs the same normalising as anything off the stream.
   block.body = NormalizeNewlines(text);
   block.summary = OneLine(block.body, kSummaryLimit);
+  return AppendBlocks({std::move(block)});
+}
+
+Edit Transcript::AppendInterrupted() {
+  Block block;
+  block.kind = BlockKind::Interrupted;
+  block.body = L"Prerušené používateľom.";
+  block.summary = block.body;
+  // One line, so there is nothing behind the summary to unfold.
+  block.collapsible = false;
+  // So that the E key finds it.  Navigating to trouble means navigating to
+  // every place the work did not go through, and a turn stopped by hand is
+  // one of those -- the reader is looking for where things stopped.
+  block.isError = true;
   return AppendBlocks({std::move(block)});
 }
 

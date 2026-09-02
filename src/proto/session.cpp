@@ -117,6 +117,18 @@ bool Session::SendPrompt(const std::string& utf8Text) {
   return SendJson(message);
 }
 
+bool Session::Interrupt() {
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!turnInFlight_) return false;
+  }
+  // turnInFlight_ is deliberately left alone: the turn is not over when the
+  // request is written, it is over when the CLI says so.  Anything that ends
+  // it here would let Stop() close stdin while the CLI is still winding the
+  // turn down -- the one thing control.h says never to do.
+  return SendJson(MakeInterrupt("stop-" + std::to_string(nextRequestId_++)));
+}
+
 bool Session::WaitForTurn(unsigned milliseconds) {
   std::unique_lock<std::mutex> lock(mutex_);
   return turnEnded_.wait_for(lock, std::chrono::milliseconds(milliseconds),

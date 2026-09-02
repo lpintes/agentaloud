@@ -34,6 +34,7 @@ enum class BlockKind {
   UserPrompt,        // what we typed; added locally, not read off the stream
   AssistantText,     // the answer
   PermissionDenied,  // a tool a rule would not let through
+  Interrupted,       // the turn the reader stopped; added locally, like a prompt
   Thinking,
   ToolUse,
   ToolResult,
@@ -88,6 +89,16 @@ class Transcript {
   // text should appear the moment it is sent, and --replay-user-messages would
   // put it a round trip away.
   Edit AppendUserPrompt(const std::wstring& text);
+
+  // A one-line mark where a turn was cut short.  Written by us rather than
+  // read off the stream: the CLI does put a user record saying "[Request
+  // interrupted by user]" on the wire, but Append() takes only tool results
+  // out of user records, and widening that to text would let every synthetic
+  // nudge the CLI writes in the user's name into the transcript.
+  //
+  // Without the mark an interrupted answer, read back later, is indis-
+  // tinguishable from one that ended by itself -- it just stops.
+  Edit AppendInterrupted();
 
   // Zero or more blocks, and therefore zero or more edits: a record carrying
   // two tool results for two calls made in parallel writes into two different

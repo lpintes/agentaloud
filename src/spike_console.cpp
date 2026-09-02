@@ -3,10 +3,15 @@
 // this prints an approved tool and a denied one, the protocol layer is right
 // and the GUI can be built on it.
 //
-//   spike_console <working-dir> [allow|deny]
+//   spike_console <working-dir> [allow|deny|interrupt]
 //
 // The working directory should be a throwaway git repository: the point of the
 // exercise is a real `git commit`, and on approval it really happens.
+//
+// `interrupt` runs a different errand (claude-gui-lkk.5.4): it starts a tool
+// that will not finish on its own and stops the turn from underneath it, with
+// every record printed whole.  What the end of an interrupted turn looks like
+// is not something one can read out of the CLI binary with any confidence.
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -17,6 +22,10 @@
 #include "proto/session.h"
 
 namespace {
+
+// Every record printed whole rather than summarised.  Only the interrupt
+// errand wants it: there the shape of the records IS the result.
+bool gVerbose = false;
 
 // The console is the only place in this program that speaks to a person, so
 // it is also the only place that has to care that Windows consoles are not
@@ -55,10 +64,15 @@ void PrintAssistantText(const proto::Json& record) {
 int wmain(int argc, wchar_t** argv) {
   UseUtf8Console();
   if (argc < 2) {
-    std::printf("pouzitie: spike_console <pracovny-adresar> [allow|deny]\n");
+    std::printf(
+        "pouzitie: spike_console <pracovny-adresar> [allow|deny|interrupt]\n");
     return 2;
   }
-  const bool allow = argc < 3 || std::wstring(argv[2]) != L"deny";
+  const std::wstring mode = argc < 3 ? L"allow" : argv[2];
+  const bool interrupt = mode == L"interrupt";
+  // The interrupt errand has to let the tool start before it can stop it.
+  const bool allow = interrupt || mode != L"deny";
+  gVerbose = interrupt;
 
   proto::Session::Options options;
   options.workingDir = argv[1];
@@ -74,6 +88,11 @@ int wmain(int argc, wchar_t** argv) {
   const bool started = session.Start(
       options,
       [](const proto::Event& event) {
+        if (gVerbose) {
+          std::printf("[%s] %s\n", proto::KindName(event.kind),
+                      event.raw.dump().c_str());
+          return;
+        }
         switch (event.kind) {
           case proto::EventKind::SystemInit:
             std::printf("[init] model=%s session=%s\n",
@@ -119,6 +138,28 @@ int wmain(int argc, wchar_t** argv) {
   if (!started) {
     std::printf("claude sa nepodarilo spustit\n");
     return 1;
+  }
+
+  if (interrupt) {
+    session.SendPrompt(
+        "Run exactly this bash command and nothing else: sleep 45");
+    // Long enough for the permission to be answered and the tool to be really
+    // running.  Interrupting before that would only prove that a request sent
+    // into nothing does nothing.
+    Sleep(10000);
+    std::printf("\n[posielam interrupt]\n");
+    if (!session.Interrupt()) {
+      std::printf("[ziadny tah nebezal -- interrupt sa neposlal]\n");
+    }
+    // A generous wait on purpose: the question the errand asks is whether the
+    // turn ends at all, and a timeout here is itself the answer.
+    if (!session.WaitForTurn(60000)) {
+      std::printf("\n[tah sa po interrupte NESKONCIL -- ziadny result]\n");
+    } else {
+      std::printf("\n[tah po interrupte skoncil]\n");
+    }
+    session.Stop();
+    return 0;
   }
 
   session.SendPrompt(

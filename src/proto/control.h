@@ -49,6 +49,18 @@ bool ParsePermissionRequest(const Json& record, PermissionRequest* out);
 // control channel is established before the first turn.
 Json MakeInitialize(const std::string& requestId);
 
+// Stops the turn in flight.  NOT control_cancel_request -- that one withdraws
+// a control_request of our own that we no longer want answered, and a turn is
+// not one of those.  The subtype is `interrupt`, and `reason` is what the CLI
+// forwards to the turn's AbortSignal: "interrupt" is the value its own Esc and
+// Ctrl+C use, and tools branch on it to keep quiet about being aborted rather
+// than reporting an error.
+//
+// Fire and forget: the CLI answers with a control_response listing the queued
+// messages that survive, which we have none of, so nothing has to remember the
+// request id.  The end of the turn arrives the usual way, as a Result.
+Json MakeInterrupt(const std::string& requestId);
+
 // updatedInput may be null, in which case the tool's own input is used
 // unchanged.  Passing something else is how a dialog can let the user edit a
 // commit message before it runs.

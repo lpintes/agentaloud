@@ -175,7 +175,11 @@ míňa kredit, `allow` naozaj vykoná commit):
 ```bash
 ./bin/spike_console.exe <prazdny-git-repo> allow   # commit prejde
 ./bin/spike_console.exe <prazdny-git-repo> deny    # commit neprejde
+./bin/spike_console.exe <prazdny-git-repo> interrupt  # tah sa prerusi zvonku
 ```
+
+Režim `interrupt` vypisuje každý záznam celý: pri ňom je tvar záznamov práve
+ten výsledok, po ktorom siaha.
 
 ucrt64, nie mingw64 — UCRT je systémové CRT novších Windowsov a odpadá
 `msvcrt` a jeho zaobchádzanie s UTF-8. Prekladač sa volá absolútnou cestou;
@@ -221,6 +225,16 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    `non_execution_kind: "permission-rule"` — číta sa to ako zamietnutie
    pravidlom, nie ako pokazený kanál, a model to skúša znova. Zavrieť až po
    zázname `type: result`. Vynucuje `proto::Session::Stop()`.
+
+   Platí to aj pre ťah, ktorý prerušil používateľ. Prerušenie sa posiela ako
+   `control_request` so `subtype: "interrupt"` — **nie** ako
+   `control_cancel_request`; ten iba stiahne našu vlastnú nezodpovedanú
+   požiadavku a s ťahom nemá čo robiť. Ťah sa nekončí odoslaním prerušenia,
+   ale až vlastným `result` (overené: `subtype: "error_during_execution"`,
+   `terminal_reason: "aborted_streaming"`). `Session::Interrupt()` preto
+   `turnInFlight_` zámerne nechá tak — kto ho zhasne skôr, dovolí `Stop()`
+   zavrieť stdin uprostred ukončovania ťahu, čiže presne to, čo tento bod
+   zakazuje.
 2. **Callbacky bežia na čítacom vlákne.** `EventCallback` aj
    `PermissionCallback`. Čokoľvek, čo siahne na okno, musí ísť cez
    `PostMessage`.

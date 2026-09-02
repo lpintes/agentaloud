@@ -275,6 +275,40 @@ void TestErrorNavigationAndFirstLine() {
   CHECK(transcript.FirstLine(1).find(L", rozbalené") != std::wstring::npos);
 }
 
+void TestInterruptLeavesAMark() {
+  TEST("transcript: prerusenie zanecha stopu, ktoru najde navigacia na chybu");
+  model::Transcript transcript;
+  std::string problem;
+  transcript.AppendUserPrompt(L"nieco dlhe");
+  proto::Json partial = proto::Json::parse(R"({
+    "type": "assistant",
+    "message": {"content": [{"type": "text", "text": "zacal som odpoved"}]}
+  })");
+  transcript.Append(proto::Classify(partial));
+  transcript.AppendInterrupted();
+  CHECK(transcript.CheckInvariants(&problem));
+  CHECK_EQ(transcript.blocks().size(), size_t{3});
+
+  const model::Block& mark = transcript.blocks()[2];
+  CHECK(mark.kind == model::BlockKind::Interrupted);
+  // Jednoriadkova; nie je za nou nic, co by sa dalo rozbalit.
+  CHECK(!mark.collapsible);
+  CHECK(mark.summary.find(L'\n') == std::wstring::npos);
+
+  // Klavesa E ju musi najst -- prave tam sa praca zastavila.
+  const model::Transcript::BlockPredicate trouble =
+      [](const model::Block& block) {
+        return block.isError ||
+               block.kind == model::BlockKind::PermissionDenied;
+      };
+  const auto found = transcript.NextWhere(0, trouble);
+  CHECK(found.has_value());
+  CHECK_EQ(*found, size_t{2});
+
+  // Ziadna predpona hovoriaceho: prerusenie nepovedal ani jeden z nich.
+  CHECK_EQ(transcript.FirstLine(2), std::wstring(L"Prerušené používateľom."));
+}
+
 void TestToolResultsSitBehindTheirCall() {
   TEST("transcript: vysledok stoji za svojim volanim, nie na konci");
   model::Transcript transcript;
@@ -733,6 +767,7 @@ int main(int argc, char** argv) {
   TestRangeMap();
   TestBlockAtAndNavigation();
   TestErrorNavigationAndFirstLine();
+  TestInterruptLeavesAMark();
   TestToolResultsSitBehindTheirCall();
   TestBookmarksSurviveCollapsing();
   TestRateLimitParsing();

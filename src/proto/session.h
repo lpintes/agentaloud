@@ -9,6 +9,7 @@
 // moment -- when the CLI changes.  Keeping them together means one place to
 // look when that happens.
 
+#include <atomic>
 #include <condition_variable>
 #include <functional>
 #include <memory>
@@ -56,6 +57,12 @@ class Session {
   // when a Result event arrives.
   bool SendPrompt(const std::string& utf8Text);
 
+  // Stops the turn in flight.  False when there is no turn to stop -- Esc on a
+  // session that is not working is not an error, it just has nothing to do.
+  // Returns as soon as the request is written; the turn is over when a Result
+  // arrives, exactly as if it had ended on its own.
+  bool Interrupt();
+
   // Blocks until the turn in flight ends.  Returns false on timeout, which
   // leaves the session usable -- the caller may want to wait again.
   bool WaitForTurn(unsigned milliseconds);
@@ -87,7 +94,9 @@ class Session {
   // Writes come from the caller's thread and from the reader thread answering
   // a permission request, so the handle needs its own lock.
   std::mutex writeMutex_;
-  unsigned nextRequestId_ = 1;
+  // Read from the GUI thread (Interrupt) as well as from Start, so it cannot
+  // be a plain unsigned.
+  std::atomic<unsigned> nextRequestId_{1};
 };
 
 // The command line Session runs, exposed so a test or a log can show exactly
