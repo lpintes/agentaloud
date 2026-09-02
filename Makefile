@@ -42,18 +42,44 @@ LDLIBS   := -lole32 -lshell32 -lcomctl32 -luuid
 WIN_SRCS   := src/win/window.cpp src/win/dialog.cpp src/win/process.cpp
 # Vsetko, co hovori s Claudom: proces, rury, JSONL aj control kanal.  Su
 # spolu preto, ze prestanu platit naraz -- ked sa zmeni CLI.
-PROTO_SRCS := src/proto/jsonl.cpp src/proto/events.cpp src/proto/control.cpp \
-              src/proto/session.cpp
+#
+# Delene na dve: PURE je cisty preklad bajtov na udalosti a spat a nesiaha na
+# nic mimo procesu, takze sa da testovat.  session.cpp vlastni proces, teda
+# aj win::Process, a preto ho testy nelinkuju -- keby museli, znamenalo by to,
+# ze sa spracovanie protokolu niekde zamotalo so spustanim procesu.
+PROTO_PURE_SRCS := src/proto/jsonl.cpp src/proto/events.cpp \
+                   src/proto/control.cpp
+PROTO_SRCS := $(PROTO_PURE_SRCS) src/proto/session.cpp
+
+# Transkript a jeho mapa rozsahov.  Nevie o windows.h, a prave preto sa da
+# testovat bez okna -- co je vacsina toho, preco maju tie testy cenu.
+MODEL_SRCS := src/model/utf.cpp src/model/transcript.cpp
 
 SPIKE_SRCS := $(WIN_SRCS) $(PROTO_SRCS) src/spike_console.cpp
 SPIKE_OBJS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(SPIKE_SRCS))
 
-.PHONY: all spike clean
-all: spike
+TEST_SRCS := $(PROTO_PURE_SRCS) $(MODEL_SRCS)
+TEST_OBJS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(TEST_SRCS)) \
+             $(BUILD)/tests/test_main.o
+
+.PHONY: all spike test check clean
+all: spike test
 spike: $(BIN)/spike_console.exe
+test: $(BIN)/tests.exe
+
+# `make check` testy aj spusti; `make test` ich len zostavi.
+check: test
+	./$(BIN)/tests.exe
 
 $(BIN)/spike_console.exe: $(SPIKE_OBJS) | $(BIN)
 	$(CXX) $(STATIC) $(UNICODE_ENTRY) -o $@ $^ $(LDLIBS)
+
+$(BIN)/tests.exe: $(TEST_OBJS) | $(BIN)
+	$(CXX) $(STATIC) -o $@ $^
+
+$(BUILD)/tests/%.o: tests/%.cpp
+	mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(DEPFLAGS) -c -o $@ $<
 
 # Jedno pravidlo na vsetky zdroje; adresar objektu kopiruje adresar zdroja,
 # takze pribudnutie src/model/ nevyzaduje nic okrem doplnenia do *_SRCS.

@@ -147,9 +147,27 @@ claude-gui-lkk` (epic) a `bd ready`.
 ## Build & Test
 
 ```bash
-PATH=/c/msys64/ucrt64/bin:$PATH make spike   # bin/spike_console.exe
+PATH=/c/msys64/ucrt64/bin:$PATH make        # spike aj testy
+PATH=/c/msys64/ucrt64/bin:$PATH make check  # testy zostavi a spusti
 PATH=/c/msys64/ucrt64/bin:$PATH make clean
 ```
+
+Testy majú tri úrovne s odlišným účelom — sú vysvetlené v hlavičke
+`tests/test_main.cpp`. Tretia, soak nad súkromným korpusom, sa zapína
+premennou a beží ručne:
+
+```bash
+ls ~/.claude/projects/*/*.jsonl | xargs -d'\n' cygpath -m > /tmp/corpus.txt
+CLAUDELENS_CORPUS=/tmp/corpus.txt ./bin/tests.exe
+```
+
+`cygpath -m` nie je kozmetika. Bash dáva cesty ako `/c/users/...`, natívny
+`.exe` im nerozumie a otvorenie **zlyhá ticho** — soak potom nahlási nula
+súborov namiesto chyby.
+
+Fixtúry sa negenerujú v testoch. `python tools/make_fixtures.py` sa púšťa
+ručne, keď sa zmení formát CLI; diff fixtúry je práve tá informácia, ktorú
+chceš vidieť.
 
 Overenie protokolovej vrstvy naostro (potrebuje jednorazový git repozitár,
 míňa kredit, `allow` naozaj vykoná commit):
@@ -179,6 +197,20 @@ kanál prestanú platiť naraz — keď sa zmení CLI.
 
 `model/transcript` drží bloky a mapu blok → rozsah znakov. `ui/transcript_view`
 je jediný, kto tú mapu prekladá na pozície kurzora.
+
+Buffer transkriptu je **UTF-16**, nie UTF-8, hoci protokol je UTF-8. RichEdit
+počíta v UTF-16 a prepočítavanie offsetov pri každej navigácii a každom
+zbalení je trieda chýb, ktorá sa prejaví presne tým, čomu sa tu vyhýbame —
+kurzorom na zlom mieste. Konverzia sa robí raz, pri vzniku bloku
+(`model/utf.h`, vlastná implementácia, aby `model/` nemuselo ťahať
+`windows.h`).
+
+**Formát záznamu session na disku nie je formát streamu.** Zdieľané sú
+`assistant` a `user` (teda práve tie, z ktorých sa robia bloky), ale disk má
+navyše `attachment`, `queue-operation`, `mode`, `permission-mode` a ďalších
+vyše desať typov, a nemá `system/init`, `result` ani `rate_limit_event`.
+Aktuálny zoznam je v `kKnownDiskOnlyTypes` v `tests/test_main.cpp` a vznikol
+soakom, nie čítaním dokumentácie.
 
 ## Invarianty
 
