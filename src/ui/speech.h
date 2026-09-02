@@ -35,6 +35,13 @@ class Speech {
   // reader asked for by pressing a key -- they want the answer to that press,
   // not the tail of the previous one.  Leave it off for something that
   // arrived on its own, which should wait its turn.
+  //
+  // It is not a parameter of the NVDA API: this is cancelSpeech() followed by
+  // speakText(), and cancelSpeech empties the WHOLE of NVDA's queue -- our
+  // own earlier messages that have not been said yet, and the speech NVDA
+  // generates itself, the line under the caret, the focus, the letter just
+  // typed.  So there is no such thing as interrupting only our own last
+  // sentence, and anything designed around that granularity cannot be built.
   void Say(const std::wstring& text, bool interrupt);
   void Silence();
 

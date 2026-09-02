@@ -259,6 +259,14 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    odlíšiť od klávesy, ktorá nedošla. Hovorí sa riadok, na ktorom kurzor
    skutočne stojí (`model::Transcript::FirstLine`), nie zhrnutie bloku — inak
    by sa ohlásilo niečo iné, než čo si čitateľ prečíta ďalej.
+7. **Reč, ktorá prišla sama, sa neprerušuje.** `interrupt=true` v `Speech::Say`
+   patrí výlučne odozve na klávesu (`ui::SessionPane::Announce`); čokoľvek, čo
+   prišlo zo streamu, ide do fronty a čaká. Dôvod nie je zdvorilosť:
+   `interrupt` nie je parameter NVDA API, `Say` ho robí ako `cancelSpeech()` +
+   `speakText()`, a `cancelSpeech` vyprázdni **celú** frontu NVDA — aj naše
+   staršie správy, aj reč, ktorú NVDA generuje sama (čítanie riadku, ohlásenie
+   fokusu). Prerušiť „len tú svoju poslednú vetu" sa teda nedá ani teoreticky.
+   Ruší výlučne používateľ, klávesou, tak ako je zvyknutý z terminálu.
 
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa
