@@ -16,6 +16,7 @@
 #include <windows.h>
 
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -47,6 +48,11 @@ class SessionPane {
   // flight, because a second prompt would queue behind the first with nothing
   // on screen to say so.
   void Send();
+
+  // Enter in the transcript.  The smallest possible piece of step 5, brought
+  // forward because without it the output of every tool is in the model and
+  // unreachable on screen -- a hole, not a missing convenience.
+  void ToggleBlockAtCaret();
 
   const std::wstring& statusLine() const { return status_; }
   bool busy() const { return busy_; }

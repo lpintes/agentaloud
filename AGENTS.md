@@ -224,11 +224,16 @@ Tri pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho
 2. **Callbacky bežia na čítacom vlákne.** `EventCallback` aj
    `PermissionCallback`. Čokoľvek, čo siahne na okno, musí ísť cez
    `PostMessage`.
-3. **Kurzor vo výstupnom poli sa nikdy nehýbe sám.** Ani pri rozbalení bloku,
-   ani pri pripísaní nového obsahu na koniec. Hýbu sa tri veci a všetky tri
-   treba obnoviť: kurzor, výber a prvý viditeľný riadok. Postup je v
-   `ui::ApplyEdit` — `EM_EXGETSEL` + `EM_GETFIRSTVISIBLELINE`, zmena s vypnutým
-   `WM_SETREDRAW`, potom `EM_EXSETSEL` + `EM_LINESCROLL` späť.
+3. **Kurzor vo výstupnom poli sa nehýbe kvôli textu, ktorý pribudol.** Ani pri
+   rozbalení bloku, ani pri pripísaní obsahu na koniec. Hýbu sa tri veci a
+   všetky tri treba obnoviť: kurzor, výber a prvý viditeľný riadok. Postup je
+   v `ui::ApplyEdit` — `EM_EXGETSEL` + `EM_GETFIRSTVISIBLELINE`, zmena
+   s vypnutým `WM_SETREDRAW`, potom `EM_EXSETSEL` + `EM_LINESCROLL` späť.
+
+   Pravidlo je o texte, ktorý **prichádza**, nie o akciách používateľa.
+   Odoslanie promptu kurzor zámerne presunie na koniec prepisu — inak by si
+   sa k odpovedi musel prečítať cez vlastný prompt. Zistené až používaním;
+   pôvodná formulácia invariantu to nerozlišovala.
 4. **Každý zlom riadku je práve jeden znak, a je to `\n`.** RichEdit počíta
    odstavcový zlom ako jeden; text s `\r\n` by bol dva znaky v modeli a jeden
    vo widgete. Výstup nástrojov `\r\n` obsahuje — sú to windowsové programy.

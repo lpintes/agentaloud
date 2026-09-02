@@ -63,6 +63,25 @@ void ApplyEdit(HWND edit, size_t start, size_t removed,
   InvalidateRect(edit, nullptr, TRUE);
 }
 
+size_t CaretOffset(HWND edit) {
+  CHARRANGE range = {};
+  SendMessageW(edit, EM_EXGETSEL, 0, reinterpret_cast<LPARAM>(&range));
+  return range.cpMin < 0 ? 0 : static_cast<size_t>(range.cpMin);
+}
+
+void PutCaret(HWND edit, size_t offset) {
+  CHARRANGE at = {static_cast<LONG>(offset), static_cast<LONG>(offset)};
+  SendMessageW(edit, EM_EXSETSEL, 0, reinterpret_cast<LPARAM>(&at));
+  SendMessageW(edit, EM_SCROLLCARET, 0, 0);
+}
+
+void PutCaretAtEnd(HWND edit) {
+  const int length = TextLength(edit);
+  CHARRANGE end = {length, length};
+  SendMessageW(edit, EM_EXSETSEL, 0, reinterpret_cast<LPARAM>(&end));
+  SendMessageW(edit, EM_SCROLLCARET, 0, 0);
+}
+
 std::wstring GetText(HWND edit) {
   const int length = GetWindowTextLengthW(edit);
   if (length <= 0) return {};
@@ -237,6 +256,22 @@ LRESULT SessionPane::OnPermission(LPARAM pointer) {
   return 0;
 }
 
+void SessionPane::ToggleBlockAtCaret() {
+  const std::optional<size_t> index = model_.BlockAt(CaretOffset(transcript_));
+  if (!index.has_value()) return;
+
+  const bool collapsed = model_.blocks()[*index].collapsed;
+  Apply(model_.SetCollapsed(*index, !collapsed));
+
+  // To the start of the block, always.  Collapsing can leave the caret past
+  // the block's new end, and even when it does not, the line the reader wants
+  // after pressing this is the one they acted on.  The move is also the only
+  // feedback there is until step 5 brings speech: a screen reader announces
+  // the line the caret lands on, so it says either the summary or the first
+  // line of what just appeared.
+  PutCaret(transcript_, model_.blocks()[*index].start);
+}
+
 void SessionPane::SetStatus(std::wstring text) {
   status_ = std::move(text);
   SetWindowTextW(host_, (L"ClaudeLens — " + status_).c_str());
@@ -250,6 +285,22 @@ void SessionPane::Send() {
   if (IsBlank(text)) return;
 
   Apply(model_.AppendUserPrompt(text));
+  // Past the prompt that was just added, so the answer arrives directly under
+  // the caret.
+  //
+  // This does not contradict "the caret never moves on its own" -- it sharpens
+  // it.  The rule is about text ARRIVING; sending is something the reader did,
+  // and after doing it the thing they want to read next is what comes back,
+  // not what they themselves just wrote.  Leaving the caret alone meant having
+  // to walk through your own prompt to reach the answer.
+  //
+  // Considered and rejected: doing this only when the caret was already at the
+  // end.  It sounds more careful and is worse -- after the first turn the
+  // caret sits at the start of that answer, never at the end, so the condition
+  // would hold once and never again.  Getting back to a place left behind is
+  // what Ctrl+0 is for (claude-gui-lkk.5).
+  PutCaretAtEnd(transcript_);
+
   session_.SendPrompt(model::Utf8FromUtf16(text));
   SetWindowTextW(prompt_, L"");
   busy_ = true;
@@ -285,6 +336,10 @@ LRESULT CALLBACK SessionPane::TranscriptProc(HWND window, UINT message,
   SessionPane* pane = reinterpret_cast<SessionPane*>(data);
   if (message == WM_KEYDOWN && wParam == VK_TAB) {
     SetFocus(pane->prompt_);
+    return 0;
+  }
+  if (message == WM_KEYDOWN && wParam == VK_RETURN) {
+    pane->ToggleBlockAtCaret();
     return 0;
   }
   if (message == WM_DESTROY) RemoveWindowSubclass(window, TranscriptProc, id);
