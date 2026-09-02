@@ -132,7 +132,7 @@ void TestRangeMap() {
   const model::Edit first = transcript.AppendUserPrompt(L"prvy prompt");
   CHECK_EQ(first.start, size_t{0});
   CHECK_EQ(first.removed, size_t{0});
-  CHECK_EQ(first.inserted, std::wstring(L"prvy prompt\n"));
+  CHECK_EQ(first.inserted, std::wstring(L"you: prvy prompt\n"));
 
   proto::Json assistant = proto::Json::parse(R"({
     "type": "assistant",
@@ -269,6 +269,47 @@ void TestEmptyBlocksAreDropped() {
 
   std::string problem;
   CHECK(transcript.CheckInvariants(&problem));
+}
+
+void TestSpeakerPrefix() {
+  TEST("transcript: obsahove bloky maju prefix hovoriaceho");
+  // Bez neho splyva prompt s odpovedou do jedneho prudu riadkov a citajuci
+  // nema z coho poznat, kde jeden koncil.  Prefix je len vo vykresleni --
+  // body zostava cisty, lebo z neho cita rec.
+  model::Transcript transcript;
+  transcript.AppendUserPrompt(L"otazka");
+  proto::Json assistant = proto::Json::parse(R"({
+    "type": "assistant",
+    "message": {"content": [
+      {"type": "text", "text": "odpoved"},
+      {"type": "tool_use", "id": "toolu_1", "name": "Read",
+       "input": {"file_path": "a.txt"}}
+    ]}
+  })");
+  transcript.Append(proto::Classify(assistant));
+
+  CHECK_EQ(transcript.Text().substr(0, 5), std::wstring(L"you: "));
+  CHECK_EQ(transcript.blocks()[0].body, std::wstring(L"otazka"));
+
+  const model::Block& answer = transcript.blocks()[1];
+  CHECK_EQ(transcript.Text().substr(answer.start, 8),
+           std::wstring(L"claude: "));
+  CHECK_EQ(answer.body, std::wstring(L"odpoved"));
+
+  // Mechanika sa hlasi svojou hlavickou, prefix by bol druhy popis toho isteho.
+  const model::Block& tool = transcript.blocks()[2];
+  CHECK_EQ(transcript.Text().substr(tool.start, 5), std::wstring(L"Read:"));
+
+  // A mapa rozsahov musi sediet aj po zbaleni obsahoveho bloku -- prefix je
+  // v oboch tvaroch, takze rozdiel dlzok je len rozdiel tela a zhrnutia.
+  std::string problem;
+  transcript.SetCollapsed(1, true);
+  CHECK(transcript.CheckInvariants(&problem));
+  CHECK_EQ(transcript.Text().substr(transcript.blocks()[1].start, 8),
+           std::wstring(L"claude: "));
+  transcript.SetCollapsed(0, true);
+  CHECK(transcript.CheckInvariants(&problem));
+  CHECK_EQ(transcript.Text().substr(0, 5), std::wstring(L"you: "));
 }
 
 void TestSummariesAreOneLine() {
@@ -455,6 +496,7 @@ int main(int argc, char** argv) {
   TestBlockAtAndNavigation();
   TestNewlinesAreOneCharacter();
   TestEmptyBlocksAreDropped();
+  TestSpeakerPrefix();
   TestSummariesAreOneLine();
   TestFixtureBasic(fixtures);
   TestFixtureDenied(fixtures);

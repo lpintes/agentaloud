@@ -202,6 +202,19 @@ Block MakeToolResult(const proto::Json& blockJson) {
   return block;
 }
 
+// Who said it, written in front of the line.  Only the two kinds that carry
+// speech get one: a mechanism block already names itself in its heading, and a
+// denied tool was said by neither party.  The prefix lives in the rendering
+// and not in the block's text, so what a screen reader is handed on request --
+// and what a copy of the body produces -- stays free of it.
+const wchar_t* SpeakerPrefix(BlockKind kind) {
+  switch (kind) {
+    case BlockKind::UserPrompt: return L"you: ";
+    case BlockKind::AssistantText: return L"claude: ";
+    default: return L"";
+  }
+}
+
 }  // namespace
 
 bool IsMechanism(BlockKind kind) {
@@ -231,17 +244,20 @@ const wchar_t* KindLabel(BlockKind kind) {
 }
 
 std::wstring Transcript::Render(const Block& block) const {
-  if (block.collapsed) return block.summary + L'\n';
+  const std::wstring prefix = SpeakerPrefix(block.kind);
+  if (block.collapsed) return prefix + block.summary + L'\n';
   // An expanded mechanism block keeps its heading.  Without it there is no
   // way to tell, reading line by line, where a tool's output starts, where it
   // ends, or whether what you are in is expanded at all -- the collapsed form
   // describes itself and the expanded form used to be bare text.  Content
   // blocks get no heading: a prompt and an answer are what the reader came
   // for and a label above every one of them is a line of noise per turn.
+  // They get the speaker prefix instead, on the first line, which says the
+  // same thing without spending a line on it.
   if (IsMechanism(block.kind) && block.collapsible) {
     return block.summary + L", rozbalené\n" + block.body + L'\n';
   }
-  return block.body + L'\n';
+  return prefix + block.body + L'\n';
 }
 
 Edit Transcript::AppendBlocks(std::vector<Block> blocks) {
