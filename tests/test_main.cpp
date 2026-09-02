@@ -17,6 +17,7 @@
 //      len invarianty, a hlasi neznama typy zaznamov.  Zapina sa premennou
 //      CLAUDELENS_CORPUS a bezi rucne.
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -215,6 +216,61 @@ void TestBlockAtAndNavigation() {
              .has_value());
 }
 
+void TestNewlinesAreOneCharacter() {
+  TEST("transcript: kazdy zlom riadku je prave jeden znak");
+  // RichEdit pocita odstavcovy zlom ako jeden znak.  Keby text s "\r\n"
+  // zostal dvojznakovy, mapa rozsahov by sa rozisla s widgetom o jeden znak
+  // na kazdy riadok vystupu nastroja -- a to konci kurzorom na zlom mieste.
+  model::Transcript transcript;
+  transcript.AppendUserPrompt(L"prvy\r\ndruhy\rtreti\nstvrty");
+  const std::wstring& text = transcript.Text();
+  CHECK(text.find(L'\r') == std::wstring::npos);
+  CHECK_EQ(std::count(text.begin(), text.end(), L'\n'), ptrdiff_t{4});
+
+  proto::Json assistant = proto::Json::parse(R"({
+    "type": "user",
+    "message": {"content": [
+      {"type": "tool_result", "tool_use_id": "toolu_1",
+       "content": "riadok\r\nriadok\r\n"}
+    ]}
+  })");
+  transcript.Append(proto::Classify(assistant));
+  transcript.SetCollapsed(transcript.blocks().size() - 1, false);
+  CHECK(transcript.Text().find(L'\r') == std::wstring::npos);
+
+  std::string problem;
+  CHECK(transcript.CheckInvariants(&problem));
+}
+
+void TestEmptyBlocksAreDropped() {
+  TEST("transcript: prazdny text a thinking nerobia blok");
+  // Videne v prvom behu GUI: prisiel blok "premýšľanie (0 riadkov)".
+  model::Transcript transcript;
+  proto::Json assistant = proto::Json::parse(R"({
+    "type": "assistant",
+    "message": {"content": [
+      {"type": "thinking", "thinking": ""},
+      {"type": "text", "text": ""},
+      {"type": "text", "text": "toto zostava"}
+    ]}
+  })");
+  transcript.Append(proto::Classify(assistant));
+  CHECK_EQ(transcript.blocks().size(), size_t{1});
+
+  // Prazdny vysledok nastroja je naopak odpoved a zostava.
+  proto::Json result = proto::Json::parse(R"({
+    "type": "user",
+    "message": {"content": [
+      {"type": "tool_result", "tool_use_id": "toolu_1", "content": ""}
+    ]}
+  })");
+  transcript.Append(proto::Classify(result));
+  CHECK_EQ(transcript.blocks().size(), size_t{2});
+
+  std::string problem;
+  CHECK(transcript.CheckInvariants(&problem));
+}
+
 void TestSummariesAreOneLine() {
   TEST("transcript: zhrnutie je vzdy jeden riadok");
   model::Transcript transcript;
@@ -397,6 +453,8 @@ int main(int argc, char** argv) {
   TestUtfRoundTrip();
   TestRangeMap();
   TestBlockAtAndNavigation();
+  TestNewlinesAreOneCharacter();
+  TestEmptyBlocksAreDropped();
   TestSummariesAreOneLine();
   TestFixtureBasic(fixtures);
   TestFixtureDenied(fixtures);

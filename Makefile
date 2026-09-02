@@ -30,13 +30,17 @@ DEPFLAGS  = -MMD -MP
 # Jeden .exe bez msys64 na cielovom stroji.  Pri appke, ktora sa ma dat
 # niekomu poslat, to nie je luxus ale podmienka.
 STATIC   := -static -static-libgcc -static-libstdc++
-# wmain namiesto main: argv pride ako wchar_t** a cesty s diakritikou prezijú.
-# Bez -municode hlada linker WinMain a padne na undefined reference.
+# Siroky vstupny bod: cesty s diakritikou prezijú.  Bez -municode hlada linker
+# WinMain a padne na undefined reference.
 UNICODE_ENTRY := -municode
+# Aplikacia je windowsova, nie konzolova.  Konzolovemu .exe pridelí Windows
+# konzolu, ci ju chce alebo nie, a vedla okna sa zjavi cierny obdlznik --
+# presne to, od coho sa tu odchadza.  Spike konzolu naopak potrebuje.
+GUI_SUBSYSTEM := -mwindows
 
 CXXFLAGS := -std=c++20 -O2 $(WARN) -I. -Isrc \
             -DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00 -DUNICODE -D_UNICODE
-LDLIBS   := -lole32 -lshell32 -lcomctl32 -luuid
+LDLIBS   := -lole32 -lshell32 -lcomctl32 -luuid -lgdi32
 
 # Nezavisle na ClaudeLens, da sa vziat do ineho projektu tak ako je.
 WIN_SRCS   := src/win/window.cpp src/win/dialog.cpp src/win/process.cpp
@@ -55,6 +59,11 @@ PROTO_SRCS := $(PROTO_PURE_SRCS) src/proto/session.cpp
 # testovat bez okna -- co je vacsina toho, preco maju tie testy cenu.
 MODEL_SRCS := src/model/utf.cpp src/model/transcript.cpp
 
+UI_SRCS := src/ui/session_pane.cpp src/ui/main_window.cpp
+
+APP_SRCS := $(WIN_SRCS) $(PROTO_SRCS) $(MODEL_SRCS) $(UI_SRCS) src/main.cpp
+APP_OBJS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(APP_SRCS))
+
 SPIKE_SRCS := $(WIN_SRCS) $(PROTO_SRCS) src/spike_console.cpp
 SPIKE_OBJS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(SPIKE_SRCS))
 
@@ -62,14 +71,18 @@ TEST_SRCS := $(PROTO_PURE_SRCS) $(MODEL_SRCS)
 TEST_OBJS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(TEST_SRCS)) \
              $(BUILD)/tests/test_main.o
 
-.PHONY: all spike test check clean
-all: spike test
+.PHONY: all app spike test check clean
+all: app spike test
+app: $(BIN)/claudelens.exe
 spike: $(BIN)/spike_console.exe
 test: $(BIN)/tests.exe
 
 # `make check` testy aj spusti; `make test` ich len zostavi.
 check: test
 	./$(BIN)/tests.exe
+
+$(BIN)/claudelens.exe: $(APP_OBJS) | $(BIN)
+	$(CXX) $(STATIC) $(UNICODE_ENTRY) $(GUI_SUBSYSTEM) -o $@ $^ $(LDLIBS)
 
 $(BIN)/spike_console.exe: $(SPIKE_OBJS) | $(BIN)
 	$(CXX) $(STATIC) $(UNICODE_ENTRY) -o $@ $^ $(LDLIBS)

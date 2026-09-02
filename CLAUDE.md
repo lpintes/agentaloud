@@ -157,9 +157,20 @@ Tri pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho
    `PermissionCallback`. Čokoľvek, čo siahne na okno, musí ísť cez
    `PostMessage`.
 3. **Kurzor vo výstupnom poli sa nikdy nehýbe sám.** Ani pri rozbalení bloku,
-   ani pri pripísaní nového obsahu na koniec. `EM_REPLACESEL` a `SETTEXTEX` ho
-   posunú, takže: uložiť `EM_EXGETSEL`, zmena s vypnutým `WM_SETREDRAW`,
-   obnoviť na prepočítaný offset.
+   ani pri pripísaní nového obsahu na koniec. Hýbu sa tri veci a všetky tri
+   treba obnoviť: kurzor, výber a prvý viditeľný riadok. Postup je v
+   `ui::ApplyEdit` — `EM_EXGETSEL` + `EM_GETFIRSTVISIBLELINE`, zmena s vypnutým
+   `WM_SETREDRAW`, potom `EM_EXSETSEL` + `EM_LINESCROLL` späť.
+4. **Každý zlom riadku je práve jeden znak, a je to `\n`.** RichEdit počíta
+   odstavcový zlom ako jeden; text s `\r\n` by bol dva znaky v modeli a jeden
+   vo widgete. Výstup nástrojov `\r\n` obsahuje — sú to windowsové programy.
+   Normalizuje `model::NormalizeNewlines`, ktorým prechádza **každý** text
+   vstupujúci do bloku, vrátane promptu z editačného poľa.
+
+Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
+za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa
+rozídu, titulok okna sa zmení na **„ClaudeLens — NESÚLAD MAPY ROZSAHOV"**. Ak
+to niekedy uvidíš, neladí invariant 3 alebo 4 a navigácia bude zameriavať zle.
 
 Bez `--permission-prompt-tool stdio` sa z pravidla „ask" stane „deny" a nikto
 sa nás na nič nespýta. Prepínač je z `--help` vypadnutý, ale CLI ho prijíma.

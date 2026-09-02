@@ -8,7 +8,32 @@ namespace {
 constexpr size_t kSummaryLimit = 100;
 constexpr size_t kInlineResultLimit = 60;
 
-std::wstring Widen(const std::string& text) { return Utf16FromUtf8(text); }
+// Every line break becomes exactly one character, and it is '\n'.
+//
+// Not tidiness.  RichEdit stores a paragraph break as a single character and
+// counts it as one, so text carrying "\r\n" would be two characters here and
+// one there.  The map of block to character range is the whole basis of
+// navigation, collapsing and bookmarks, so a drift of one character per line
+// of tool output ends as a caret in the wrong place -- the exact failure this
+// application exists to remove.  Tool output does carry "\r\n": it comes from
+// Windows programs.
+std::wstring NormalizeNewlines(std::wstring text) {
+  std::wstring out;
+  out.reserve(text.size());
+  for (size_t i = 0; i < text.size(); ++i) {
+    if (text[i] == L'\r') {
+      if (i + 1 < text.size() && text[i + 1] == L'\n') ++i;
+      out.push_back(L'\n');
+    } else {
+      out.push_back(text[i]);
+    }
+  }
+  return out;
+}
+
+std::wstring Widen(const std::string& text) {
+  return NormalizeNewlines(Utf16FromUtf8(text));
+}
 
 std::string StringField(const proto::Json& object, const char* name) {
   auto found = object.find(name);
@@ -224,8 +249,10 @@ Edit Transcript::AppendBlocks(std::vector<Block> blocks) {
 Edit Transcript::AppendUserPrompt(const std::wstring& text) {
   Block block;
   block.kind = BlockKind::UserPrompt;
-  block.body = text;
-  block.summary = OneLine(text, kSummaryLimit);
+  // The prompt comes straight out of a multiline edit control, which hands
+  // back "\r\n"; it needs the same normalising as anything off the stream.
+  block.body = NormalizeNewlines(text);
+  block.summary = OneLine(block.body, kSummaryLimit);
   return AppendBlocks({std::move(block)});
 }
 
@@ -250,10 +277,17 @@ Edit Transcript::Append(const proto::Event& event) {
       for (const proto::Json& item : *content) {
         if (!item.is_object()) continue;
         const std::string type = StringField(item, "type");
+        // Empty text and empty thinking blocks do arrive -- a message can
+        // carry a block that never got any content.  They are not worth a
+        // line each; "premýšľanie (0 riadkov)" is noise between the things
+        // the reader came for.  An empty tool_result is different and stays:
+        // that a command printed nothing is an answer.
         if (type == "thinking") {
-          made.push_back(MakeThinking(Widen(StringField(item, "thinking"))));
+          const std::wstring thinking = Widen(StringField(item, "thinking"));
+          if (!thinking.empty()) made.push_back(MakeThinking(thinking));
         } else if (type == "text") {
-          made.push_back(MakeAssistantText(Widen(StringField(item, "text"))));
+          const std::wstring text = Widen(StringField(item, "text"));
+          if (!text.empty()) made.push_back(MakeAssistantText(text));
         } else if (type == "tool_use") {
           made.push_back(MakeToolUse(item));
         }
