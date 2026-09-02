@@ -4,3 +4,6 @@
 *.db
 .beads-credential-key
 .beads/proxieddb/
+
+# Surovy zaznam spiku -- obsahuje session id a ceny, nie je to zdroj pravdy.
+tools/spike_control.log
