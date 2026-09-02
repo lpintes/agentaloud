@@ -66,7 +66,7 @@ principiálne zlé rozhranie pre konverzáciu so štruktúrou — je to jeden pl
 buffer bez sémantiky.
 
 **Aplikácia sa volá ClaudeLens, adresár repozitára je `claude-gui`, pracovná
-vetva `claudelens`.** Nie je to nekonzistencia, ktorú treba opraviť.
+vetva `main`.** Nie je to nekonzistencia, ktorú treba opraviť.
 
 **Nereplikujeme terminál.** Komunikuje sa cez headless režim, ktorý posiela
 štruktúrované JSONL. Terminál ten istý dátový model iba vykresľuje; my ho
