@@ -125,3 +125,112 @@ bd prime                # Refresh Beads context
 
 **Architecture in one line:** issues live in a local Dolt DB; sync uses `refs/dolt/data` on your git remote; `.beads/issues.jsonl` is a passive export. See https://github.com/gastownhall/beads/blob/main/docs/SYNC_CONCEPTS.md for details and anti-patterns.
 <!-- END BEADS CODEX SETUP -->
+
+## ClaudeLens
+
+Natívne Win32 GUI v C++, ktoré nahrádza terminál ako rozhranie ku Claude Code.
+Primárne pre autora, sekundárne pre nevidiacich používateľov NVDA. Terminál je
+principiálne zlé rozhranie pre konverzáciu so štruktúrou — je to jeden plochý
+buffer bez sémantiky.
+
+**Aplikácia sa volá ClaudeLens, adresár repozitára je `claude-gui`, pracovná
+vetva `claudelens`.** Nie je to nekonzistencia, ktorú treba opraviť.
+
+**Nereplikujeme terminál.** Komunikuje sa cez headless režim, ktorý posiela
+štruktúrované JSONL. Terminál ten istý dátový model iba vykresľuje; my ho
+vykresľujeme inak. Ak sa niekedy objaví nutkanie parsovať ANSI alebo použiť
+ConPTY, je to znak, že sa niečo robí zle.
+
+Celý návrh vrátane zavrhnutých alternatív je v beads. Začni `bd show
+claude-gui-lkk` (epic) a `bd ready`.
+
+## Build & Test
+
+```bash
+PATH=/c/msys64/ucrt64/bin:$PATH make spike   # bin/spike_console.exe
+PATH=/c/msys64/ucrt64/bin:$PATH make clean
+```
+
+Overenie protokolovej vrstvy naostro (potrebuje jednorazový git repozitár,
+míňa kredit, `allow` naozaj vykoná commit):
+
+```bash
+./bin/spike_console.exe <prazdny-git-repo> allow   # commit prejde
+./bin/spike_console.exe <prazdny-git-repo> deny    # commit neprejde
+```
+
+ucrt64, nie mingw64 — UCRT je systémové CRT novších Windowsov a odpadá
+`msvcrt` a jeho zaobchádzanie s UTF-8. Prekladač sa volá absolútnou cestou;
+globálnemu PATH sa never (viď poznámku o 32/64-bit v globálnom `CLAUDE.md`).
+
+## Architecture Overview
+
+Štyri vrstvy. Každá vidí len tú pod sebou a **iba `ui/` pozná `HWND`.**
+
+| Vrstva | Obsah | Nesmie vedieť |
+|---|---|---|
+| `src/win/` | `window`, `dialog` (prevzaté z `c:/b/eureka-a4`), `process` | čo je na druhom konci rúr |
+| `src/proto/` | `jsonl`, `events`, `control`, `session` | ako sa transkript zobrazuje |
+| `src/model/` | `transcript`, `bookmarks`, `history` | že existuje RichEdit |
+| `src/ui/` | pohľady, dialógy, stavový riadok, reč | — |
+
+`session` je v `proto/`, nie v `model/`, lebo proces, rúry, JSONL aj control
+kanál prestanú platiť naraz — keď sa zmení CLI.
+
+`model/transcript` drží bloky a mapu blok → rozsah znakov. `ui/transcript_view`
+je jediný, kto tú mapu prekladá na pozície kurzora.
+
+## Invarianty
+
+Tri pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
+
+1. **Stdin JE control kanál.** Zavrieť ho pred koncom ťahu spôsobí
+   `"Tool permission request failed: AbortError: Stream closed"` s
+   `non_execution_kind: "permission-rule"` — číta sa to ako zamietnutie
+   pravidlom, nie ako pokazený kanál, a model to skúša znova. Zavrieť až po
+   zázname `type: result`. Vynucuje `proto::Session::Stop()`.
+2. **Callbacky bežia na čítacom vlákne.** `EventCallback` aj
+   `PermissionCallback`. Čokoľvek, čo siahne na okno, musí ísť cez
+   `PostMessage`.
+3. **Kurzor vo výstupnom poli sa nikdy nehýbe sám.** Ani pri rozbalení bloku,
+   ani pri pripísaní nového obsahu na koniec. `EM_REPLACESEL` a `SETTEXTEX` ho
+   posunú, takže: uložiť `EM_EXGETSEL`, zmena s vypnutým `WM_SETREDRAW`,
+   obnoviť na prepočítaný offset.
+
+Bez `--permission-prompt-tool stdio` sa z pravidla „ask" stane „deny" a nikto
+sa nás na nič nespýta. Prepínač je z `--help` vypadnutý, ale CLI ho prijíma.
+
+## Conventions & Patterns
+
+- Komentáre v `src/` po anglicky (tak sú písané prevzaté `win/` súbory),
+  v `Makefile` po slovensky bez diakritiky. Komentár hovorí **prečo**, nie čo.
+- Beads polia a commit správy bez diakritiky.
+- **Zdrojáky nepíš cez shell heredoc.** Toto prostredie v ňom žerie spätné
+  lomky, takže `L'\\'` sa ticho zmení na `L'\'`. Používaj Write/Edit.
+- Žiadny Python ani Node v produkte. Python je na prieskum správania CLI
+  (`tools/`), nie závislosť.
+- Ústupky vidiacim používateľom sa nerobia. Vloženie dialógov do prepisu,
+  streamovanie po tokenoch a farebné diffy boli zvážené a zamietnuté.
+
+## Uzavretie kroku
+
+Krok je hotový až keď sa dá bezpečne skončiť — teda keď by nová session
+s jediným slovom „pokračuj" nestratila nič podstatné. Pred ohlásením hotového
+kroku:
+
+1. **Zostav a spusti** — nestačí, že sa to preložilo.
+2. **`bd update <id> --notes`** — čo sa zistilo, aké sú overené tvary dát,
+   a **každá odchýlka od pôvodného návrhu aj s dôvodom.** Odchýlku zapíš aj do
+   `--design` epicu, nech tam nezostane nepravda.
+3. **Nový invariant → do sekcie Invarianty vyššie**, nielen do komentára. Ak
+   pravidlo platí pre viac než jeden súbor, patrí sem.
+4. **`bd create`** na všetko, čo z kroku vypadlo alebo pribudlo.
+5. **Commit** so správou, ktorá hovorí prečo, nie čo. Diff hovorí čo.
+6. **`bd close`** až nakoniec.
+
+Bod 2 a 3 sú tie, ktoré sa vynechávajú, a sú to práve tie, ktoré rozhodujú
+o tom, či sa dá pokračovať zajtra.
+
+`CLAUDE.md` a `AGENTS.md` sú nezávislé súbory s odlišnou hlavičkou od beads,
+ale od nadpisu `## ClaudeLens` nižšie musia byť **zhodné** — Codex číta ten
+druhý. Pri zmene tejto časti zrkadli do oboch a over `diff`om.
