@@ -69,6 +69,14 @@ size_t CaretOffset(HWND edit) {
   return range.cpMin < 0 ? 0 : static_cast<size_t>(range.cpMin);
 }
 
+// A selection means somebody is working with the text, whatever else it looks
+// like, and nothing here may move it.
+bool HasSelection(HWND edit) {
+  CHARRANGE range = {};
+  SendMessageW(edit, EM_EXGETSEL, 0, reinterpret_cast<LPARAM>(&range));
+  return range.cpMin != range.cpMax;
+}
+
 void PutCaret(HWND edit, size_t offset) {
   CHARRANGE at = {static_cast<LONG>(offset), static_cast<LONG>(offset)};
   SendMessageW(edit, EM_EXSETSEL, 0, reinterpret_cast<LPARAM>(&at));
@@ -319,23 +327,29 @@ void SessionPane::Send() {
   const std::wstring text = GetText(prompt_);
   if (IsBlank(text)) return;
 
+  // Is the reader reading, or just listening?
+  //
+  // Sending moves the caret past the new prompt, so that the answer arrives
+  // directly under it -- otherwise you walk through your own prompt to reach
+  // the reply.  But it must not do that to somebody who is in the middle of
+  // reading something further back; they would lose their place.
+  //
+  // "Caret at the end" alone does not decide it.  Once a turn has happened the
+  // caret sits where we left it, just before that answer -- never at the end
+  // -- so a reader who only listens and never touches the transcript would
+  // have the caret pinned to the first answer of the day.  So the test is: at
+  // the end, OR exactly where this left it last time and therefore untouched.
+  // Anything else means they moved it themselves, and then it is theirs.
+  const size_t caret = CaretOffset(transcript_);
+  const bool following = !HasSelection(transcript_) &&
+                         (caret >= model_.Text().size() || caret == anchor_);
+
   turnFirstBlock_ = model_.blocks().size();
   Apply(model_.AppendUserPrompt(text));
-  // Past the prompt that was just added, so the answer arrives directly under
-  // the caret.
-  //
-  // This does not contradict "the caret never moves on its own" -- it sharpens
-  // it.  The rule is about text ARRIVING; sending is something the reader did,
-  // and after doing it the thing they want to read next is what comes back,
-  // not what they themselves just wrote.  Leaving the caret alone meant having
-  // to walk through your own prompt to reach the answer.
-  //
-  // Considered and rejected: doing this only when the caret was already at the
-  // end.  It sounds more careful and is worse -- after the first turn the
-  // caret sits at the start of that answer, never at the end, so the condition
-  // would hold once and never again.  Getting back to a place left behind is
-  // what Ctrl+0 is for (claude-gui-lkk.5).
-  PutCaretAtEnd(transcript_);
+  if (following) {
+    PutCaretAtEnd(transcript_);
+    anchor_ = model_.Text().size();
+  }
 
   session_.SendPrompt(model::Utf8FromUtf16(text));
   SetWindowTextW(prompt_, L"");

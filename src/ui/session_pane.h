@@ -85,6 +85,10 @@ class SessionPane {
   // Where this turn's blocks begin, so that when it ends we know which of the
   // answers is the new one to read out.
   size_t turnFirstBlock_ = 0;
+  // Where Send() last put the caret.  If it is still there when the next
+  // prompt goes out, nobody has moved it and the caret is ours to move; if it
+  // has moved, the reader is reading and it is theirs.
+  size_t anchor_ = 0;
 
   std::mutex queueMutex_;
   std::vector<proto::Event> queue_;
