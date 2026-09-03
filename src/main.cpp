@@ -19,16 +19,37 @@ namespace {
 // what the tools may touch.  It is never guessed from where the .exe happens
 // to sit, because that is how a session ends up rooted somewhere harmless
 // looking and wrong.
-std::wstring ChooseProject() {
+// The project, and the permission mode if one was asked for.  The mode is not
+// guessed either: a session that quietly ran with bypassPermissions because
+// the last one did is worse than one that asks too much.
+struct Arguments {
+  std::wstring project;
+  std::wstring permissionMode;
+};
+
+Arguments ReadArguments() {
+  Arguments arguments;
   int argc = 0;
   wchar_t** argv = CommandLineToArgvW(GetCommandLineW(), &argc);
-  std::wstring project;
   if (argv) {
-    if (argc > 1) project = argv[1];
+    for (int i = 1; i < argc; ++i) {
+      const std::wstring argument = argv[i];
+      // The CLI's own spelling, and its own values -- acceptEdits, auto,
+      // bypassPermissions, manual, dontAsk, plan.  Not validated here: the
+      // CLI rejects what it does not know, and a second list of legal values
+      // in this file would be a list that goes stale.
+      if (argument == L"--permission-mode" && i + 1 < argc) {
+        arguments.permissionMode = argv[++i];
+      } else if (arguments.project.empty()) {
+        arguments.project = argument;
+      }
+    }
     LocalFree(argv);
   }
-  if (!project.empty()) return project;
-  return win::PickFolder(nullptr, L"Vyberte priečinok projektu");
+  if (arguments.project.empty()) {
+    arguments.project = win::PickFolder(nullptr, L"Vyberte priečinok projektu");
+  }
+  return arguments;
 }
 
 }  // namespace
@@ -56,11 +77,12 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     return 1;
   }
 
-  const std::wstring project = ChooseProject();
-  if (project.empty()) return 0;  // cancelled, which is an answer
+  const Arguments arguments = ReadArguments();
+  if (arguments.project.empty()) return 0;  // cancelled, which is an answer
 
   proto::Session::Options options;
-  options.workingDir = project;
+  options.workingDir = arguments.project;
+  options.permissionMode = arguments.permissionMode;
 
   ui::MainWindow window;
   if (!window.Open(instance, options)) {

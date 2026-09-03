@@ -311,7 +311,20 @@ void SessionPane::OnDrain() {
   const size_t blocksBefore = model_.blocks().size();
 
   for (const proto::Event& event : events) {
+    // Taken before the blocks are made, so that what the batch added can be
+    // told from what was there.  An id and not a count: a tool result is
+    // inserted behind its call, so the new blocks are not the tail.
+    const size_t idBefore = model_.nextBlockId();
     for (const model::Edit& edit : model_.Append(event)) Apply(edit);
+    if (event.kind == proto::EventKind::Assistant) AnnounceProgress(idBefore);
+    if (event.kind == proto::EventKind::SystemThinkingTokens && !thinkingSaid_) {
+      // Once per stretch of thinking, not once per record -- there are dozens
+      // of these per turn.  Cleared by anything else that speaks, so a turn
+      // that thinks, calls a tool and thinks again says it twice, which is
+      // what is happening.
+      thinkingSaid_ = true;
+      if (speech_.available()) speech_.Say(L"premýšľam", false);
+    }
     if (event.kind == proto::EventKind::Result) {
       busy_ = false;
       // Empty, not "done".  Done says nothing a reader can use -- what was
@@ -376,6 +389,26 @@ LRESULT SessionPane::OnPermission(LPARAM pointer) {
   pending->decision.denyMessage =
       "Používateľ to zamietol. Nepokračuj a spýtaj sa, čo ďalej.";
   return 0;
+}
+
+void SessionPane::AnnounceProgress(size_t firstNewId) {
+  // What the turn is doing, while it does it.  Until this was here the whole
+  // turn was silent until its result, and a reader had no way to tell a long
+  // tool call from a session that had died -- the one question the status bar
+  // cannot answer, because NVDA does not read it on its own.
+  //
+  // Tool calls only, and only their summary line, which the model already
+  // makes in the form "Bash: git status".  Not the thinking and not the
+  // answer: those are read whole at the end, and reading them twice would be
+  // the chattiness that made the terminal unbearable.
+  //
+  // Queued, never interrupting.  This arrived on its own -- invariant 7.
+  for (const model::Block& block : model_.blocks()) {
+    if (block.id < firstNewId) continue;
+    if (block.kind != model::BlockKind::ToolUse) continue;
+    thinkingSaid_ = false;
+    if (speech_.available()) speech_.Say(block.summary, false);
+  }
 }
 
 void SessionPane::SpeakAnswer() {
@@ -606,10 +639,25 @@ void SessionPane::ShowRateLimit(const proto::Event& event) {
 
 void SessionPane::FocusPrompt() const { SetFocus(prompt_); }
 
+void SessionPane::RestoreFocus() const {
+  SetFocus(lastFocus_ ? lastFocus_ : prompt_);
+}
+
 void SessionPane::Send() {
-  if (busy_) return;
+  // Both refusals say so.  Ctrl+Enter is a chord and a chord can be missed --
+  // Enter alone puts a line break in the box and does nothing else -- so a
+  // send that answers with silence cannot be told from a key that half
+  // arrived.  The text is left in the box in both cases; that is why the
+  // wording says what is in the way rather than that something was lost.
+  if (busy_) {
+    Announce(L"ťah ešte beží, prompt zostal v poli");
+    return;
+  }
   const std::wstring text = GetText(prompt_);
-  if (IsBlank(text)) return;
+  if (IsBlank(text)) {
+    Announce(L"prázdny prompt");
+    return;
+  }
 
   // Is the reader reading, or just listening?
   //
@@ -638,8 +686,14 @@ void SessionPane::Send() {
   session_.SendPrompt(model::Utf8FromUtf16(text));
   SetWindowTextW(prompt_, L"");
   interrupted_ = false;
+  thinkingSaid_ = false;
   busy_ = true;
   SetStatus(L"pracujem");
+  // Said as well as written.  The bar is silent until NVDA+End is pressed, and
+  // "did that go?" is a question one has right after pressing the key, not one
+  // worth a second key.  This answers the key, so it interrupts -- invariant 7
+  // allows exactly that, and only that.
+  Announce(L"pracujem");
 }
 
 void SessionPane::Interrupt() {
@@ -667,6 +721,7 @@ LRESULT CALLBACK SessionPane::PromptProc(HWND window, UINT message,
                                          WPARAM wParam, LPARAM lParam,
                                          UINT_PTR id, DWORD_PTR data) {
   SessionPane* pane = reinterpret_cast<SessionPane*>(data);
+  if (message == WM_SETFOCUS) pane->lastFocus_ = window;
   if (message == WM_KEYDOWN) {
     const bool control = GetKeyState(VK_CONTROL) < 0;
     if (wParam == VK_RETURN && control) {
@@ -700,7 +755,14 @@ LRESULT CALLBACK SessionPane::PromptProc(HWND window, UINT message,
       return 0;
     }
   }
-  if (message == WM_CHAR && wParam == VK_TAB) return 0;  // no tab character
+  // Neither of these may reach the box as a character.  TranslateMessage runs
+  // in the message loop, BEFORE the key ever gets here, so a key this
+  // procedure "handled" still produces its WM_CHAR: Tab would type a tab, and
+  // Ctrl+Enter produces 0x0A, which a multiline EDIT dutifully inserts.  On a
+  // send that goes through, the box is cleared and nobody sees it; on one that
+  // is refused -- a turn already running, an empty prompt -- the line break
+  // stays and is carried into the next prompt.
+  if (message == WM_CHAR && (wParam == VK_TAB || wParam == 0x0A)) return 0;
   if (message == WM_DESTROY) RemoveWindowSubclass(window, PromptProc, id);
   return DefSubclassProc(window, message, wParam, lParam);
 }
@@ -709,6 +771,7 @@ LRESULT CALLBACK SessionPane::TranscriptProc(HWND window, UINT message,
                                              WPARAM wParam, LPARAM lParam,
                                              UINT_PTR id, DWORD_PTR data) {
   SessionPane* pane = reinterpret_cast<SessionPane*>(data);
+  if (message == WM_SETFOCUS) pane->lastFocus_ = window;
   if (message == WM_KEYDOWN && wParam == VK_TAB) {
     SetFocus(pane->prompt_);
     return 0;

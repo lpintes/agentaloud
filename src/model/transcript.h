@@ -176,6 +176,11 @@ class Transcript {
   size_t nextBlockId_ = 1;
   size_t unknownCount_ = 0;
   std::vector<std::string> unknownTypes_;
+  // The project directory, out of system/init.  Kept only to take itself off
+  // the front of the paths in tool summaries -- a summary is one line and the
+  // part of a path worth hearing is the end.  Empty until the first init,
+  // which is harmless: paths are then shortened from the left instead.
+  std::wstring projectRoot_;
 };
 
 }  // namespace model

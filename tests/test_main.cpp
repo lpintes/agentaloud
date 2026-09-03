@@ -514,6 +514,80 @@ void TestNewlinesAreOneCharacter() {
   CHECK(transcript.CheckInvariants(&problem));
 }
 
+void TestAnsiEscapesAreStripped() {
+  TEST("transcript: ANSI sekvencie z vystupu nastroja sa zahadzuju");
+  // Vystup nastrojov je vystup terminalovych programov.  V korpuse 147
+  // session su farby (\x1b[36;1m) aj kurzorove riadenie z progress barov
+  // (\x1b[2K, \x1b[1A, \x1b[G).  Ponechane by ich NVDA citala znak po znaku.
+  model::Transcript transcript;
+  proto::Json result = proto::Json::parse(R"({
+    "type": "user",
+    "message": {"content": [
+      {"type": "tool_result", "tool_use_id": "toolu_1",
+       "content": "\u001b[31;1mchyba\u001b[0m\n\u001b[2K\u001b[1Ghotovo"}
+    ]}
+  })");
+  transcript.Append(proto::Classify(result));
+  transcript.SetCollapsed(transcript.blocks().size() - 1, false);
+  const std::wstring& text = transcript.Text();
+  CHECK(text.find(L'\x1b') == std::wstring::npos);
+  CHECK(text.find(L"[31;1m") == std::wstring::npos);
+  // Text medzi sekvenciami zostava, aj ked su nalepene na nom.
+  CHECK(text.find(L"chyba") != std::wstring::npos);
+  CHECK(text.find(L"hotovo") != std::wstring::npos);
+
+  std::string problem;
+  CHECK(transcript.CheckInvariants(&problem));
+
+  // Osamoteny ESC zahodi seba, nie znak za sebou -- v korpuse su za nim
+  // obycajne znaky, nie dvojznakove sekvencie.
+  model::Transcript lone;
+  proto::Json odd = proto::Json::parse(R"({
+    "type": "assistant",
+    "message": {"content": [{"type": "text", "text": "pred\u001b\"po"}]}
+  })");
+  lone.Append(proto::Classify(odd));
+  CHECK(lone.Text().find(L"pred\"po") != std::wstring::npos);
+}
+
+void TestToolPathsAreShortened() {
+  TEST("transcript: cesta v zhrnuti nastroja sa kráti od zaciatku, nie od konca");
+  // Pocute pri testovani cez NVDA: zhrnutie zaznelo ako "Write: C:, Users,
+  // pintes, AppData, Local, Temp, claude, C--vcs-..., f3a7ea6b-38b1-4427-88"
+  // a tam skoncilo -- limit odrezal nazov suboru, cize jedine, co citatel
+  // chcel vediet.
+  model::Transcript transcript;
+  proto::Json init = proto::Json::parse(R"({
+    "type": "system", "subtype": "init", "cwd": "C:/projekt/appka"
+  })");
+  transcript.Append(proto::Classify(init));
+
+  proto::Json call = proto::Json::parse(R"({
+    "type": "assistant",
+    "message": {"content": [
+      {"type": "tool_use", "id": "toolu_1", "name": "Write",
+       "input": {"file_path": "C:\\projekt\\appka\\src\\model\\transcript.cpp"}}
+    ]}
+  })");
+  transcript.Append(proto::Classify(call));
+  // Opacne lomky proti lomkam a velke pismena proti malym: to iste miesto.
+  CHECK_EQ(transcript.blocks().back().summary,
+           std::wstring(L"Write: src\\model\\transcript.cpp"));
+
+  // Mimo projektu sa odreze zaciatok a nazov suboru zostane.
+  proto::Json outside = proto::Json::parse(R"({
+    "type": "assistant",
+    "message": {"content": [
+      {"type": "tool_use", "id": "toolu_2", "name": "Read",
+       "input": {"file_path": "C:\\Users\\niekto\\AppData\\Local\\Temp\\hlboko\\este\\hlbsie\\a\\b\\c\\dolezity_subor.txt"}}
+    ]}
+  })");
+  transcript.Append(proto::Classify(outside));
+  const std::wstring& summary = transcript.blocks().back().summary;
+  CHECK(summary.find(L"dolezity_subor.txt") != std::wstring::npos);
+  CHECK(summary.find(L"...") == size_t{6});  // hned za "Read: "
+}
+
 void TestEmptyBlocksAreDropped() {
   TEST("transcript: prazdny text a thinking nerobia blok");
   // Videne v prvom behu GUI: prisiel blok "premýšľanie (0 riadkov)".
@@ -772,6 +846,8 @@ int main(int argc, char** argv) {
   TestBookmarksSurviveCollapsing();
   TestRateLimitParsing();
   TestNewlinesAreOneCharacter();
+  TestAnsiEscapesAreStripped();
+  TestToolPathsAreShortened();
   TestEmptyBlocksAreDropped();
   TestSpeakerPrefix();
   TestSummariesAreOneLine();

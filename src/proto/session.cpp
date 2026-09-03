@@ -21,6 +21,11 @@ std::wstring BuildCommandLine(const Session::Options& options) {
   // The one switch the whole design rests on.  See control.h.
   add(L"--permission-prompt-tool");
   add(L"stdio");
+  if (!options.permissionMode.empty()) {
+    add(L"--permission-mode");
+    line += L' ';
+    line += win::Process::Quote(options.permissionMode);
+  }
   if (!options.model.empty()) {
     add(L"--model");
     line += L' ';

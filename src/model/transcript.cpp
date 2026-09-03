@@ -31,8 +31,60 @@ std::wstring NormalizeNewlines(std::wstring text) {
   return out;
 }
 
+// Terminal escape sequences, thrown away rather than rendered.
+//
+// Tool output is the output of terminal programs, so it carries them: colours
+// (ESC [ 31;1 m), but also cursor control from progress bars (ESC [ 2K,
+// ESC [ 1A, ESC [ G).  Left in, a screen reader reads them out character by
+// character; they are noise in the one place where noise costs the most.
+//
+// Colouring them instead was considered and is claude-gui-lkk.5.16.  It does
+// not change this function: the cursor sequences say "go back and overwrite
+// the line", which is terminal redrawing, and this application does not redraw
+// a terminal.  They would have to be dropped either way.
+//
+// CSI (ESC [ ... final) and OSC (ESC ] ... BEL or ESC \) go whole.  A lone ESC
+// goes on its own, keeping what follows: in the corpus those are ordinary
+// characters that happen to sit behind an ESC, not two-character sequences.
+std::wstring StripEscapes(const std::wstring& text) {
+  std::wstring out;
+  out.reserve(text.size());
+  for (size_t i = 0; i < text.size(); ++i) {
+    const wchar_t character = text[i];
+    if (character == 0x07) continue;  // BEL: a beep we did not ask for
+    if (character != 0x1B) {
+      out.push_back(character);
+      continue;
+    }
+    if (i + 1 >= text.size()) break;  // trailing ESC, nothing to keep
+    if (text[i + 1] == L'[') {
+      // Parameters and intermediates, then one final byte in 0x40..0x7E.
+      size_t at = i + 2;
+      while (at < text.size() && text[at] >= 0x20 && text[at] <= 0x3F) ++at;
+      if (at < text.size() && text[at] >= 0x40 && text[at] <= 0x7E) {
+        i = at;
+      } else {
+        i = text.size() - 1;  // unterminated: the rest is not text either
+      }
+      continue;
+    }
+    if (text[i + 1] == L']') {
+      size_t at = i + 2;
+      while (at < text.size() && text[at] != 0x07 &&
+             !(text[at] == 0x1B && at + 1 < text.size() &&
+               text[at + 1] == L'\\')) {
+        ++at;
+      }
+      i = at < text.size() && text[at] == 0x1B ? at + 1 : at;
+      continue;
+    }
+    // Anything else: drop the ESC alone and let the next character stand.
+  }
+  return out;
+}
+
 std::wstring Widen(const std::string& text) {
-  return NormalizeNewlines(Utf16FromUtf8(text));
+  return NormalizeNewlines(StripEscapes(Utf16FromUtf8(text)));
 }
 
 std::string StringField(const proto::Json& object, const char* name) {
@@ -80,24 +132,61 @@ std::wstring Count(size_t lines) {
   return number + L" riadkov";
 }
 
+// A path as it belongs in a summary line: what is left of it once the project
+// is taken off the front.
+//
+// The whole path does not fit -- summaries are cut at kSummaryLimit -- and it
+// is cut at the END, which on a path throws away the file name and keeps
+// "C:\Users\...\AppData\Local\Temp\...".  Heard out loud at every tool call
+// that is not merely long, it is the wrong half.
+//
+// Comparison is case-insensitive and treats the two separators as one: the
+// working directory arrives from system/init with forward slashes and tool
+// arguments come back with backslashes, for the same file.
+std::wstring ShortenPath(const std::wstring& path, const std::wstring& root) {
+  const auto same = [](wchar_t left, wchar_t right) {
+    if (left == L'/') left = L'\\';
+    if (right == L'/') right = L'\\';
+    if (left >= L'A' && left <= L'Z') left = static_cast<wchar_t>(left + 32);
+    if (right >= L'A' && right <= L'Z') right = static_cast<wchar_t>(right + 32);
+    return left == right;
+  };
+  if (!root.empty() && path.size() > root.size() &&
+      std::equal(root.begin(), root.end(), path.begin(), same)) {
+    size_t at = root.size();
+    if (path[at] == L'\\' || path[at] == L'/') ++at;
+    if (at < path.size()) return path.substr(at);
+  }
+  // Not under the project: keep the tail, mark that the head is gone.  The
+  // limit is the summary's, less the room the tool name and the marker take.
+  constexpr size_t kPathLimit = 70;
+  if (path.size() > kPathLimit) {
+    return L"..." + path.substr(path.size() - kPathLimit);
+  }
+  return path;
+}
+
 // The field that says what a tool call actually does.  Falling back to the
 // whole input would put a diff into a summary line.
-std::wstring PrimaryInput(const std::string& toolName,
-                          const proto::Json& input) {
+std::wstring PrimaryInput(const std::string& toolName, const proto::Json& input,
+                          const std::wstring& root) {
   static const struct {
     const char* tool;
     const char* field;
+    bool isPath;
   } kPrimary[] = {
-      {"Bash", "command"},      {"PowerShell", "command"},
-      {"Read", "file_path"},    {"Edit", "file_path"},
-      {"Write", "file_path"},   {"NotebookEdit", "notebook_path"},
-      {"Glob", "pattern"},      {"Grep", "pattern"},
-      {"WebFetch", "url"},      {"Skill", "skill"},
+      {"Bash", "command", false},      {"PowerShell", "command", false},
+      {"Read", "file_path", true},     {"Edit", "file_path", true},
+      {"Write", "file_path", true},    {"NotebookEdit", "notebook_path", true},
+      {"Glob", "pattern", false},      {"Grep", "pattern", false},
+      {"WebFetch", "url", false},      {"Skill", "skill", false},
   };
   for (const auto& entry : kPrimary) {
     if (toolName == entry.tool) {
       const std::string value = StringField(input, entry.field);
-      if (!value.empty()) return Widen(value);
+      if (value.empty()) continue;
+      const std::wstring wide = Widen(value);
+      return entry.isPath ? ShortenPath(wide, root) : wide;
     }
   }
   const std::string description = StringField(input, "description");
@@ -161,7 +250,7 @@ Block MakeAssistantText(const std::wstring& text) {
   return block;
 }
 
-Block MakeToolUse(const proto::Json& blockJson) {
+Block MakeToolUse(const proto::Json& blockJson, const std::wstring& root) {
   const std::string name = StringField(blockJson, "name");
   auto input = blockJson.find("input");
   const proto::Json empty = proto::Json::object();
@@ -171,8 +260,8 @@ Block MakeToolUse(const proto::Json& blockJson) {
   block.kind = BlockKind::ToolUse;
   block.toolUseId = StringField(blockJson, "id");
   block.body = RenderToolInput(arguments);
-  block.summary =
-      Widen(name) + L": " + OneLine(PrimaryInput(name, arguments), kSummaryLimit);
+  block.summary = Widen(name) + L": " +
+                  OneLine(PrimaryInput(name, arguments, root), kSummaryLimit);
   block.collapsed = true;
   return block;
 }
@@ -382,7 +471,7 @@ std::vector<Edit> Transcript::Append(const proto::Event& event) {
           const std::wstring text = Widen(StringField(item, "text"));
           if (!text.empty()) made.push_back(MakeAssistantText(text));
         } else if (type == "tool_use") {
-          made.push_back(MakeToolUse(item));
+          made.push_back(MakeToolUse(item, projectRoot_));
         }
       }
       break;
@@ -417,11 +506,20 @@ std::vector<Edit> Transcript::Append(const proto::Event& event) {
     case proto::EventKind::Unknown:
       NoteUnknown(event);
       break;
+    // Makes no block either, but one field of it is worth keeping: cwd is the
+    // project, and tool paths are shortened against it.
+    case proto::EventKind::SystemInit:
+      if (projectRoot_.empty()) {
+        projectRoot_ = Widen(StringField(event.raw, "cwd"));
+      }
+      break;
     // Deliberately not in the transcript: they belong in the status bar, which
     // a screen reader reads on request and not on every change.  That is the
     // whole reason this application exists.
-    case proto::EventKind::SystemInit:
     case proto::EventKind::SystemHook:
+    // Carries a token count and nothing else; it is a sign of life for the
+    // status bar and the speech, not a piece of the conversation.
+    case proto::EventKind::SystemThinkingTokens:
     case proto::EventKind::SystemOther:
     case proto::EventKind::RateLimit:
     case proto::EventKind::Result:

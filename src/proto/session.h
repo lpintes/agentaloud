@@ -36,6 +36,13 @@ class Session {
   struct Options {
     std::wstring workingDir;              // required: this is the project
     std::wstring model;                   // empty means the configured default
+    // acceptEdits | auto | bypassPermissions | manual | dontAsk | plan.
+    // Empty means whatever the CLI defaults to, which is "ask about
+    // everything".  It has to be said here because the mode a terminal
+    // session is switched into with Shift+Tab is runtime state of that
+    // session: settings, hooks and CLAUDE.md carry over into a headless one,
+    // that does not.
+    std::wstring permissionMode;
     std::vector<std::wstring> extraArgs;  // for spikes and experiments
   };
 

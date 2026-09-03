@@ -51,6 +51,12 @@ class SessionPane {
   LRESULT OnPermission(LPARAM pending);
 
   void FocusPrompt() const;
+  // Where the focus was when the window last lost it -- the prompt the first
+  // time, because that is where a session starts.  The window itself is never
+  // a place for the focus to sit, but neither is the prompt when the reader
+  // was in the middle of the transcript: coming back from another application
+  // would cost them their place in the text.
+  void RestoreFocus() const;
   // Sends what is in the prompt box and clears it.  No-op while a turn is in
   // flight, because a second prompt would queue behind the first with nothing
   // on screen to say so.
@@ -106,6 +112,9 @@ class SessionPane {
   // Reads out what this turn answered, or beeps when there was no text answer
   // or no screen reader listening.
   void SpeakAnswer();
+  // Says what the turn is doing right now: the tool calls made since the given
+  // block id.  Called while the turn is still running, unlike SpeakAnswer.
+  void AnnounceProgress(size_t firstNewId);
 
   HWND host_ = nullptr;
   HWND transcriptLabel_ = nullptr;
@@ -113,6 +122,9 @@ class SessionPane {
   HWND promptLabel_ = nullptr;
   HWND prompt_ = nullptr;
   HFONT font_ = nullptr;
+  // Kept by the two subclass procedures, read by RestoreFocus.  A window
+  // handle and not a flag, so that a third box later needs nothing here.
+  HWND lastFocus_ = nullptr;
 
   StatusBar* statusBar_ = nullptr;
   model::Transcript model_;
@@ -137,6 +149,11 @@ class SessionPane {
   // Set by Esc, cleared by the Result that follows it and by the next prompt.
   // Its whole job is to keep that one Result quiet -- see OnDrain.
   bool interrupted_ = false;
+  // Whether "premýšľam" has already been said for the stretch of thinking now
+  // running.  Cleared by the prompt and by every tool call announced, so that
+  // it is said once per stretch and not once per record -- there are dozens of
+  // thinking_tokens per turn.
+  bool thinkingSaid_ = false;
   std::wstring status_;
   // The folder name, kept because the bar is rewritten field by field and the
   // project one has to be put back after anything that clears it.

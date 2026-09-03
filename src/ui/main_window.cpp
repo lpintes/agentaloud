@@ -38,8 +38,11 @@ LRESULT MainWindow::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
 
     case WM_SETFOCUS:
       // The window itself is never a useful place for focus to sit; a screen
-      // reader would announce the window and then nothing.
-      if (pane_) pane_->FocusPrompt();
+      // reader would announce the window and then nothing.  Where it goes is
+      // the pane's business: back to the box the reader left, not always the
+      // prompt -- coming back from another application used to cost them
+      // their place in the transcript.
+      if (pane_) pane_->RestoreFocus();
       return 0;
 
     case kMsgDrain:

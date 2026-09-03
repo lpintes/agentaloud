@@ -23,6 +23,11 @@ enum class EventKind {
   SystemInit,             // tools, model, cwd, session_id, slash_commands
   SystemPermissionDenied, // a tool that a rule would not let through
   SystemHook,             // hook_started / hook_response
+  // Ticks while the model is thinking, one every few tokens.  Carries no text
+  // worth showing -- only a running token count -- but it is the earliest
+  // sign that a turn is doing something, and the only one during a long
+  // think.  That is what it is classified for.
+  SystemThinkingTokens,
   SystemOther,
   Assistant,              // one message, content blocks inside
   User,                   // our prompt replayed, or a tool_result

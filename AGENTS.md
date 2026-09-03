@@ -280,6 +280,18 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    Kým tam druhá hláška nebola, prerušenie, ktoré prešlo, znelo rovnako ako
    prerušenie, ktoré neprešlo — ticho. Stavový riadok to nezachráni, ten NVDA
    sám nečíta.
+
+   To isté platí pre odoslanie promptu, a platí aj vtedy, keď sa **nič
+   nestalo**: Ctrl+Enter je chord a chord sa dá minúť — samotný Enter urobí
+   nový riadok a nič viac. Preto hovoria všetky tri konce `Send()`: odoslanie
+   („pracujem"), bežiaci ťah aj prázdny prompt.
+
+   A ťah, ktorý beží, nesmie byť ticho celý. Ohlasuje sa „premýšľam" pri prvom
+   `system/thinking_tokens` daného úseku a zhrnutie každého nového `ToolUse`
+   bloku (`ui::SessionPane::AnnounceProgress`) — teda to, čo terminál ukazuje
+   ako riadok so spinnerom. Nie po tokenoch: `--include-partial-messages` je
+   zvážený a zamietnutý (claude-gui-lkk.5.17), lebo práve tá reč bola na
+   termináli chaotická. Celé bloky nie sú chaos, je to jedna veta na nástroj.
 7. **Reč, ktorá prišla sama, sa neprerušuje.** `interrupt=true` v `Speech::Say`
    patrí výlučne odozve na klávesu (`ui::SessionPane::Announce`); čokoľvek, čo
    prišlo zo streamu, ide do fronty a čaká. Dôvod nie je zdvorilosť:
@@ -288,6 +300,14 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    staršie správy, aj reč, ktorú NVDA generuje sama (čítanie riadku, ohlásenie
    fokusu). Prerušiť „len tú svoju poslednú vetu" sa teda nedá ani teoreticky.
    Ruší výlučne používateľ, klávesou, tak ako je zvyknutý z terminálu.
+8. **Do bloku nevstúpi terminálová escape sekvencia.** Výstup nástrojov je
+   výstup terminálových programov: v korpuse sú farby (`ESC[36;1m`) aj
+   kurzorové riadenie z progress barov (`ESC[2K`, `ESC[1A`, `ESC[G`). NVDA ich
+   prečíta znak po znaku. Zahadzuje ich `StripEscapes` v `model/transcript.cpp`
+   na tom istom mieste ako `NormalizeNewlines` — vo `Widen()`, ktorým prechádza
+   všetok text zo streamu. Zahadzujú sa, nie prekladajú na farby: kurzorové
+   sekvencie znamenajú „vráť sa a prepíš riadok", čo je prekresľovanie
+   terminálu, a to táto aplikácia nerobí.
 
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa
@@ -302,6 +322,13 @@ sa nás na nič nespýta. Prepínač je z `--help` vypadnutý, ale CLI ho prijí
 - Komentáre v `src/` po anglicky (tak sú písané prevzaté `win/` súbory),
   v `Makefile` po slovensky bez diakritiky. Komentár hovorí **prečo**, nie čo.
 - Beads polia a commit správy bez diakritiky.
+- **Spracovať `WM_KEYDOWN` v subclasse nezabráni tomu, aby prišiel `WM_CHAR`.**
+  `TranslateMessage` beží v slučke správ, teda skôr než sa správa dostane
+  k procedúre okna. Ctrl+Enter preto do editačného poľa vloží `0x0A` a Tab
+  vloží tabulátor, nech `PromptProc` vráti čokoľvek. Každý nový chord treba
+  zahodiť **dvakrát** — raz ako klávesu, raz ako znak. Zlyháva ticho: pri
+  odoslaní sa pole vyčistí, takže vložený znak vidno až vtedy, keď sa prompt
+  neodošle.
 - **Zdrojáky nepíš cez shell heredoc.** Toto prostredie v ňom žerie spätné
   lomky, takže `L'\\'` sa ticho zmení na `L'\'`. Používaj Write/Edit.
 - Žiadny Python ani Node v produkte. Python je na prieskum správania CLI

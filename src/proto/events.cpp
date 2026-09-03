@@ -15,6 +15,7 @@ EventKind ClassifySystem(const std::string& subtype) {
   if (subtype == "hook_started" || subtype == "hook_response") {
     return EventKind::SystemHook;
   }
+  if (subtype == "thinking_tokens") return EventKind::SystemThinkingTokens;
   return EventKind::SystemOther;
 }
 
@@ -93,6 +94,7 @@ const char* KindName(EventKind kind) {
     case EventKind::SystemInit: return "system/init";
     case EventKind::SystemPermissionDenied: return "system/permission_denied";
     case EventKind::SystemHook: return "system/hook";
+    case EventKind::SystemThinkingTokens: return "system/thinking_tokens";
     case EventKind::SystemOther: return "system";
     case EventKind::Assistant: return "assistant";
     case EventKind::User: return "user";
