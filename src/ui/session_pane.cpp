@@ -345,7 +345,7 @@ void SessionPane::OnDrain() {
         if (speech_.available()) {
           speech_.Say(L"prerušené", false);
         } else {
-          MessageBeep(MB_OK);
+          MessageBeep(MB_ICONASTERISK);
         }
       } else {
         SpeakAnswer();
@@ -436,8 +436,8 @@ void SessionPane::SpeakAnswer() {
   // there is no screen reader listening.  A sound is then the only way to
   // know the turn is over without going to look.  MessageBeep rather than a
   // tone of our own: it goes through the system sounds, so it can be silenced
-  // where everything else is.
-  MessageBeep(MB_OK);
+  // where everything else is.  Asterisk, not the Default Beep -- see Announce.
+  MessageBeep(MB_ICONASTERISK);
 }
 
 bool SessionPane::Navigate(wchar_t key) {
@@ -547,7 +547,12 @@ void SessionPane::Announce(const std::wstring& text) {
     speech_.Say(text, true);
     return;
   }
-  MessageBeep(MB_OK);
+  // MB_ICONASTERISK and not MB_OK.  MB_OK is the Default Beep, which is the
+  // sound Windows makes at a key a dialog will not take -- so using it here
+  // says the opposite of what happened: the key worked, there was just no
+  // voice to say what it did.  Reported from use, and it was the reason a
+  // missing DLL read as "this build does not know these keys".
+  MessageBeep(MB_ICONASTERISK);
 }
 
 void SessionPane::ToggleBlockAtCaret() {

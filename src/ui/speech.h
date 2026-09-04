@@ -30,6 +30,11 @@ class Speech {
   // is a fact about the machine and not an error.
   bool Open();
   bool available() const { return speak_ != nullptr && Running(); }
+  // Whether the client library was found at all.  Not the same question as
+  // available(): NVDA not running is a fact about the moment and nothing is
+  // wrong, but a missing DLL is a broken installation that will never speak,
+  // and one the application cannot report in its own voice.
+  bool loaded() const { return library_ != nullptr; }
 
   // interrupt: stop what is being said first.  Use it for something the
   // reader asked for by pressing a key -- they want the answer to that press,

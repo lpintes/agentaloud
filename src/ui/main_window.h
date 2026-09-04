@@ -23,6 +23,9 @@ class MainWindow : public win::Window {
  private:
   // Status bar along the bottom, pane above it.
   void Arrange(int width, int height);
+  // Says out loud -- through a dialog, the only way left -- that the speech
+  // library is missing.  Once, at startup.
+  void WarnIfMute();
 
  private:
   // Below the pane and outside it: with tabs there will be several panes and

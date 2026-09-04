@@ -20,7 +20,28 @@ bool MainWindow::Open(HINSTANCE instance,
   if (!pane_->Start(options)) return false;
   Show(SW_SHOW);
   pane_->FocusPrompt();
+  WarnIfMute();
   return true;
+}
+
+void MainWindow::WarnIfMute() {
+  if (!pane_ || pane_->speechInstalled()) return;
+  // A dialog, and not the status bar or the title, because this is the one
+  // message the application cannot say itself: without the library it has no
+  // voice, and every Announce falls back to a beep.  A dialog is read out by
+  // NVDA's own machinery, so it arrives even here.
+  //
+  // Worth the interruption because the symptom is unreadable.  Beep already
+  // means "the turn is over" (SpeakAnswer), so a beep to every keypress reads
+  // as "this key does nothing" -- the copy of the .exe looks broken rather
+  // than incomplete, and Ctrl+Enter sounds refused while it is in fact
+  // sending.
+  MessageBoxW(hwnd_,
+              L"Vedľa ClaudeLens.exe chýba nvdaControllerClient.dll, takže "
+              L"aplikácia nemá ako hovoriť: klávesy fungujú, ale namiesto "
+              L"hlásení pípajú.\n\nSkopírujte knižnicu z bin\\ vedľa .exe "
+              L"a spustite ClaudeLens znova.",
+              L"ClaudeLens — bez reči", MB_OK | MB_ICONWARNING);
 }
 
 void MainWindow::Arrange(int width, int height) {

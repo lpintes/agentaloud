@@ -27,6 +27,25 @@ struct Arguments {
   std::wstring permissionMode;
 };
 
+// "." is a perfectly good thing to type and a useless thing to read back: the
+// title bar answers "which checkout is this", and the status bar wants the
+// folder's name, and neither can be had from a relative path.  Expanded here
+// rather than in the window, because the working directory of THIS process is
+// what the dot means, and by the time the pane sees the string that context is
+// gone.  A path that cannot be expanded is passed through untouched -- the CLI
+// will complain about it better than a second check here would.
+std::wstring Expand(const std::wstring& path) {
+  if (path.empty()) return path;
+  const DWORD needed = GetFullPathNameW(path.c_str(), 0, nullptr, nullptr);
+  if (needed == 0) return path;
+  std::wstring full(needed, L'\0');
+  const DWORD written =
+      GetFullPathNameW(path.c_str(), needed, full.data(), nullptr);
+  if (written == 0 || written >= needed) return path;
+  full.resize(written);
+  return full;
+}
+
 Arguments ReadArguments() {
   Arguments arguments;
   int argc = 0;
@@ -49,6 +68,7 @@ Arguments ReadArguments() {
   if (arguments.project.empty()) {
     arguments.project = win::PickFolder(nullptr, L"Vyberte priečinok projektu");
   }
+  arguments.project = Expand(arguments.project);
   return arguments;
 }
 

@@ -224,6 +224,17 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    ako riadok so spinnerom. Nie po tokenoch: `--include-partial-messages` je
    zvážený a zamietnutý (claude-gui-lkk.5.17), lebo práve tá reč bola na
    termináli chaotická. Celé bloky nie sú chaos, je to jedna veta na nástroj.
+
+   Pípnutie nie je náhrada reči. `MessageBeep` už jeden význam má — „ťah
+   skončil a nebolo čo prečítať" (`SpeakAnswer`) — takže keď naň spadne aj
+   `Announce`, odpovie každá klávesa tým istým zvukom ako koniec ťahu a znie
+   to, akoby ju appka nepoznala. Presne to urobila kópia `.exe` bez
+   `nvdaControllerClient.dll` vedľa seba: klávesy vrátane Ctrl+Enter fungovali
+   a pípali. Chýbajúcu knižnicu preto appka ohlási pri štarte dialógom
+   (`ui::MainWindow::WarnIfMute`) — bez knižnice nemá vlastný hlas a dialóg je
+   jediné, čo NVDA prečíta sama. `Speech::loaded()` je preto iná otázka než
+   `available()`: nebežiaca NVDA je normálny stav, chýbajúca DLL je pokazená
+   inštalácia.
 7. **Reč, ktorá prišla sama, sa neprerušuje.** `interrupt=true` v `Speech::Say`
    patrí výlučne odozve na klávesu (`ui::SessionPane::Announce`); čokoľvek, čo
    prišlo zo streamu, ide do fronty a čaká. Dôvod nie je zdvorilosť:

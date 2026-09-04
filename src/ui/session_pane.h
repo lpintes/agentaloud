@@ -87,6 +87,10 @@ class SessionPane {
 
   const std::wstring& statusLine() const { return status_; }
   bool busy() const { return busy_; }
+  // False when nvdaControllerClient.dll is not beside the executable.  The
+  // host asks after Create, because that is a thing to be told once at the
+  // start and never again -- see Announce for why it cannot be told later.
+  bool speechInstalled() const { return speech_.loaded(); }
 
  private:
   static LRESULT CALLBACK PromptProc(HWND window, UINT message, WPARAM wParam,
