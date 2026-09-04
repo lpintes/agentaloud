@@ -28,7 +28,11 @@ std::wstring Money(double amount) {
 // Thousands separated, and only here.  Six digits in a row is what a context
 // window looks like, and read aloud "200000" is a guessing game -- a screen
 // reader says the whole thing as one number and the listener has to count.
-// A non-breaking space, so the number never wraps across two lines.
+//
+// Not shortened to "1,0 M", which was raised from use and turned down: a
+// window of "1 000 000" is a mouthful, but this field exists to answer "does
+// the rest of this file still fit", and a rounded number cannot answer it.
+// The length is the price of the answer being exact.
 std::wstring Grouped(long long value) {
   const std::wstring digits = std::to_wstring(value);
   std::wstring text;
