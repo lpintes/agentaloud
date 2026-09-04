@@ -68,3 +68,5 @@
 export.auto: true
 sync:
     remote: "git+https://github.com/lpintes/claude-lens.git"
+export:
+    git-add: true
