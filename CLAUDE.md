@@ -306,6 +306,17 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    sekvencie znamenajú „vráť sa a prepíš riadok", čo je prekresľovanie
    terminálu, a to táto aplikácia nerobí.
 
+   To isté platí pre **protokolový obal**: neúspešný nástroj vracia telo
+   zabalené v `<tool_use_error>…</tool_use_error>`. Je to značka pre stroj,
+   nie text pre čitateľa — nahlas znie ako „menšie ako tool podčiarkovník
+   error". Strháva ju `UnwrapToolError`, a **nie** vo `Widen()`, hoci by sa to
+   ponúkalo: `Widen` prechádza všetok text zo streamu vrátane odpovede
+   asistenta, takže by zožrala aj vetu, v ktorej o tom tagu niekto píše. Tag
+   sa vyskytuje výlučne v `tool_result`, takže tam patrí aj jeho odstránenie.
+   Obal je zároveň druhý svedok chyby: `isError` je `is_error || obal`. Pole
+   v streame naozaj chodí (`tests/fixtures/basic.jsonl`), takže sa číta prvé —
+   hádať chybu z obsahu by bolo horšie než prečítať pole.
+
 9. **Proces je DPI-aware, a nie kvôli ostrému textu.** Bez
    `SetProcessDpiAwarenessContext` (prvý riadok `wWinMain`) škáluje okno
    Windows sám a súradnice, ktoré si prečíta iný proces, sa pritom

@@ -588,6 +588,114 @@ void TestToolPathsAreShortened() {
   CHECK(summary.find(L"...") == size_t{6});  // hned za "Read: "
 }
 
+void TestEditAndWriteSayWhatChanged() {
+  TEST("transcript: Edit a Write hovoria zmenu, nie vypis poli");
+  model::Transcript transcript;
+  proto::Json calls = proto::Json::parse(R"({
+    "type": "assistant",
+    "message": {"content": [
+      {"type": "tool_use", "id": "toolu_E", "name": "Edit",
+       "input": {"file_path": "src/x.cpp", "replace_all": false,
+                 "old_string": "stary", "new_string": "novy\nriadok"}},
+      {"type": "tool_use", "id": "toolu_W", "name": "Write",
+       "input": {"file_path": "src/y.cpp", "content": "a\nb\nc"}}
+    ]}
+  })");
+  transcript.Append(proto::Classify(calls));
+  const std::vector<model::Block>& blocks = transcript.blocks();
+  CHECK_EQ(blocks.size(), size_t{2});
+
+  // Zhrnutie povie velkost zmeny, aby sa kvoli nej nemuselo rozbalovat.
+  CHECK_EQ(blocks[0].summary,
+           std::wstring(L"Edit: src/x.cpp, 1 riadok na 2 riadky"));
+  CHECK_EQ(blocks[1].summary, std::wstring(L"Write: src/y.cpp, 3 riadky"));
+
+  // Telo je zmena, nie dump JSON poli.
+  CHECK_EQ(blocks[0].body,
+           std::wstring(L"pôvodné:\nstary\nnové:\nnovy\nriadok"));
+  CHECK(blocks[0].body.find(L"old_string") == std::wstring::npos);
+  CHECK_EQ(blocks[1].body, std::wstring(L"obsah:\na\nb\nc"));
+
+  // Uspesny vysledok je jedno slovo, ktore nezopakuje cestu, a nie je co
+  // rozbalovat -- povodna veta CLI bola dlhsia nez kInlineResultLimit, takze
+  // sa zbalila do "vystup (1 riadok)".
+  proto::Json results = proto::Json::parse(R"J({
+    "type": "user",
+    "message": {"content": [
+      {"type": "tool_result", "tool_use_id": "toolu_E",
+       "content": "The file src/x.cpp has been updated successfully. (file state is current in your context - no need to Read it back)"},
+      {"type": "tool_result", "tool_use_id": "toolu_W",
+       "content": "File created successfully at: src/y.cpp"}
+    ]}
+  })J");
+  transcript.Append(proto::Classify(results));
+  CHECK_EQ(blocks.size(), size_t{4});
+  CHECK_EQ(blocks[1].summary, std::wstring(L"zapísané"));
+  CHECK_EQ(blocks[1].body, std::wstring(L"zapísané"));
+  CHECK(!blocks[1].collapsible);
+  CHECK_EQ(blocks[3].summary, std::wstring(L"vytvorené"));
+  CHECK_EQ(blocks[3].toolName, std::wstring(L"Write"));
+
+  // Bash sa nemeni: prikaz JE svojimi argumentmi a vystup je cely obsah.
+  model::Transcript other;
+  proto::Json bash = proto::Json::parse(R"({
+    "type": "assistant",
+    "message": {"content": [
+      {"type": "tool_use", "id": "toolu_B", "name": "Bash",
+       "input": {"command": "echo ahoj"}}
+    ]}
+  })");
+  other.Append(proto::Classify(bash));
+  CHECK_EQ(other.blocks()[0].summary, std::wstring(L"Bash: echo ahoj"));
+  CHECK_EQ(other.blocks()[0].body, std::wstring(L"command: echo ahoj"));
+}
+
+void TestFailedToolResultReadsLikeAnError() {
+  TEST("transcript: neuspesny nastroj povie, co sa pokazilo");
+  model::Transcript transcript;
+  proto::Json call = proto::Json::parse(R"({
+    "type": "assistant",
+    "message": {"content": [
+      {"type": "tool_use", "id": "toolu_E", "name": "Edit",
+       "input": {"file_path": "src/x.cpp", "old_string": "a", "new_string": "b"}}
+    ]}
+  })");
+  transcript.Append(proto::Classify(call));
+
+  proto::Json failed = proto::Json::parse(R"({
+    "type": "user",
+    "message": {"content": [
+      {"type": "tool_result", "tool_use_id": "toolu_E", "is_error": true,
+       "content": "<tool_use_error>String to replace not found in file.\nString: a\nb</tool_use_error>"}
+    ]}
+  })");
+  transcript.Append(proto::Classify(failed));
+  const model::Block& result = transcript.blocks()[1];
+  CHECK(result.isError);
+  // Chybny vysledok NEDOSTANE slovo "zapisane" -- ten nastroj nezapisal nic.
+  CHECK(result.summary.rfind(L"chyba: ", 0) == 0);
+  CHECK(result.summary.find(L"String to replace not found in file.") !=
+        std::wstring::npos);
+  // Protokolovy obal do prepisu nepatri, ani do zhrnutia, ani do tela.
+  CHECK(result.summary.find(L"tool_use_error") == std::wstring::npos);
+  CHECK(result.body.find(L"tool_use_error") == std::wstring::npos);
+  CHECK_EQ(result.body.substr(0, 6), std::wstring(L"String"));
+
+  // Obal sam o sebe staci: keby stream pole is_error nikdy neposlal, blok je
+  // stale chyba a klavesa e ho najde.
+  proto::Json noField = proto::Json::parse(R"({
+    "type": "user",
+    "message": {"content": [
+      {"type": "tool_result", "tool_use_id": "toolu_X",
+       "content": "<tool_use_error>File has not been read yet.</tool_use_error>"}
+    ]}
+  })");
+  transcript.Append(proto::Classify(noField));
+  const model::Block& second = transcript.blocks().back();
+  CHECK(second.isError);
+  CHECK_EQ(second.summary, std::wstring(L"chyba: File has not been read yet."));
+}
+
 void TestEmptyBlocksAreDropped() {
   TEST("transcript: prazdny text a thinking nerobia blok");
   // Videne v prvom behu GUI: prisiel blok "premýšľanie (0 riadkov)".
@@ -848,6 +956,8 @@ int main(int argc, char** argv) {
   TestNewlinesAreOneCharacter();
   TestAnsiEscapesAreStripped();
   TestToolPathsAreShortened();
+  TestEditAndWriteSayWhatChanged();
+  TestFailedToolResultReadsLikeAnError();
   TestEmptyBlocksAreDropped();
   TestSpeakerPrefix();
   TestSummariesAreOneLine();

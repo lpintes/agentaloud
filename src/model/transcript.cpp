@@ -194,7 +194,7 @@ std::wstring PrimaryInput(const std::string& toolName, const proto::Json& input,
   return Widen(input.dump());
 }
 
-std::wstring RenderToolInput(const proto::Json& input) {
+std::wstring RenderFields(const proto::Json& input) {
   if (!input.is_object()) return Widen(input.dump(2));
   std::wstring body;
   for (auto it = input.begin(); it != input.end(); ++it) {
@@ -205,6 +205,84 @@ std::wstring RenderToolInput(const proto::Json& input) {
                                    : Widen(it.value().dump());
   }
   return body;
+}
+
+// What a tool call will actually do, for the two tools where the field dump
+// was the only place in the whole transcript that said what changed -- and
+// said it as JSON.  "old_string: ... / new_string: ..." is a record of the
+// arguments; a reader wants the two texts, one after the other, under a word
+// that says which is which.
+//
+// No colours and no diff markers.  A '+' and a '-' at the start of every line
+// is read out as a character per line, and picking the changed lines apart
+// would mean writing a diff -- the whole old and the whole new is what the
+// call actually contained, and it is the truth.
+//
+// Anything else falls through to the field dump, which for Bash or Grep is
+// exactly right: a command IS its arguments.  This list stays short on
+// purpose -- it is knowledge about tools, and the place for that is next to
+// kPrimary, not spread over the file.
+std::wstring RenderToolInput(const std::string& toolName,
+                             const proto::Json& input) {
+  if (!input.is_object()) return Widen(input.dump(2));
+  if (toolName == "Edit") {
+    const std::string before = StringField(input, "old_string");
+    const std::string after = StringField(input, "new_string");
+    if (!before.empty() || !after.empty()) {
+      std::wstring body = L"pôvodné:\n" + Widen(before) + L"\nnové:\n" +
+                          Widen(after);
+      if (input.value("replace_all", false)) body += L"\nvšetky výskyty";
+      return body;
+    }
+  }
+  if (toolName == "Write") {
+    auto content = input.find("content");
+    if (content != input.end() && content->is_string()) {
+      return L"obsah:\n" + Widen(content->get<std::string>());
+    }
+  }
+  return RenderFields(input);
+}
+
+// The size of what a call is about to do, said in the summary so that it does
+// not have to be unfolded to be judged.  "Edit: transcript.cpp" and "Edit:
+// transcript.cpp, 3 riadky na 40 riadkov" are two different pieces of news.
+std::wstring InputDetail(const std::string& toolName,
+                         const proto::Json& input) {
+  if (!input.is_object()) return {};
+  if (toolName == "Edit") {
+    const std::wstring before = Widen(StringField(input, "old_string"));
+    const std::wstring after = Widen(StringField(input, "new_string"));
+    if (before.empty() && after.empty()) return {};
+    return Count(CountLines(before)) + L" na " + Count(CountLines(after));
+  }
+  if (toolName == "Write") {
+    auto content = input.find("content");
+    if (content == input.end() || !content->is_string()) return {};
+    return Count(CountLines(Widen(content->get<std::string>())));
+  }
+  return {};
+}
+
+// The wrapper the CLI puts around a failed tool's message.  It is protocol,
+// not text for a reader: spoken, "menšie ako tool podčiarkovník use..." is
+// noise in front of the one sentence that says what went wrong.  Taken off
+// here for the same reason StripEscapes takes off the terminal's own noise.
+//
+// It is also the second witness that this is an error.  is_error does come on
+// the wire -- tests/fixtures/basic.jsonl has it -- so the field is read first
+// and this only fills in behind it.  Reading the tag is not guessing: nothing
+// else in the corpus is wrapped in it.
+bool UnwrapToolError(std::wstring& text) {
+  static const std::wstring open = L"<tool_use_error>";
+  static const std::wstring close = L"</tool_use_error>";
+  if (text.size() < open.size() + close.size()) return false;
+  if (text.compare(0, open.size(), open) != 0) return false;
+  if (text.compare(text.size() - close.size(), close.size(), close) != 0) {
+    return false;
+  }
+  text = text.substr(open.size(), text.size() - open.size() - close.size());
+  return true;
 }
 
 // tool_result content is a string on the simple path and an array of blocks
@@ -259,20 +337,52 @@ Block MakeToolUse(const proto::Json& blockJson, const std::wstring& root) {
   Block block;
   block.kind = BlockKind::ToolUse;
   block.toolUseId = StringField(blockJson, "id");
-  block.body = RenderToolInput(arguments);
+  block.toolName = Widen(name);
+  block.body = RenderToolInput(name, arguments);
   block.summary = Widen(name) + L": " +
                   OneLine(PrimaryInput(name, arguments, root), kSummaryLimit);
+  const std::wstring detail = InputDetail(name, arguments);
+  if (!detail.empty()) block.summary += L", " + detail;
   block.collapsed = true;
   return block;
 }
 
-Block MakeToolResult(const proto::Json& blockJson) {
+// The tools whose successful result says nothing the call did not already
+// say.  Their answer is one word, and it is the word the reader is waiting
+// for: it happened.  Everything else -- the path, the size -- stands in the
+// summary of the call, one line above.
+const wchar_t* DoneWord(const std::wstring& toolName) {
+  if (toolName == L"Edit" || toolName == L"NotebookEdit") return L"zapísané";
+  if (toolName == L"Write") return L"vytvorené";
+  return nullptr;
+}
+
+Block MakeToolResult(const proto::Json& blockJson,
+                     const std::wstring& toolName) {
   Block block;
   block.kind = BlockKind::ToolResult;
   block.toolUseId = StringField(blockJson, "tool_use_id");
-  block.isError = blockJson.value("is_error", false);
+  block.toolName = toolName;
   block.body = RenderToolResult(blockJson);
+  // The field first, the wrapper only behind it -- see UnwrapToolError.  The
+  // wrapper comes off either way: it is protocol, and a successful result
+  // never carries it.
+  const bool wrapped = UnwrapToolError(block.body);
+  block.isError = blockJson.value("is_error", false) || wrapped;
   block.collapsed = true;
+
+  // "The file ... has been updated successfully. (file state is current in
+  // your context ...)" -- one line, but longer than kInlineResultLimit, so it
+  // used to collapse into "výstup (1 riadok)": a line of transcript and a
+  // sentence of speech that said nothing at all, after every single edit.
+  const wchar_t* done = block.isError ? nullptr : DoneWord(toolName);
+  if (done != nullptr) {
+    block.body = done;
+    block.summary = done;
+    block.collapsible = false;
+    block.collapsed = false;
+    return block;
+  }
 
   const std::wstring label = block.isError ? L"chyba" : L"výstup";
   const size_t lines = CountLines(block.body);
@@ -285,6 +395,14 @@ Block MakeToolResult(const proto::Json& blockJson) {
                                                 : L": " + block.body);
     block.collapsible = false;
     block.collapsed = false;
+  } else if (block.isError) {
+    // An error says what went wrong in its first sentence, and that sentence
+    // is the whole point of the block.  Collapsed to "chyba (3 riadky)" the
+    // only difference from an ordinary output was one word, which is nothing
+    // at all when heard -- reported from use.  The count stays behind it, so
+    // that it is clear there is more to unfold.
+    block.summary = label + L": " + OneLine(block.body, kSummaryLimit) +
+                    L" (" + Count(lines) + L")";
   } else {
     block.summary = label + L" (" + Count(lines) + L")";
   }
@@ -412,6 +530,12 @@ std::optional<size_t> Transcript::PlaceForResult(
   return std::nullopt;
 }
 
+std::wstring Transcript::ToolNameFor(const std::string& toolUseId) const {
+  const std::optional<size_t> place = PlaceForResult(toolUseId);
+  if (!place.has_value()) return {};
+  return blocks_[*place - 1].toolName;
+}
+
 std::optional<size_t> Transcript::IndexOfId(size_t id) const {
   for (size_t i = 0; i < blocks_.size(); ++i) {
     if (blocks_[i].id == id) return i;
@@ -492,7 +616,9 @@ std::vector<Edit> Transcript::Append(const proto::Event& event) {
       for (const proto::Json& item : *content) {
         if (!item.is_object()) continue;
         if (StringField(item, "type") == "tool_result") {
-          made.push_back(MakeToolResult(item));
+          made.push_back(
+              MakeToolResult(item, ToolNameFor(StringField(item,
+                                                           "tool_use_id"))));
         }
       }
       break;
