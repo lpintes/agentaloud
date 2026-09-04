@@ -22,6 +22,16 @@ UCRT64 ?= C:/msys64/ucrt64
 CXX := $(UCRT64)/bin/g++.exe
 RC  := $(UCRT64)/bin/windres.exe
 
+# Vypisuje sa meno zdrojaka, nie cely prikaz -- v tom sa chyba prekladaca
+# hlada horsie nez sama chyba.  `make V=1` vrati povodny ukecany vystup;
+# pri nom sa meno vypise aj tak, aby sa dvojica meno/prikaz dala parovat.
+V ?= 0
+ifeq ($(V),0)
+Q := @
+else
+Q :=
+endif
+
 BUILD := build
 BIN   := bin
 
@@ -72,7 +82,7 @@ TEST_SRCS := $(PROTO_PURE_SRCS) $(MODEL_SRCS)
 TEST_OBJS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(TEST_SRCS)) \
              $(BUILD)/tests/test_main.o
 
-.PHONY: all app spike test check clean
+.PHONY: all app spike test check clean compdb
 all: app spike test
 # Aplikacia potrebuje DLL vedla seba, nie na PATH: LoadLibrary ho hlada najprv
 # v adresari .exe.  Kopiruje sa, nelinkuje -- je pod LGPL, kym ClaudeLens je
@@ -80,38 +90,90 @@ all: app spike test
 app: $(BIN)/claudelens.exe $(BIN)/nvdaControllerClient.dll
 
 $(BIN)/nvdaControllerClient.dll: vendor/nvda/nvdaControllerClient.dll | $(BIN)
-	cp $< $@
+	@echo "  COPY   $@"
+	$(Q)cp $< $@
 spike: $(BIN)/spike_console.exe
 test: $(BIN)/tests.exe
+compdb: compile_commands.json
 
 # `make check` testy aj spusti; `make test` ich len zostavi.
 check: test
-	./$(BIN)/tests.exe
+	$(Q)./$(BIN)/tests.exe
 
 $(BIN)/claudelens.exe: $(APP_OBJS) | $(BIN)
-	$(CXX) $(STATIC) $(UNICODE_ENTRY) $(GUI_SUBSYSTEM) -o $@ $^ $(LDLIBS)
+	@echo "  LINK   $@"
+	$(Q)$(CXX) $(STATIC) $(UNICODE_ENTRY) $(GUI_SUBSYSTEM) -o $@ $^ $(LDLIBS)
 
 $(BIN)/spike_console.exe: $(SPIKE_OBJS) | $(BIN)
-	$(CXX) $(STATIC) $(UNICODE_ENTRY) -o $@ $^ $(LDLIBS)
+	@echo "  LINK   $@"
+	$(Q)$(CXX) $(STATIC) $(UNICODE_ENTRY) -o $@ $^ $(LDLIBS)
 
 $(BIN)/tests.exe: $(TEST_OBJS) | $(BIN)
-	$(CXX) $(STATIC) -o $@ $^
+	@echo "  LINK   $@"
+	$(Q)$(CXX) $(STATIC) -o $@ $^
 
 $(BUILD)/tests/%.o: tests/%.cpp
-	mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) $(DEPFLAGS) -c -o $@ $<
+	@mkdir -p $(dir $@)
+	@echo "  CXX    $<"
+	$(Q)$(CXX) $(CXXFLAGS) $(DEPFLAGS) -c -o $@ $<
 
 # Jedno pravidlo na vsetky zdroje; adresar objektu kopiruje adresar zdroja,
 # takze pribudnutie src/model/ nevyzaduje nic okrem doplnenia do *_SRCS.
 $(BUILD)/%.o: src/%.cpp
-	mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) $(DEPFLAGS) -c -o $@ $<
+	@mkdir -p $(dir $@)
+	@echo "  CXX    $<"
+	$(Q)$(CXX) $(CXXFLAGS) $(DEPFLAGS) -c -o $@ $<
 
 $(BIN):
-	mkdir -p $(BIN)
+	@mkdir -p $(BIN)
 
 clean:
-	rm -rf $(BUILD) $(BIN)
+	$(Q)rm -rf $(BUILD) $(BIN) compile_commands.json
+
+# Databaza prekladovych prikazov pre clangd.  Generuje sa z tych istych
+# premennych, ktorymi sa preklada, takze sa nema ako rozist s Makefilom --
+# nastroj typu `bear`, ktory build odpocuva, by tu navyse musel presvedcit
+# make, ze nic nie je hotove.
+#
+# Cesty musia byt windowsove: clangd je nativny .exe a `/c/vcs/...` z bashu
+# mu nic nehovori -- ako vsetko v tomto projekte to zlyha ticho, subor sa
+# tvari platny a diagnostika je len prazdna.  Preklada `cygpath -m`; ked
+# nie je (make spusteny z cmd.exe), $(CURDIR) uz windowsovy je.
+COMPDB_SRCS := $(sort $(APP_SRCS) $(SPIKE_SRCS)) tests/test_main.cpp
+COMPDB_DIR  := $(shell cygpath -m "$(CURDIR)" 2>/dev/null || echo "$(CURDIR)")
+
+# Databaza hovori aj TOOLCHAIN, nielen prepinace, a to je tu podstatnejsie
+# nez inde.  Klient (LSP plugin Claude Code) spusta holy `clangd
+# --background-index`, teda BEZ --query-driver -- a taky clangd sa prekladaca
+# nesmie spytat, kde ma hlavicky.  Namiesto toho si na Windows vezme, co najde
+# sam: MSVC a Windows SDK.  Prelozi to bez chyby, takze to vyzera spravne, ale
+# analyzuje sa iny toolchain nez ten, ktorym sa prekada -- iny <windows.h>,
+# ine STL, _MSC_VER namiesto __GNUC__ a mingw vetvy neviditelne.
+#
+# --target preto hovori, ze prekladame mingw (inak by v hlavickach libstdc++
+# platili MSVC vetvy), a -isystem cesty su presne tie, ktore vypise nas g++.
+# Vytiahnut ich odtial je jedine miesto, kde nezostarnu pri upgrade gcc; kym
+# tu bola verzia napisana rukou, prezila by prvy `pacman -Syu` a nikto by si
+# nevsimol.  `< /dev/null` a nie `-E /dev/null`: g++ je nativny .exe a msysovu
+# cestu neotvori.
+#
+# Obnova visi na Makefile, lebo pribudnutie zdrojaka je vzdy aj jeho zmena.
+# Po upgrade gcc staci `touch Makefile`.
+COMPDB_SYSINC = $(shell $(CXX) -E -x c++ - -v < /dev/null 2>&1 \
+    | sed -n '/^#include <\.\.\.>/,/^End of search/p' \
+    | sed -n 's/^ /-isystem /p' | tr '\n' ' ')
+COMPDB_TARGET := --target=x86_64-w64-mingw32
+
+compile_commands.json: Makefile
+	@echo "  GEN    $@"
+	$(Q)printf '[\n' > $@
+	$(Q)sep=' '; for s in $(COMPDB_SRCS); do \
+	  printf '%s{"directory":"%s","file":"%s","command":"%s %s %s %s -c %s"}\n' \
+	    "$$sep" '$(COMPDB_DIR)' "$$s" '$(CXX)' '$(CXXFLAGS)' \
+	    '$(COMPDB_TARGET)' '$(COMPDB_SYSINC)' "$$s" >> $@; \
+	  sep=','; \
+	done
+	$(Q)printf ']\n' >> $@
 
 # VSETKY objekty, nielen spike.  Kym tu bol len $(SPIKE_OBJS), zmena hlavicky
 # neprelozila nic z app/ ani z testov a pouzil sa zastaraly objekt -- presne

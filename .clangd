@@ -1,0 +1,17 @@
+# Nastavenie clangd pre ClaudeLens.  Prepinace aj toolchain berie clangd
+# z `compile_commands.json`, ktory generuje `make compdb` (robi to aj
+# ./build.sh).  Bez neho nevie ani o -Isrc a -DUNICODE, ani o tom, ze sa
+# preklada mingw -- a druhe je horsie: na Windows si v takom pripade najde
+# MSVC a Windows SDK, prelozi to bez chyby a diagnostika potom plati pre iny
+# prekladac, nez ktorym sa prekada.  Podrobnosti su pri cieli compdb
+# v Makefile.
+#
+# --query-driver sa tu preto ani nepotrebuje (a nastavit by sa nedal, patri
+# do konfiguracie klienta): databaza uz nesie --target aj -isystem cesty
+# vytiahnute z nasho g++.
+CompileFlags:
+  CompilationDatabase: .
+  Add:
+    # GCC-ove prepinace, ktorym clang nerozumie; bez toho by kazdy subor
+    # zacinal chybou o neznamom argumente.
+    - -Wno-unknown-warning-option

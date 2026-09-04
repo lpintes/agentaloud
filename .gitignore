@@ -11,3 +11,6 @@ tools/spike_control.log
 # Vysledky zostavenia.
 build/
 bin/
+
+# Generuje `make compdb` z Makefile; stroj od stroja iny (absolutne cesty).
+compile_commands.json

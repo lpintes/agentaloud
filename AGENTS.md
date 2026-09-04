@@ -147,10 +147,30 @@ claude-gui-lkk` (epic) a `bd ready`.
 ## Build & Test
 
 ```bash
-PATH=/c/msys64/ucrt64/bin:$PATH make        # spike aj testy
-PATH=/c/msys64/ucrt64/bin:$PATH make check  # testy zostavi a spusti
-PATH=/c/msys64/ucrt64/bin:$PATH make clean
+./build.sh           # app, spike aj testy
+./build.sh check     # testy zostavi a spusti
+./build.sh clean
+./build.sh V=1 app   # ukecany vystup: aj cele prikazy prekladaca
 ```
+
+`build.sh` je tenká vrstva nad `make`: predradí ucrt64 na PATH a obnoví
+`compile_commands.json`. Argumenty prechádzajú do `make` nezmenené, takže
+`-j8`, `-B` aj ciele fungujú. Holé `PATH=/c/msys64/ucrt64/bin:$PATH make`
+platí ďalej.
+
+Výstup je tichý — jeden riadok na zdroják. `V=1` vráti pôvodné príkazy.
+
+Diagnostiku dáva clangd z `compile_commands.json`, ktorý generuje
+`make compdb` z tých istých premenných, ktorými sa prekladá. Do gitu
+nejde: sú v ňom absolútne cesty. Po upgrade gcc stačí `touch Makefile`.
+
+**Databáza nesie aj toolchain**, nielen prepínače — `--target` a `-isystem`
+cesty vytiahnuté z nášho `g++`. Bez nich si clangd na Windows nájde MSVC
+a Windows SDK, **preloží to bez jedinej chyby** a diagnostika potom platí
+pre iný prekladač, než ktorým sa prekladá: iný `<windows.h>`, iné STL,
+`_MSC_VER` namiesto `__GNUC__`. Vlastného `clangd` netreba prehovárať
+prepínačom `--query-driver` — LSP plugin Claude Code ho aj tak spúšťa
+holý.
 
 Testy majú tri úrovne s odlišným účelom — sú vysvetlené v hlavičke
 `tests/test_main.cpp`. Tretia, soak nad súkromným korpusom, sa zapína
