@@ -58,6 +58,23 @@ LRESULT MainWindow::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
       Arrange(LOWORD(lParam), HIWORD(lParam));
       return 0;
 
+    case WM_DPICHANGED: {
+      // Windows hands us the rectangle this window should take on the screen
+      // it just moved to.  A per-monitor aware process that ignores it keeps
+      // the size it had at the old scaling, which is the whole cost of asking
+      // for the awareness in the first place (see wWinMain).
+      //
+      // The font first: the SetWindowPos below sends WM_SIZE, and the layout
+      // it triggers has to measure against the font it will actually draw.
+      if (pane_) pane_->OnDpiChanged();
+      const RECT* suggested = reinterpret_cast<const RECT*>(lParam);
+      SetWindowPos(hwnd_, nullptr, suggested->left, suggested->top,
+                   suggested->right - suggested->left,
+                   suggested->bottom - suggested->top,
+                   SWP_NOZORDER | SWP_NOACTIVATE);
+      return 0;
+    }
+
     case WM_SETFOCUS:
       // The window itself is never a useful place for focus to sit; a screen
       // reader would announce the window and then nothing.  Where it goes is

@@ -59,8 +59,12 @@ bool Window::Create(const wchar_t* className, const std::wstring& title,
     if (!RegisterClassExW(&wc)) return false;
   }
 
-  RECT rect{0, 0, clientWidth, clientHeight};
-  AdjustWindowRect(&rect, style, menu != nullptr);
+  // The caller's size is in 96-DPI units.  A DPI-aware process is not scaled
+  // by Windows, so on a scaled display the window has to be scaled here or it
+  // comes out a third too small.
+  const UINT dpi = GetDpiForSystem();
+  RECT rect{0, 0, MulDiv(clientWidth, dpi, 96), MulDiv(clientHeight, dpi, 96)};
+  AdjustWindowRectExForDpi(&rect, style, menu != nullptr, 0, dpi);
   CreateWindowExW(0, className, title.c_str(), style, CW_USEDEFAULT,
                   CW_USEDEFAULT, rect.right - rect.left, rect.bottom - rect.top,
                   nullptr, menu, instance, this);

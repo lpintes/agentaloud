@@ -306,6 +306,26 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    sekvencie znamenajú „vráť sa a prepíš riadok", čo je prekresľovanie
    terminálu, a to táto aplikácia nerobí.
 
+9. **Proces je DPI-aware, a nie kvôli ostrému textu.** Bez
+   `SetProcessDpiAwarenessContext` (prvý riadok `wWinMain`) škáluje okno
+   Windows sám a súradnice, ktoré si prečíta iný proces, sa pritom
+   zaokrúhľujú: obdĺžnik stavového riadku hovorí, že siaha po posledný riadok
+   klientskej oblasti, ale hit-test na tom istom riadku spadne na rámové okno.
+   NVDA hľadá stavový riadok práve tam — `api.getStatusBar()` sa pýta, aký
+   objekt sedí v ľavom dolnom rohu klientskej oblasti — a keď ho nenájde,
+   prečíta namiesto neho posledný riadok plochého prehľadu, čiže text, ktorý
+   je práve na obrazovke. Preto NVDA+End čítal prepis. Odmerané pri 150 %:
+   unaware zlyhá, aware nájde bar; závisí to od parity rozmerov, takže to
+   vyzerá ako náhodné („chvíľu po spustení to funguje").
+
+   Cena je, že appku už neškáluje nikto iný: rozmery v 96-DPI jednotkách sa
+   musia prenásobiť samy (`MulDiv(x, dpi, 96)` v `SessionPane::Layout`
+   a `win::Window::Create`), font sa pýta cez `SystemParametersInfoForDpi`,
+   nie `SystemParametersInfoW`, a `WM_DPICHANGED` musí prijať obdĺžnik, ktorý
+   Windows ponúka. Vynechať ktorýkoľvek z tých krokov znamená okno o tretinu
+   menšie alebo orezané popisky — a to je chyba, ktorú autor tejto aplikácie
+   neuvidí.
+
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa
 rozídu, titulok okna sa zmení na **„ClaudeLens — NESÚLAD MAPY ROZSAHOV"**. Ak

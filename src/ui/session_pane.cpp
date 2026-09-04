@@ -174,13 +174,6 @@ size_t BookmarkSlot(WPARAM key) {
 bool SessionPane::Create(HWND host, HINSTANCE instance) {
   host_ = host;
 
-  // The shell font, so the controls match every other window and follow the
-  // user's size.  A screen reader does not care, but a magnifier user does.
-  NONCLIENTMETRICSW metrics = {};
-  metrics.cbSize = sizeof(metrics);
-  SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(metrics), &metrics, 0);
-  font_ = CreateFontIndirectW(&metrics.lfMessageFont);
-
   // A static label immediately before an edit is what gives the edit its
   // accessible name; without one a screen reader announces only "edit".
   transcriptLabel_ = CreateWindowExW(
@@ -207,9 +200,7 @@ bool SessionPane::Create(HWND host, HINSTANCE instance) {
 
   if (!transcript_ || !prompt_) return false;
 
-  for (HWND control : {transcriptLabel_, transcript_, promptLabel_, prompt_}) {
-    SendMessageW(control, WM_SETFONT, reinterpret_cast<WPARAM>(font_), TRUE);
-  }
+  ApplyFont();
   // No limit.  The default 32k would silently truncate a long session, and
   // silent truncation of a transcript is the worst failure this can have.
   SendMessageW(transcript_, EM_EXLIMITTEXT, 0, 0x7FFFFFFF);
@@ -223,19 +214,62 @@ bool SessionPane::Create(HWND host, HINSTANCE instance) {
   return true;
 }
 
-void SessionPane::Layout(int width, int height) {
-  const int promptHeight = kLabelHeight * kPromptLines;
-  const int promptTop = height - kMargin - promptHeight;
-  const int labelTop = promptTop - kLabelHeight;
-  const int transcriptTop = kMargin + kLabelHeight;
-  const int transcriptHeight = labelTop - transcriptTop - kMargin;
-  const int usable = width - 2 * kMargin;
+// The shell font, so the controls match every other window and follow the
+// user's size.  A screen reader does not care, but a magnifier user does.
+//
+// Asked for THIS window's dpi rather than the system's: the process is
+// per-monitor aware, so the same window can be at 96 on one screen and 144 on
+// the next, and SystemParametersInfoW would answer for neither.
+void SessionPane::ApplyFont() {
+  NONCLIENTMETRICSW metrics = {};
+  metrics.cbSize = sizeof(metrics);
+  SystemParametersInfoForDpi(SPI_GETNONCLIENTMETRICS, sizeof(metrics),
+                             &metrics, 0, Dpi());
+  const HFONT wanted = CreateFontIndirectW(&metrics.lfMessageFont);
+  if (!wanted) return;
 
-  MoveWindow(transcriptLabel_, kMargin, kMargin, usable, kLabelHeight, TRUE);
-  MoveWindow(transcript_, kMargin, transcriptTop, usable,
+  for (HWND control : {transcriptLabel_, transcript_, promptLabel_, prompt_}) {
+    if (control) {
+      SendMessageW(control, WM_SETFONT, reinterpret_cast<WPARAM>(wanted), TRUE);
+    }
+  }
+  // Only after nothing is drawing with it any more.
+  if (font_) DeleteObject(font_);
+  font_ = wanted;
+}
+
+UINT SessionPane::Dpi() const {
+  const UINT dpi = host_ ? GetDpiForWindow(host_) : 0;
+  return dpi != 0 ? dpi : 96;
+}
+
+void SessionPane::OnDpiChanged() {
+  ApplyFont();
+  // The layout follows from the host's WM_SIZE, which the move that comes
+  // with WM_DPICHANGED sends anyway.
+}
+
+void SessionPane::Layout(int width, int height) {
+  // The constants are in 96-DPI units; nothing scales them for us, because a
+  // DPI-aware process is not scaled by Windows.  Without this the margins and
+  // the label strip stay at their 96-DPI size while the font grows into them,
+  // and the labels come out clipped.
+  const UINT dpi = Dpi();
+  const int margin = MulDiv(kMargin, dpi, 96);
+  const int labelHeight = MulDiv(kLabelHeight, dpi, 96);
+
+  const int promptHeight = labelHeight * kPromptLines;
+  const int promptTop = height - margin - promptHeight;
+  const int labelTop = promptTop - labelHeight;
+  const int transcriptTop = margin + labelHeight;
+  const int transcriptHeight = labelTop - transcriptTop - margin;
+  const int usable = width - 2 * margin;
+
+  MoveWindow(transcriptLabel_, margin, margin, usable, labelHeight, TRUE);
+  MoveWindow(transcript_, margin, transcriptTop, usable,
              transcriptHeight > 0 ? transcriptHeight : 0, TRUE);
-  MoveWindow(promptLabel_, kMargin, labelTop, usable, kLabelHeight, TRUE);
-  MoveWindow(prompt_, kMargin, promptTop, usable, promptHeight, TRUE);
+  MoveWindow(promptLabel_, margin, labelTop, usable, labelHeight, TRUE);
+  MoveWindow(prompt_, margin, promptTop, usable, promptHeight, TRUE);
 }
 
 void SessionPane::Apply(const model::Edit& edit) {

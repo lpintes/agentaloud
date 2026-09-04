@@ -79,6 +79,18 @@ Arguments ReadArguments() {
 // the first version put a black window on screen beside the application --
 // which is precisely the thing this program exists to get away from.
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
+  // Per-monitor DPI awareness, and the reason is not sharp text.  A
+  // DPI-unaware process is scaled by Windows, and the coordinates another
+  // process reads back are then rounded: the status bar's rectangle says it
+  // reaches the last row of the client area while a hit test on that very row
+  // lands on the frame window instead.  NVDA finds a status bar by asking
+  // what object sits at the bottom left of the client area
+  // (api.getStatusBar), so that rounding is the whole difference between
+  // NVDA+End reading the bar and NVDA+End reading whatever text is on screen.
+  // Measured at 150%: unaware fails, aware finds the bar.  Must be the first
+  // thing done, before any window exists.
+  SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
   // Required by the shell folder picker, and by anything else that later
   // wants the shell.
   CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);

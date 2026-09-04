@@ -92,7 +92,17 @@ class SessionPane {
   // start and never again -- see Announce for why it cannot be told later.
   bool speechInstalled() const { return speech_.loaded(); }
 
+  // The window moved to a screen with a different scaling.  The controls need
+  // a font for the new dpi; the layout follows from the WM_SIZE that comes
+  // with the move.
+  void OnDpiChanged();
+
  private:
+  // This window's dpi, 96 when there is no window yet to ask.
+  UINT Dpi() const;
+  // Builds the shell font for the current dpi and hands it to the controls.
+  void ApplyFont();
+
   static LRESULT CALLBACK PromptProc(HWND window, UINT message, WPARAM wParam,
                                      LPARAM lParam, UINT_PTR id,
                                      DWORD_PTR data);
