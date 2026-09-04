@@ -15,9 +15,10 @@
 #define IDC_DETAILS_MODEL       1001
 #define IDC_DETAILS_MODE        1002
 #define IDC_DETAILS_PROJECT     1003
-#define IDC_DETAILS_COST        1004
-#define IDC_DETAILS_TOKENS      1005
-#define IDC_DETAILS_COPY        1006
+#define IDC_DETAILS_CONTEXT     1004
+#define IDC_DETAILS_COST        1005
+#define IDC_DETAILS_TOKENS      1006
+#define IDC_DETAILS_COPY        1007
 
 // Labels need their own ids only because a static with IDC_STATIC (-1) cannot
 // be told apart from any other, and each of these is the accessible name of
@@ -26,7 +27,8 @@
 #define IDC_DETAILS_MODEL_LABEL   1011
 #define IDC_DETAILS_MODE_LABEL    1012
 #define IDC_DETAILS_PROJECT_LABEL 1013
-#define IDC_DETAILS_COST_LABEL    1014
-#define IDC_DETAILS_TOKENS_LABEL  1015
+#define IDC_DETAILS_CONTEXT_LABEL 1014
+#define IDC_DETAILS_COST_LABEL    1015
+#define IDC_DETAILS_TOKENS_LABEL  1016
 
 #endif

@@ -85,7 +85,13 @@ class Session {
   std::string sessionId() const;
   // What the CLI says it is running as, out of the initialize handshake --
   // available before the first turn, unlike everything in `system/init`.
-  // Empty until the answer arrives, which is a few milliseconds after Start.
+  //
+  // Empty until the answer arrives, and that is NOT immediate: the CLI answers
+  // the handshake only after its SessionStart hooks have run.  Measured in
+  // this repository, whose hook runs `bd prime`, the answer was not there
+  // after 8 seconds and was after 25.  So "known at startup" means "known once
+  // the CLI has finished starting", and a caller that reads this too early
+  // gets an empty string rather than a wrong one.
   std::string permissionMode() const;
 
  private:

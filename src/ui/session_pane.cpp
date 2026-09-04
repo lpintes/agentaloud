@@ -378,6 +378,15 @@ void SessionPane::OnDrain() {
         event.kind == proto::EventKind::User) {
       if (WantsProgressSpeech()) AnnounceProgress(idBefore);
     }
+    if (event.kind == proto::EventKind::Assistant) {
+      // How full the window is right now.  The newest message wins, and there
+      // are several per turn -- each one was sent everything before it, so the
+      // last is the only one that is still true.
+      long long context = 0;
+      if (proto::ParseContextTokens(event.raw, &context)) {
+        details_.contextTokens = context;
+      }
+    }
     if (event.kind == proto::EventKind::SystemThinkingTokens && !thinkingSaid_ &&
         WantsProgressSpeech()) {
       // Once per stretch of thinking, not once per record -- there are dozens
@@ -391,7 +400,10 @@ void SessionPane::OnDrain() {
       busy_ = false;
       // Overwritten, not added to: the numbers in modelUsage are the session's
       // running total, so each result is the whole answer -- see proto::Usage.
-      if (proto::ParseUsage(event.raw, &details_.usage)) {
+      // The model is passed in so that the context window reported is the one
+      // this session runs, and not a subagent's.
+      if (proto::ParseUsage(event.raw, model::Utf8FromUtf16(details_.model),
+                            &details_.usage)) {
         details_.haveUsage = true;
       }
       // Empty, not "done".  Done says nothing a reader can use -- what was

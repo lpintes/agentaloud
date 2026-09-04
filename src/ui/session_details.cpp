@@ -25,6 +25,37 @@ std::wstring Money(double amount) {
   return result + L" USD";
 }
 
+// Thousands separated, and only here.  Six digits in a row is what a context
+// window looks like, and read aloud "200000" is a guessing game -- a screen
+// reader says the whole thing as one number and the listener has to count.
+// A non-breaking space, so the number never wraps across two lines.
+std::wstring Grouped(long long value) {
+  const std::wstring digits = std::to_wstring(value);
+  std::wstring text;
+  for (size_t i = 0; i < digits.size(); ++i) {
+    if (i > 0 && (digits.size() - i) % 3 == 0) text += L' ';
+    text += digits[i];
+  }
+  return text;
+}
+
+std::wstring FormatContext(const SessionDetails& details) {
+  const long long window = details.haveUsage ? details.usage.contextWindow : 0;
+  if (details.contextTokens <= 0) {
+    // The window on its own is worth saying: it is the one number here that
+    // says how much room there is, and it arrives a turn before the other.
+    if (window <= 0) return kUnknown;
+    return L"okno " + Grouped(window) + L" tokenov, využitie zatiaľ neznáme";
+  }
+  const std::wstring used = Grouped(details.contextTokens) + L" tokenov";
+  if (window <= 0) return used;
+  // Percent first would be shorter, but the two raw numbers are what a person
+  // compares when deciding whether a long file still fits.
+  const long long percent = details.contextTokens * 100 / window;
+  return used + L" z " + Grouped(window) + L" (" + std::to_wstring(percent) +
+         L" %)";
+}
+
 std::wstring FormatCost(const SessionDetails& details) {
   if (!details.haveUsage) return kUnknown;
   const proto::Usage& usage = details.usage;
@@ -70,6 +101,7 @@ bool SessionDetailsDialog::OnInit() {
   // it in ourselves would be a guess that can be wrong.
   SetText(IDC_DETAILS_MODE, OrUnknown(details_.permissionMode));
   SetText(IDC_DETAILS_PROJECT, OrUnknown(details_.project));
+  SetText(IDC_DETAILS_CONTEXT, FormatContext(details_));
   SetText(IDC_DETAILS_COST, FormatCost(details_));
   SetText(IDC_DETAILS_TOKENS, FormatTokens(details_));
   // There is nothing here to copy when there is no id, and a button that does

@@ -89,10 +89,29 @@ struct Usage {
   long long cacheReadTokens = 0;
   long long cacheCreationTokens = 0;
   long long thinkingTokens = 0;
+  // How many tokens the running model can hold at once.  A property of the
+  // model and not of the session, but the CLI says it only here -- the
+  // catalogue in the initialize handshake does not carry it, so it is not
+  // known until a turn has ended.
+  long long contextWindow = 0;
 };
 
+// `model` picks whose contextWindow is reported: modelUsage has an entry per
+// model, and a session with a subagent in it has more than one.  An empty or
+// unknown name takes the largest, which is the right answer whenever the
+// session runs a single model and an honest ceiling when it does not.
+//
 // False when the record is not a result, or carries neither cost nor tokens.
-bool ParseUsage(const Json& record, Usage* out);
+bool ParseUsage(const Json& record, const std::string& model, Usage* out);
+
+// How much context the model was sent for one request, out of an `assistant`
+// record: the prompt plus everything read from and written to the cache.  The
+// newest one is how full the window is now -- there is no record that says so
+// directly, and the totals in `result` are no use for it, being sums over the
+// whole session.
+//
+// False when the record is not an assistant message with usage on it.
+bool ParseContextTokens(const Json& record, long long* out);
 
 // For logs and for the "unknown record type" case, where the name is the whole
 // of what we can say about it.

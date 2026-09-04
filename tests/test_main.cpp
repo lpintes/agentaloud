@@ -547,17 +547,17 @@ void TestUsageParsing() {
       "claude-haiku-4-5-20251001": {
         "costUSD": 0.045, "inputTokens": 72, "outputTokens": 1198,
         "cacheReadInputTokens": 97063, "cacheCreationInputTokens": 14781,
-        "thinkingTokens": 756
+        "thinkingTokens": 756, "contextWindow": 200000
       },
       "claude-opus-5": {
         "costUSD": 0.1, "inputTokens": 8, "outputTokens": 2,
         "cacheReadInputTokens": 0, "cacheCreationInputTokens": 0,
-        "thinkingTokens": 0
+        "thinkingTokens": 0, "contextWindow": 500000
       }
     }
   })");
   proto::Usage usage;
-  CHECK(proto::ParseUsage(result, &usage));
+  CHECK(proto::ParseUsage(result, "claude-haiku-4-5-20251001", &usage));
   // Scitane cez modely: session sa da prepnut a potom ani jeden zaznam nie je
   // cela pravda.
   CHECK(usage.listUsd > 0.1449 && usage.listUsd < 0.1451);
@@ -569,21 +569,61 @@ void TestUsageParsing() {
   // Uctovana cena je na predplatnom nula, a nesmie sa tvarit, ze je to cena
   // z cennika -- preto su to dve polia a nie jedno.
   CHECK(usage.billedUsd == 0);
+  // Okno sa NESCITAVA: je to strop, nie mnozstvo. Pomenovany model rozhoduje,
+  // aj ked ten druhy ma vacsie -- inak by session s podagentom hlasila cudzie
+  // okno.
+  CHECK_EQ(usage.contextWindow, 200000LL);
+
+  // Bez mena modelu zostava najvacsie okno: pri jednom modeli je to to iste
+  // cislo, pri dvoch aspon nie vymyslene.
+  proto::Usage unnamed;
+  CHECK(proto::ParseUsage(result, "", &unnamed));
+  CHECK_EQ(unnamed.contextWindow, 500000LL);
 
   // Zaznam bez modelUsage: cena z total_cost_usd sama o sebe staci.
   proto::Usage billed;
   CHECK(proto::ParseUsage(
-      proto::Json::parse(R"({"type": "result", "total_cost_usd": 0.5})"),
+      proto::Json::parse(R"({"type": "result", "total_cost_usd": 0.5})"), "",
       &billed));
   CHECK(billed.billedUsd > 0.49 && billed.billedUsd < 0.51);
   CHECK_EQ(billed.outputTokens, 0LL);
+  CHECK_EQ(billed.contextWindow, 0LL);
 
   // Iny typ zaznamu nie je chyba, len nie je result.
   proto::Usage ignored;
-  CHECK(!proto::ParseUsage(proto::Json::parse(R"({"type": "assistant"})"),
+  CHECK(!proto::ParseUsage(proto::Json::parse(R"({"type": "assistant"})"), "",
                            &ignored));
-  CHECK(!proto::ParseUsage(proto::Json::parse(R"({"type": "result"})"),
+  CHECK(!proto::ParseUsage(proto::Json::parse(R"({"type": "result"})"), "",
                            &ignored));
+}
+
+void TestContextTokensParsing() {
+  TEST("events: kolko kontextu je zabrate, zo spravy asistenta");
+  // Ako plne je okno, nehovori ziadny zaznam priamo. Cisla v 'result' su sucty
+  // za celu session, takze na to nie su. Poslednej sprave asistenta sa vsak
+  // poslalo vsetko, co je v kontexte, a jej 'usage' to rozpisuje na tri
+  // polozky. Tvar odpozorovany z tests/fixtures/basic.jsonl.
+  long long tokens = 0;
+  CHECK(proto::ParseContextTokens(proto::Json::parse(R"({
+    "type": "assistant",
+    "message": {"usage": {
+      "input_tokens": 8,
+      "cache_read_input_tokens": 14461,
+      "cache_creation_input_tokens": 320,
+      "output_tokens": 2
+    }}
+  })"), &tokens));
+  // Vystup sa NEPOCITA: to, co model napisal, zabera okno az ked sa mu posle
+  // spat, a vtedy uz je v niektorej z tych troch poloziek.
+  CHECK_EQ(tokens, 14789LL);
+
+  // Zaznam bez usage a zaznam ineho typu nie su chyba.
+  long long ignored = -1;
+  CHECK(!proto::ParseContextTokens(
+      proto::Json::parse(R"({"type": "assistant", "message": {}})"), &ignored));
+  CHECK(!proto::ParseContextTokens(proto::Json::parse(R"({"type": "result"})"),
+                                   &ignored));
+  CHECK_EQ(ignored, -1LL);
 }
 
 void TestNewlinesAreOneCharacter() {
@@ -1053,6 +1093,7 @@ int main(int argc, char** argv) {
   TestRateLimitParsing();
   TestInitializeResponseParsing();
   TestUsageParsing();
+  TestContextTokensParsing();
   TestNewlinesAreOneCharacter();
   TestAnsiEscapesAreStripped();
   TestToolPathsAreShortened();

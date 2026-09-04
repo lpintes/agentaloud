@@ -89,7 +89,7 @@ bool ParseRateLimit(const Json& record, RateLimit* out) {
   return true;
 }
 
-bool ParseUsage(const Json& record, Usage* out) {
+bool ParseUsage(const Json& record, const std::string& model, Usage* out) {
   if (StringField(record, "type") != "result") return false;
 
   Usage usage;
@@ -111,18 +111,34 @@ bool ParseUsage(const Json& record, Usage* out) {
         {"cacheCreationInputTokens", &usage.cacheCreationTokens},
         {"thinkingTokens", &usage.thinkingTokens},
     };
+    bool namedWindow = false;
     for (const auto& entry : models->items()) {
-      const Json& model = entry.value();
-      if (!model.is_object()) continue;
+      const Json& spent = entry.value();
+      if (!spent.is_object()) continue;
       anything = true;
-      auto cost = model.find("costUSD");
-      if (cost != model.end() && cost->is_number()) {
+      auto cost = spent.find("costUSD");
+      if (cost != spent.end() && cost->is_number()) {
         usage.listUsd += cost->get<double>();
       }
       for (const auto& [name, into] : counts) {
-        auto value = model.find(name);
-        if (value != model.end() && value->is_number()) {
+        auto value = spent.find(name);
+        if (value != spent.end() && value->is_number()) {
           *into += value->get<long long>();
+        }
+      }
+
+      // Not summed, unlike everything else here: a window is a ceiling, not an
+      // amount.  The named model's own is taken when it is there; failing
+      // that, the largest, which with one model in the session is the same
+      // number and with two is at least not a made-up one.
+      auto window = spent.find("contextWindow");
+      if (window != spent.end() && window->is_number()) {
+        const long long size = window->get<long long>();
+        if (!model.empty() && entry.key() == model) {
+          usage.contextWindow = size;
+          namedWindow = true;
+        } else if (!namedWindow && size > usage.contextWindow) {
+          usage.contextWindow = size;
         }
       }
     }
@@ -130,6 +146,32 @@ bool ParseUsage(const Json& record, Usage* out) {
 
   if (!anything) return false;
   *out = usage;
+  return true;
+}
+
+bool ParseContextTokens(const Json& record, long long* out) {
+  if (StringField(record, "type") != "assistant") return false;
+  auto message = record.find("message");
+  if (message == record.end() || !message->is_object()) return false;
+  auto usage = message->find("usage");
+  if (usage == message->end() || !usage->is_object()) return false;
+
+  // The three ways context reaches the model.  Output is not among them: what
+  // the model wrote counts against the window only once it has been sent back
+  // in, and by then it is in one of these three.
+  const char* const parts[] = {"input_tokens", "cache_read_input_tokens",
+                               "cache_creation_input_tokens"};
+  long long total = 0;
+  bool anything = false;
+  for (const char* name : parts) {
+    auto value = usage->find(name);
+    if (value != usage->end() && value->is_number()) {
+      total += value->get<long long>();
+      anything = true;
+    }
+  }
+  if (!anything) return false;
+  *out = total;
   return true;
 }
 
