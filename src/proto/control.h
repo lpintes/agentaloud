@@ -49,6 +49,27 @@ bool ParsePermissionRequest(const Json& record, PermissionRequest* out);
 // control channel is established before the first turn.
 Json MakeInitialize(const std::string& requestId);
 
+// What the answer to MakeInitialize says about the session.  It arrives before
+// the first turn, which makes it the earliest anything is known at all --
+// everything else comes out of `system/init`, and that is a per-turn record.
+//
+// What is NOT in it is the model, and that is worth writing down because the
+// response looks like it has one.  It carries a `models` array, but that is a
+// catalogue: what may be passed to --model and what each of those words
+// resolves to.  Nothing marks the one this session runs.  Measured on an
+// account whose settings.json says "model": "opus", the entry for "default"
+// resolves to claude-sonnet-5 -- so reading the model out of that list would
+// have shown the wrong model until the first turn quietly replaced it.  The
+// model waits for system/init; the mode does not have to.
+struct InitializeInfo {
+  std::string requestId;       // echoes ours, so a stray response is ignored
+  std::string permissionMode;  // current_permission_mode
+};
+
+// False when the record is not a successful control_response, or carries none
+// of the above.
+bool ParseInitializeResponse(const Json& record, InitializeInfo* out);
+
 // Stops the turn in flight.  NOT control_cancel_request -- that one withdraws
 // a control_request of our own that we no longer want answered, and a turn is
 // not one of those.  The subtype is `interrupt`, and `reason` is what the CLI

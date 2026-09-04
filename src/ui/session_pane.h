@@ -146,9 +146,10 @@ class SessionPane {
   // Says that the turn is over.  The answer itself was already read as it
   // arrived, so this only marks the end.
   void SignalTurnEnd();
-  // Takes the id off the Session at the moment it is needed.  See the note on
-  // the definition for why it is not kept up to date instead.
-  void RefreshSessionId();
+  // Takes the id and the permission mode off the Session at the moment they
+  // are needed.  See the note on the definition for why they are not kept up
+  // to date instead.
+  void RefreshFacts();
   // Says what the turn is doing, in the order it does it: the text, the tool
   // calls and the tool results made since the given block id.
   void AnnounceProgress(size_t firstNewId);

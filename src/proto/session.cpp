@@ -52,7 +52,8 @@ bool Session::Start(const Options& options, EventCallback onEvent,
   }
   // Opening the channel before the first turn, so that the first thing to
   // travel on it is not a permission request under time pressure.
-  return SendJson(MakeInitialize("init-" + std::to_string(nextRequestId_++)));
+  initRequestId_ = "init-" + std::to_string(nextRequestId_++);
+  return SendJson(MakeInitialize(initRequestId_));
 }
 
 void Session::OnBytes(std::string_view bytes) {
@@ -69,8 +70,22 @@ void Session::OnLine(std::string_view line) {
   }
 
   Event event = Classify(std::move(record));
-  // The first one wins; every later record carries the same id.
-  if (sessionId_.empty()) sessionId_ = event.sessionId;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    // The first one wins; every later record carries the same id.
+    if (sessionId_.empty()) sessionId_ = event.sessionId;
+  }
+
+  if (event.kind == EventKind::ControlResponse) {
+    // The answer to our own opening request, and the only thing known about
+    // the session before the first turn happens.
+    InitializeInfo info;
+    if (ParseInitializeResponse(event.raw, &info) &&
+        info.requestId == initRequestId_) {
+      std::lock_guard<std::mutex> lock(mutex_);
+      permissionMode_ = info.permissionMode;
+    }
+  }
 
   if (event.kind == EventKind::ControlRequest) {
     PermissionRequest request;
@@ -101,6 +116,16 @@ void Session::OnLine(std::string_view line) {
   }
 
   if (onEvent_) onEvent_(event);
+}
+
+std::string Session::sessionId() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return sessionId_;
+}
+
+std::string Session::permissionMode() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return permissionMode_;
 }
 
 bool Session::SendJson(const Json& value) {

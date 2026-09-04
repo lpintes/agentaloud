@@ -29,6 +29,7 @@
 #include "model/bookmarks.h"
 #include "model/transcript.h"
 #include "model/utf.h"
+#include "proto/control.h"
 #include "proto/events.h"
 #include "proto/jsonl.h"
 
@@ -485,6 +486,49 @@ void TestRateLimitParsing() {
   CHECK(!proto::ParseRateLimit(
       proto::Json::parse(
           R"({"type": "rate_limit_event", "rate_limit_info": {}})"),
+      &ignored));
+}
+
+void TestInitializeResponseParsing() {
+  TEST("control: rezim povoleni sa vie uz z odpovede na initialize");
+  // Odpozorovane cez tools/probe_init.py: CLI odpovie na 'initialize' este
+  // pred prvym promptom a v odpovedi je 'current_permission_mode'. Model tam
+  // NIE JE -- pole 'models' je katalog toho, co sa da poslat do --model,
+  // a polozka "default" sa na ucte s "model": "opus" v settings.json rozvinie
+  // na claude-sonnet-5. Citat model odtial by teda zobrazilo nespravny az do
+  // prveho system/init.
+  proto::Json record = proto::Json::parse(R"({
+    "type": "control_response",
+    "response": {
+      "subtype": "success",
+      "request_id": "init-1",
+      "response": {
+        "current_permission_mode": "acceptEdits",
+        "pid": 9900,
+        "session_state": "idle"
+      }
+    }
+  })");
+  proto::InitializeInfo info;
+  CHECK(proto::ParseInitializeResponse(record, &info));
+  CHECK_EQ(info.requestId, std::string("init-1"));
+  CHECK_EQ(info.permissionMode, std::string("acceptEdits"));
+
+  // Odpoved na nieco ine, chybova odpoved a zaznam bez modu nie su chyba, len
+  // sa z nich rezim dozvediet neda.
+  proto::InitializeInfo ignored;
+  CHECK(!proto::ParseInitializeResponse(
+      proto::Json::parse(R"({"type": "control_request"})"), &ignored));
+  CHECK(!proto::ParseInitializeResponse(
+      proto::Json::parse(
+          R"({"type": "control_response",
+              "response": {"subtype": "error", "request_id": "init-1"}})"),
+      &ignored));
+  CHECK(!proto::ParseInitializeResponse(
+      proto::Json::parse(
+          R"({"type": "control_response",
+              "response": {"subtype": "success", "request_id": "init-1",
+                           "response": {"pid": 1}}})"),
       &ignored));
 }
 
@@ -1007,6 +1051,7 @@ int main(int argc, char** argv) {
   TestToolResultsSitBehindTheirCall();
   TestBookmarksSurviveCollapsing();
   TestRateLimitParsing();
+  TestInitializeResponseParsing();
   TestUsageParsing();
   TestNewlinesAreOneCharacter();
   TestAnsiEscapesAreStripped();

@@ -877,7 +877,7 @@ void SessionPane::Interrupt() {
 }
 
 void SessionPane::CopySessionId() {
-  RefreshSessionId();
+  RefreshFacts();
   // Before the first system/init there is no id at all -- the CLI makes it,
   // we only read it back -- and a key that quietly put an empty string on the
   // clipboard would be found out in the terminal, pasting nothing.
@@ -894,16 +894,22 @@ void SessionPane::CopySessionId() {
   Announce(L"id skopírované");
 }
 
-void SessionPane::RefreshSessionId() {
-  // Asked for at the moment it is wanted, not kept up to date from the
+void SessionPane::RefreshFacts() {
+  // Asked for at the moment they are wanted, not kept up to date from the
   // records: Session takes the id off the FIRST record that carries one,
   // whichever kind that turns out to be, and copying it in system/init would
   // mean the id existed but stayed invisible until an init happened to come.
   details_.id = model::Utf16FromUtf8(session_.sessionId());
+  // The mode is known from the initialize handshake, which is answered before
+  // the first turn -- so this is the one fact here that does not have to say
+  // "not yet".  Not overwritten with nothing when the answer has not arrived:
+  // what was asked for on the command line is better than a blank.
+  const std::string mode = session_.permissionMode();
+  if (!mode.empty()) details_.permissionMode = model::Utf16FromUtf8(mode);
 }
 
 void SessionPane::ShowDetails() {
-  RefreshSessionId();
+  RefreshFacts();
   // Nothing is announced here, and that is not an oversight.  A dialog is the
   // one thing NVDA reads of its own accord -- the title, then the focused
   // control -- so the key does answer.  A sentence of ours would arrive on top

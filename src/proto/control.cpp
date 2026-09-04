@@ -34,6 +34,25 @@ bool ParsePermissionRequest(const Json& record, PermissionRequest* out) {
   return true;
 }
 
+bool ParseInitializeResponse(const Json& record, InitializeInfo* out) {
+  if (StringField(record, "type") != "control_response") return false;
+  auto outer = record.find("response");
+  if (outer == record.end() || !outer->is_object()) return false;
+  if (StringField(*outer, "subtype") != "success") return false;
+  // Two nestings of the same word, and they are not the same object: the outer
+  // one is the envelope every control_response has, the inner one is what the
+  // initialize handshake in particular answered with.
+  auto inner = outer->find("response");
+  if (inner == outer->end() || !inner->is_object()) return false;
+
+  InitializeInfo info;
+  info.requestId = StringField(*outer, "request_id");
+  info.permissionMode = StringField(*inner, "current_permission_mode");
+  if (info.permissionMode.empty()) return false;
+  *out = info;
+  return true;
+}
+
 Json MakeInitialize(const std::string& requestId) {
   return Json{{"type", "control_request"},
               {"request_id", requestId},

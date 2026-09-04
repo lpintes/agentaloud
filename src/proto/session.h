@@ -78,7 +78,15 @@ class Session {
   // The order is the whole point; see the note in control.h.
   void Stop(unsigned turnTimeoutMs = 120000);
 
-  const std::string& sessionId() const { return sessionId_; }
+  // Both of these are written on the reader thread and read from whatever
+  // thread asks, so they are handed out by value under the lock.  A reference
+  // into a string another thread may be assigning is a race that shows up as
+  // a truncated id once in a hundred runs.
+  std::string sessionId() const;
+  // What the CLI says it is running as, out of the initialize handshake --
+  // available before the first turn, unlike everything in `system/init`.
+  // Empty until the answer arrives, which is a few milliseconds after Start.
+  std::string permissionMode() const;
 
  private:
   void OnBytes(std::string_view bytes);
@@ -92,11 +100,19 @@ class Session {
   std::unique_ptr<LineAssembler> assembler_;
   EventCallback onEvent_;
   PermissionCallback onPermission_;
-  std::string sessionId_;
+  // The id of the initialize request, so that an answer to something else is
+  // not mistaken for the handshake.  Set once, in Start, before the reader
+  // thread exists.
+  std::string initRequestId_;
 
-  std::mutex mutex_;
+  // Mutable because sessionId() and permissionMode() are const questions with
+  // an answer that another thread may be writing at that moment.
+  mutable std::mutex mutex_;
   std::condition_variable turnEnded_;
   bool turnInFlight_ = false;
+  // Under mutex_: written by the reader thread, read by whoever asks.
+  std::string sessionId_;
+  std::string permissionMode_;
 
   // Writes come from the caller's thread and from the reader thread answering
   // a permission request, so the handle needs its own lock.
