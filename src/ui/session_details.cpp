@@ -61,12 +61,14 @@ SessionDetailsDialog::SessionDetailsDialog(const SessionDetails& details,
 bool SessionDetailsDialog::OnInit() {
   SetText(IDC_DETAILS_ID, OrUnknown(details_.id));
   SetText(IDC_DETAILS_MODEL, OrUnknown(details_.model));
-  // "default" is what the CLI calls asking about everything, and it is the
-  // mode nine sessions in ten run in.  Spelled out, because the box would
-  // otherwise read out an English word in the middle of Slovak text.
-  SetText(IDC_DETAILS_MODE, details_.permissionMode.empty()
-                                ? L"default (pýta sa na všetko)"
-                                : details_.permissionMode);
+  // The CLI's own word for the mode, with nothing added.  It first said
+  // "default (pýta sa na všetko)" while the mode was still unknown and plain
+  // "default" once system/init had been, so the same session read two
+  // different ways depending on when it was asked -- and the gloss was not
+  // worth having anyway.  Unknown is unknown here like everywhere else in this
+  // dialog: what the default resolves to is a matter of settings, so filling
+  // it in ourselves would be a guess that can be wrong.
+  SetText(IDC_DETAILS_MODE, OrUnknown(details_.permissionMode));
   SetText(IDC_DETAILS_PROJECT, OrUnknown(details_.project));
   SetText(IDC_DETAILS_COST, FormatCost(details_));
   SetText(IDC_DETAILS_TOKENS, FormatTokens(details_));
