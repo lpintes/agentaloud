@@ -32,8 +32,9 @@ void MainWindow::WarnIfMute() {
   // NVDA's own machinery, so it arrives even here.
   //
   // Worth the interruption because the symptom is unreadable.  Beep already
-  // means "the turn is over" (SpeakAnswer), so a beep to every keypress reads
-  // as "this key does nothing" -- the copy of the .exe looks broken rather
+  // means "the turn is over and nothing was said" (SignalTurnEnd) -- and
+  // without a voice every turn ends that way -- so a beep to every keypress
+  // reads as "this key does nothing": the copy of the .exe looks broken rather
   // than incomplete, and Ctrl+Enter sounds refused while it is in fact
   // sending.
   MessageBoxW(hwnd_,
