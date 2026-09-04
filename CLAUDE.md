@@ -370,6 +370,44 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
 
     Nepomôže to, keď appka visí, ale žije. To je iná úloha.
 
+11. **Priebežná reč má tri stavy a v dvoch z nich mlčí.** Invariant 7 zakazuje
+    vlastnej reči skákať do fronty NVDA. Napĺňať tú frontu textom, ktorý nikto
+    nečaká, je ten istý priestupok z druhej strany, a rozhoduje o tom
+    `ui::SessionPane::WantsProgressSpeech`:
+
+      1. **Okno nie je v popredí.** Čokoľvek čitateľ práve robí, nie je to
+         toto. Mlčí sa. Koniec ťahu je výnimka, ale **zvukom, nie vetou** —
+         kto medzitým píše mail, zruší našu vetu prvým stlačením klávesy, lebo
+         NVDA pri písaní reč ruší, a „hotovo" zanikne uprostred. Reč je na
+         pozadí nespoľahlivý nosič z princípu, nie kvôli nášmu kódu. Zvuk vo
+         fronte nie je a nezruší ho nič.
+      2. **Fokus je v prepise a kurzor si ho čitateľ presunul sám.** Číta si
+         staršie miesto a NVDA mu pritom číta riadky, po ktorých sa pohybuje;
+         naša priebežná reč sa s tým prepletie na nezmysel. Mlčí sa.
+      3. **Fokus je v prompte, alebo kurzor sleduje koniec.** Vtedy sa čaká
+         práve na toto. Hovorí sa všetko.
+
+    Rozhoduje **poloha kurzora, nie ktoré pole má fokus** — kto stojí na konci,
+    ten čaká na to, čo príde. Tá otázka už v appke bola zodpovedaná: je to
+    `Following()`, teda „kurzor je na konci alebo presne tam, kam ho položil
+    `Send`" (`anchor_`, ktorý `Apply` vedie cez `MoveOffset` pri každej úprave,
+    takže platí celý ťah aj pri vkladaní nad kurzor). **Nulta záložka to nie
+    je**, hoci to tak návrh tvrdil: `OnDrain` ju zapisuje pri každej dávke,
+    ktorá pridala blok, bez ohľadu na kurzor.
+
+    Zvuk pre koniec ťahu na pozadí musí byť **iný než `MB_ICONASTERISK`** — ten
+    už znamená užšiu vec („ťah skončil a nič nezaznelo", invariant 6). Jeden
+    zvuk na dve udalosti neznamená ani jednu.
+
+    `Announce` (odozva na klávesu) sa toto **netýka** a nikdy sa netlmí: môže
+    prísť len vtedy, keď okno fokus má, a podľa invariantu 6 musí znieť vždy.
+
+    Za zamlčané sa nič nedlží a nič sa nedobieha. Text stojí v prepise a
+    `t`/`r`/`a`/`E` a `Ctrl+0` k nemu vedú — práve to terminál nemá.
+    „Neohlásilo sa to samo" preto nie je to isté ako „zaniklo", a tento bod sa
+    nedá porovnávať s prerušením, ktoré bez druhej hlášky znelo ako ticho,
+    lebo po ňom nezostávalo nič.
+
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa
 rozídu, titulok okna sa zmení na **„ClaudeLens — NESÚLAD MAPY ROZSAHOV"**. Ak

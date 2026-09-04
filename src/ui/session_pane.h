@@ -117,6 +117,16 @@ class SessionPane {
   void ShowRateLimit(const proto::Event& event);
   // Puts the caret at the start of a block and says which line that is.
   void GoToBlock(size_t index);
+  // Whether the caret is still where the application left it, or at the end.
+  // The reader is then listening rather than reading, and text that arrives
+  // may both move the caret and be spoken.  False means they went somewhere in
+  // the transcript themselves, and the place -- and the silence -- is theirs.
+  bool Following() const;
+  // Whether this pane's window is the one the user is working in.
+  bool InForeground() const;
+  // Whether a running turn may speak at all.  See the comment on the
+  // definition: three states, and only one of them is spoken to.
+  bool WantsProgressSpeech() const;
   // Says something, or beeps when there is no screen reader to say it to.
   // Never silent: a key that answers with nothing is indistinguishable from a
   // key that did not arrive.

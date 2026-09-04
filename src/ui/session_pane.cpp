@@ -15,6 +15,11 @@ constexpr int kIdTranscript = 1002;
 constexpr int kIdPromptLabel = 1003;
 constexpr int kIdPrompt = 1004;
 
+// The end of a turn when the window is not in front.  Deliberately not the
+// asterisk: that one already answers a narrower question ("the turn ended and
+// nothing was said"), and a sound that answers two questions answers neither.
+constexpr UINT kBackgroundEndSound = MB_ICONEXCLAMATION;
+
 constexpr int kMargin = 8;
 constexpr int kLabelHeight = 18;
 constexpr int kPromptLines = 5;
@@ -356,9 +361,10 @@ void SessionPane::OnDrain() {
     // record too, and it filters that out by kind.
     if (event.kind == proto::EventKind::Assistant ||
         event.kind == proto::EventKind::User) {
-      AnnounceProgress(idBefore);
+      if (WantsProgressSpeech()) AnnounceProgress(idBefore);
     }
-    if (event.kind == proto::EventKind::SystemThinkingTokens && !thinkingSaid_) {
+    if (event.kind == proto::EventKind::SystemThinkingTokens && !thinkingSaid_ &&
+        WantsProgressSpeech()) {
       // Once per stretch of thinking, not once per record -- there are dozens
       // of these per turn.  Cleared by anything else that speaks, so a turn
       // that thinks, calls a tool and thinks again says it twice, which is
@@ -381,12 +387,16 @@ void SessionPane::OnDrain() {
       // Whatever the turn had already said stays said.  It arrived before Esc
       // did, and unsaying it is not on offer anyway -- see invariant 7 on why
       // nothing that came on its own may cut into the queue.
+      //
+      // Behind the window it is a sound, like any other end of a turn -- see
+      // SignalTurnEnd for why speech does not carry across to a background
+      // window at all.
       if (interrupted_) {
         interrupted_ = false;
-        if (speech_.available()) {
+        if (InForeground() && speech_.available()) {
           speech_.Say(L"prerušené", false);
         } else {
-          MessageBeep(MB_ICONASTERISK);
+          MessageBeep(InForeground() ? MB_ICONASTERISK : kBackgroundEndSound);
         }
       } else {
         SignalTurnEnd();
@@ -430,6 +440,53 @@ LRESULT SessionPane::OnPermission(LPARAM pointer) {
   pending->decision.denyMessage =
       "Používateľ to zamietol. Nepokračuj a spýtaj sa, čo ďalej.";
   return 0;
+}
+
+bool SessionPane::Following() const {
+  // Is the reader reading, or just listening?
+  //
+  // "Caret at the end" alone does not decide it.  Once a turn has happened the
+  // caret sits where we left it, just before that answer -- never at the end
+  // -- so a reader who only listens and never touches the transcript would
+  // look like somebody who wandered off.  So the test is: at the end, OR
+  // exactly where Send left it last time and therefore untouched.  Anything
+  // else means they moved it themselves, and then the place is theirs.
+  //
+  // anchor_ is carried through every edit (see Apply), so this stays true for
+  // the whole of a turn that the reader is only listening to.
+  if (transcript_ == nullptr) return true;
+  const size_t caret = CaretOffset(transcript_);
+  return !HasSelection(transcript_) &&
+         (caret >= model_.Text().size() || caret == anchor_);
+}
+
+bool SessionPane::InForeground() const {
+  if (host_ == nullptr) return false;
+  const HWND top = GetAncestor(host_, GA_ROOT);
+  return top != nullptr && GetForegroundWindow() == top;
+}
+
+bool SessionPane::WantsProgressSpeech() const {
+  // Three states, and only the third one is spoken to.
+  //
+  // 1. The window is not in front.  Whatever the reader is doing, it is not
+  //    this, and our sentences would land in the middle of it.  Invariant 7
+  //    forbids cutting into NVDA's queue; filling that queue with text nobody
+  //    asked for is the same offence from the other side.
+  // 2. The window is in front, the focus is in the transcript, and the caret
+  //    is somewhere the reader put it.  They are reading an older passage,
+  //    arrowing line by line, and NVDA is already speaking those lines -- our
+  //    running commentary interleaves with them into nonsense.
+  // 3. The focus is in the prompt, or the caret is following the end.  Then
+  //    the reader is waiting for exactly this.  Unchanged.
+  //
+  // Nothing is owed for what was not said.  It stands in the transcript and
+  // t/r/a/E and Ctrl+0 lead to it -- that is the thing a terminal does not
+  // have, and the reason this is not the same case as the interrupt that
+  // needed a second sentence because it left nothing behind.
+  if (!InForeground()) return false;
+  if (GetFocus() != transcript_) return true;
+  return Following();
 }
 
 void SessionPane::AnnounceProgress(size_t firstNewId) {
@@ -487,6 +544,21 @@ void SessionPane::SignalTurnEnd() {
   // as it arrives, that sign is gone, and a turn that ends on a sentence
   // sounds exactly like a turn that is about to say another one.
   //
+  // Behind another window it is a sound and never a sentence.  Not because
+  // the end of a turn does not matter there -- it is precisely what somebody
+  // who switched away is waiting for -- but because speech does not survive
+  // the trip.  Whoever is writing a mail meanwhile cancels our sentence with
+  // the first key they press: NVDA drops its queue when typing starts, and
+  // "hotovo" dies in the middle.  A sound is not in that queue and is not
+  // cancelled by anything.
+  //
+  // A different one from the asterisk below, which already means something
+  // narrower ("the turn ended and nothing was said").  Two events answering
+  // with the same sound would make the sound mean neither.
+  if (!InForeground()) {
+    MessageBeep(kBackgroundEndSound);
+    return;
+  }
   // A word and not a beep, when anything was said.  MessageBeep plays at once
   // while the speech it belongs after is still in NVDA's queue, so the "done"
   // would land in the middle of the answer -- and a queued beep is not on
@@ -729,22 +801,11 @@ void SessionPane::Send() {
     return;
   }
 
-  // Is the reader reading, or just listening?
-  //
   // Sending moves the caret past the new prompt, so that the answer arrives
   // directly under it -- otherwise you walk through your own prompt to reach
   // the reply.  But it must not do that to somebody who is in the middle of
   // reading something further back; they would lose their place.
-  //
-  // "Caret at the end" alone does not decide it.  Once a turn has happened the
-  // caret sits where we left it, just before that answer -- never at the end
-  // -- so a reader who only listens and never touches the transcript would
-  // have the caret pinned to the first answer of the day.  So the test is: at
-  // the end, OR exactly where this left it last time and therefore untouched.
-  // Anything else means they moved it themselves, and then it is theirs.
-  const size_t caret = CaretOffset(transcript_);
-  const bool following = !HasSelection(transcript_) &&
-                         (caret >= model_.Text().size() || caret == anchor_);
+  const bool following = Following();
 
   turnFirstId_ = model_.nextBlockId();
   Apply(model_.AppendUserPrompt(text));
