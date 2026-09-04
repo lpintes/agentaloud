@@ -53,7 +53,8 @@ CXXFLAGS := -std=c++20 -O2 $(WARN) -I. -Isrc \
 LDLIBS   := -lole32 -lshell32 -lcomctl32 -luuid -lgdi32
 
 # Nezavisle na ClaudeLens, da sa vziat do ineho projektu tak ako je.
-WIN_SRCS   := src/win/window.cpp src/win/dialog.cpp src/win/process.cpp
+WIN_SRCS   := src/win/window.cpp src/win/dialog.cpp src/win/process.cpp \
+              src/win/clipboard.cpp
 # Vsetko, co hovori s Claudom: proces, rury, JSONL aj control kanal.  Su
 # spolu preto, ze prestanu platit naraz -- ked sa zmeni CLI.
 #
@@ -70,10 +71,13 @@ PROTO_SRCS := $(PROTO_PURE_SRCS) src/proto/session.cpp
 MODEL_SRCS := src/model/utf.cpp src/model/transcript.cpp src/model/bookmarks.cpp
 
 UI_SRCS := src/ui/session_pane.cpp src/ui/main_window.cpp src/ui/speech.cpp \
-           src/ui/status_bar.cpp
+           src/ui/status_bar.cpp src/ui/session_details.cpp
 
 APP_SRCS := $(WIN_SRCS) $(PROTO_SRCS) $(MODEL_SRCS) $(UI_SRCS) src/main.cpp
 APP_OBJS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(APP_SRCS))
+
+# Dialogove sablony.  Len appka: spike ani testy okno nemaju.
+APP_RES := $(BUILD)/ui/claudelens.res.o
 
 SPIKE_SRCS := $(WIN_SRCS) $(PROTO_SRCS) src/spike_console.cpp
 SPIKE_OBJS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(SPIKE_SRCS))
@@ -100,7 +104,7 @@ compdb: compile_commands.json
 check: test
 	$(Q)./$(BIN)/tests.exe
 
-$(BIN)/claudelens.exe: $(APP_OBJS) | $(BIN)
+$(BIN)/claudelens.exe: $(APP_OBJS) $(APP_RES) | $(BIN)
 	@echo "  LINK   $@"
 	$(Q)$(CXX) $(STATIC) $(UNICODE_ENTRY) $(GUI_SUBSYSTEM) -o $@ $^ $(LDLIBS)
 
@@ -111,6 +115,21 @@ $(BIN)/spike_console.exe: $(SPIKE_OBJS) | $(BIN)
 $(BIN)/tests.exe: $(TEST_OBJS) | $(BIN)
 	@echo "  LINK   $@"
 	$(Q)$(CXX) $(STATIC) -o $@ $^
+
+# Zdroje sablon.  Kodovanie sa hovori dvakrat: --codepage=65001 tu a
+# #pragma code_page(65001) v samotnom .rc.  Odskusane, ze staci ktorekolvek
+# z toho a bez oboch windres precita UTF-8 bajty ako codepage 1252, takze
+# diakritika v popiskoch skonci ako dvojica znakov -- a prelozi sa to, takze
+# to zlyha ticho.  Prepinac je tu preto, aby druhy .rc nezavisel na tom, ci si
+# niekto spomenul na pragmu.
+#
+# Zavislost na resource.h sa pise rucne: -MMD generuje gcc, nie windres, takze
+# zmena identifikatora by sa inak neprejavila az do `make clean`.
+$(BUILD)/ui/claudelens.res.o: src/ui/resource.h
+$(BUILD)/%.res.o: src/%.rc
+	@mkdir -p $(dir $@)
+	@echo "  RC     $<"
+	$(Q)$(RC) --codepage=65001 -I. -Isrc -DUNICODE -D_UNICODE -O coff -o $@ $<
 
 $(BUILD)/tests/%.o: tests/%.cpp
 	@mkdir -p $(dir $@)

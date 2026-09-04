@@ -6,6 +6,8 @@
 #include <ctime>
 
 #include "model/utf.h"
+#include "ui/resource.h"
+#include "win/clipboard.h"
 
 namespace ui {
 namespace {
@@ -159,6 +161,15 @@ bool IsJumpChord(WPARAM key) {
          key == 'E';
 }
 
+// Ctrl+Shift+C, read as a key for the same reason as the jump chords: with
+// Ctrl down there is no character left in WM_CHAR to switch on.  Not plain
+// Ctrl+C -- in the transcript that is RichEdit's own "copy the selection", and
+// taking it would be taking away the obvious way to quote what is on screen.
+bool IsCopyIdChord(WPARAM key) {
+  if (GetKeyState(VK_CONTROL) >= 0 || GetKeyState(VK_SHIFT) >= 0) return false;
+  return key == 'C';
+}
+
 // Ctrl+<digit> and Ctrl+Shift+<digit>, read as keys for the same reason -- and
 // with more force here, because the Slovak top row does not produce digits at
 // all without Shift.  VK_0..VK_9 are positional and do.
@@ -309,6 +320,10 @@ bool SessionPane::Start(const proto::Session::Options& options) {
   }
   const size_t slash = path.find_last_of(L"\\/");
   project_ = slash == std::wstring::npos ? path : path.substr(slash + 1);
+  // The dialog gets the whole path, for the same reason the title does: it is
+  // read on request and not in one breath with three other fields.
+  details_.project = path;
+  details_.permissionMode = options.permissionMode;
   if (statusBar_) statusBar_->Set(StatusBar::kProject, L"projekt " + project_);
   SetWindowTextW(host_, (L"ClaudeLens — " + path).c_str());
   return session_.Start(
@@ -374,6 +389,11 @@ void SessionPane::OnDrain() {
     }
     if (event.kind == proto::EventKind::Result) {
       busy_ = false;
+      // Overwritten, not added to: the numbers in modelUsage are the session's
+      // running total, so each result is the whole answer -- see proto::Usage.
+      if (proto::ParseUsage(event.raw, &details_.usage)) {
+        details_.haveUsage = true;
+      }
       // Empty, not "done".  Done says nothing a reader can use -- what was
       // done, and when?  The field is there to answer "is it working right
       // now", and the answer to that, once the turn is over, is nothing.
@@ -723,13 +743,20 @@ void SessionPane::SetStatus(std::wstring text) {
 }
 
 void SessionPane::ShowSessionFacts(const proto::Event& event) {
-  if (!statusBar_) return;
   const auto text = [&event](const char* name) -> std::wstring {
     auto found = event.raw.find(name);
     if (found == event.raw.end() || !found->is_string()) return {};
     return model::Utf16FromUtf8(found->get<std::string>());
   };
 
+  // Gathered before the bar is written and whether or not there is a bar: the
+  // details dialog needs these too, and the bar is optional here.
+  if (!text("model").empty()) details_.model = text("model");
+  if (!text("permissionMode").empty()) {
+    details_.permissionMode = text("permissionMode");
+  }
+
+  if (!statusBar_) return;
   // Model and permission mode in one field.  The design said "model and
   // effort", but system/init carries no effort -- and the permission mode is
   // the more useful of the two anyway: it decides whether anything will be put
@@ -849,6 +876,43 @@ void SessionPane::Interrupt() {
   Announce(L"prerušujem");
 }
 
+void SessionPane::CopySessionId() {
+  RefreshSessionId();
+  // Before the first system/init there is no id at all -- the CLI makes it,
+  // we only read it back -- and a key that quietly put an empty string on the
+  // clipboard would be found out in the terminal, pasting nothing.
+  if (details_.id.empty()) {
+    Announce(L"id session zatiaľ nie je známe, pošlite najprv prompt");
+    return;
+  }
+  if (!win::SetClipboardText(host_, details_.id)) {
+    Announce(L"schránku sa nepodarilo otvoriť, id skopírované nebolo");
+    return;
+  }
+  // Short on purpose.  The id itself is 36 characters of hex and reading it
+  // out is no use to anybody: the only thing done with it is pasting it.
+  Announce(L"id skopírované");
+}
+
+void SessionPane::RefreshSessionId() {
+  // Asked for at the moment it is wanted, not kept up to date from the
+  // records: Session takes the id off the FIRST record that carries one,
+  // whichever kind that turns out to be, and copying it in system/init would
+  // mean the id existed but stayed invisible until an init happened to come.
+  details_.id = model::Utf16FromUtf8(session_.sessionId());
+}
+
+void SessionPane::ShowDetails() {
+  RefreshSessionId();
+  // Nothing is announced here, and that is not an oversight.  A dialog is the
+  // one thing NVDA reads of its own accord -- the title, then the focused
+  // control -- so the key does answer.  A sentence of ours would arrive on top
+  // of that announcement and cut it off, which is invariant 7 read from the
+  // other side: the reply we would be interrupting is the reader's own.
+  SessionDetailsDialog dialog(details_, [this] { CopySessionId(); });
+  dialog.ShowModal(host_, IDD_SESSION_DETAILS);
+}
+
 LRESULT CALLBACK SessionPane::PromptProc(HWND window, UINT message,
                                          WPARAM wParam, LPARAM lParam,
                                          UINT_PTR id, DWORD_PTR data) {
@@ -868,6 +932,18 @@ LRESULT CALLBACK SessionPane::PromptProc(HWND window, UINT message,
     }
     if (IsJumpChord(wParam)) {
       pane->Navigate(static_cast<wchar_t>(wParam - 'A' + L'a'));
+      return 0;
+    }
+    // Both of these are the same key in both boxes, like Esc and the chords:
+    // which box has the focus is not something to have to remember first.  A
+    // function key needs no second discard either -- it produces no WM_CHAR at
+    // all, which is one whole class of trap it cannot fall into.
+    if (wParam == VK_F2) {
+      pane->ShowDetails();
+      return 0;
+    }
+    if (IsCopyIdChord(wParam)) {
+      pane->CopySessionId();
       return 0;
     }
     const size_t slot = BookmarkSlot(wParam);
@@ -922,6 +998,14 @@ LRESULT CALLBACK SessionPane::TranscriptProc(HWND window, UINT message,
   // something a reader should have to remember before pressing a key.
   if (message == WM_KEYDOWN && IsJumpChord(wParam)) {
     pane->Navigate(static_cast<wchar_t>(wParam - 'A' + L'a'));
+    return 0;
+  }
+  if (message == WM_KEYDOWN && wParam == VK_F2) {
+    pane->ShowDetails();
+    return 0;
+  }
+  if (message == WM_KEYDOWN && IsCopyIdChord(wParam)) {
+    pane->CopySessionId();
     return 0;
   }
   // Bookmarks reach the transcript the same way, and for the same reason: the

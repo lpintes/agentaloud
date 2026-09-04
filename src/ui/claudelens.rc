@@ -1,0 +1,47 @@
+// Dialog templates.  Layout is in dialog units and computed by nobody, which
+// is what makes the whole thing scale with the dialog font -- see win/dialog.h
+// for why these are real dialogs and not windows that look like ones.
+//
+// The values are read-only EDIT controls rather than static text on purpose.
+// A static cannot take focus, so a screen reader cannot walk it character by
+// character and nothing in it can be selected; a session id is 36 characters
+// of hex whose whole use is being copied out, so both of those matter.
+
+#include <windows.h>
+
+#include "ui/resource.h"
+
+// This file is UTF-8 and windres would otherwise read it as codepage 1252,
+// which turns every accented letter in a caption into two.  It compiles either
+// way, so it is found by reading the dialog, not by building it.  The Makefile
+// says the same thing again with --codepage=65001; either alone is enough.
+#pragma code_page(65001)
+
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+
+IDD_SESSION_DETAILS DIALOGEX 0, 0, 320, 146
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "ClaudeLens — podrobnosti session"
+FONT 9, "Segoe UI", 400, 0, 1
+BEGIN
+    LTEXT           "&Id session:", IDC_DETAILS_ID_LABEL, 8, 10, 74, 8
+    EDITTEXT        IDC_DETAILS_ID, 86, 8, 226, 12, ES_AUTOHSCROLL | ES_READONLY
+
+    LTEXT           "&Model:", IDC_DETAILS_MODEL_LABEL, 8, 28, 74, 8
+    EDITTEXT        IDC_DETAILS_MODEL, 86, 26, 226, 12, ES_AUTOHSCROLL | ES_READONLY
+
+    LTEXT           "&Režim povolení:", IDC_DETAILS_MODE_LABEL, 8, 46, 74, 8
+    EDITTEXT        IDC_DETAILS_MODE, 86, 44, 226, 12, ES_AUTOHSCROLL | ES_READONLY
+
+    LTEXT           "&Priečinok:", IDC_DETAILS_PROJECT_LABEL, 8, 64, 74, 8
+    EDITTEXT        IDC_DETAILS_PROJECT, 86, 62, 226, 12, ES_AUTOHSCROLL | ES_READONLY
+
+    LTEXT           "&Cena:", IDC_DETAILS_COST_LABEL, 8, 82, 74, 8
+    EDITTEXT        IDC_DETAILS_COST, 86, 80, 226, 12, ES_AUTOHSCROLL | ES_READONLY
+
+    LTEXT           "&Tokeny:", IDC_DETAILS_TOKENS_LABEL, 8, 100, 74, 8
+    EDITTEXT        IDC_DETAILS_TOKENS, 86, 98, 226, 12, ES_AUTOHSCROLL | ES_READONLY
+
+    DEFPUSHBUTTON   "&Skopírovať id", IDC_DETAILS_COPY, 190, 124, 66, 14
+    PUSHBUTTON      "&Zavrieť", IDCANCEL, 262, 124, 50, 14
+END

@@ -66,6 +66,34 @@ struct RateLimit {
 // False when the record is not a rate_limit_event or carries no usable info.
 bool ParseRateLimit(const Json& record, RateLimit* out);
 
+// What a `result` record says the session has spent so far.
+//
+// Read out of `modelUsage`, not out of the top-level `usage`: the numbers in
+// modelUsage are CUMULATIVE over the session and the ones in usage belong to
+// the last message alone.  Measured on tests/fixtures/basic.jsonl, whose four
+// results carry outputTokens 348, 598, 863, 1198 in modelUsage while
+// usage.output_tokens goes 348, 250, 265, 335.  A session total therefore
+// means keeping the last record, not adding them up -- adding them up would
+// count the whole session once per turn.
+//
+// The two costs are both kept because they answer different questions and
+// they disagree.  `total_cost_usd` is what is being billed, and on a
+// subscription it is 0; costUSD in modelUsage is the list price, which is the
+// only number that says anything at all there.  Showing just one of them
+// would either always read zero or claim money that is not being charged.
+struct Usage {
+  double billedUsd = 0;   // total_cost_usd -- 0 on a subscription
+  double listUsd = 0;     // sum of modelUsage[*].costUSD
+  long long inputTokens = 0;
+  long long outputTokens = 0;
+  long long cacheReadTokens = 0;
+  long long cacheCreationTokens = 0;
+  long long thinkingTokens = 0;
+};
+
+// False when the record is not a result, or carries neither cost nor tokens.
+bool ParseUsage(const Json& record, Usage* out);
+
 // For logs and for the "unknown record type" case, where the name is the whole
 // of what we can say about it.
 const char* KindName(EventKind kind);

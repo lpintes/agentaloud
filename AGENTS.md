@@ -496,6 +496,15 @@ sa nás na nič nespýta. Prepínač je z `--help` vypadnutý, ale CLI ho prijí
   zahodiť **dvakrát** — raz ako klávesu, raz ako znak. Zlyháva ticho: pri
   odoslaní sa pole vyčistí, takže vložený znak vidno až vtedy, keď sa prompt
   neodošle.
+- **Dialógy sú z resource šablóny.** Šablóny v `src/ui/claudelens.rc`,
+  identifikátory v `src/ui/resource.h`, `win::Dialog::ShowModal` berie id
+  šablóny. Prečo skutočný dialóg a nie okno, ktoré tak vyzerá, je vo
+  `win/dialog.h`. Hodnoty sú v nich **read-only editačné polia, nie statické
+  texty**: statický text sa nedá zamerať, takže sa nedá prečítať po znakoch ani
+  označiť, a session id je 36 znakov hexa, ktorých jediné použitie je kopírovanie.
+  `.rc` je v UTF-8 a windres to musí vedieť (`#pragma code_page(65001)`, plus
+  `--codepage` v Makefile) — inak sa diakritika v popiskoch **ticho** zmení na
+  dvojice znakov a preloží sa to.
 - **Zdrojáky nepíš cez shell heredoc.** Toto prostredie v ňom žerie spätné
   lomky, takže `L'\\'` sa ticho zmení na `L'\'`. Používaj Write/Edit.
 - Žiadny Python ani Node v produkte. Python je na prieskum správania CLI

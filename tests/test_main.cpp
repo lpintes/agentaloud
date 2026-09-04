@@ -488,6 +488,60 @@ void TestRateLimitParsing() {
       &ignored));
 }
 
+void TestUsageParsing() {
+  TEST("events: cena a tokeny sa citaju z modelUsage, nie z usage");
+  // Tvar je odpozorovany z tests/fixtures/basic.jsonl, nie vymysleny. Podstatne
+  // je, ze modelUsage je KUMULATIVNE za celu session (outputTokens ide 348,
+  // 598, 863, 1198), kym top-level usage patri poslednej sprave (348, 250,
+  // 265, 335). Keby sa scitavali zaznamy, session by sa zapocitala tolkokrat,
+  // kolko mala tahov -- a tichym vysledkom by bola prilis vysoka cena.
+  proto::Json result = proto::Json::parse(R"({
+    "type": "result",
+    "total_cost_usd": 0,
+    "usage": {"input_tokens": 18, "output_tokens": 335},
+    "modelUsage": {
+      "claude-haiku-4-5-20251001": {
+        "costUSD": 0.045, "inputTokens": 72, "outputTokens": 1198,
+        "cacheReadInputTokens": 97063, "cacheCreationInputTokens": 14781,
+        "thinkingTokens": 756
+      },
+      "claude-opus-5": {
+        "costUSD": 0.1, "inputTokens": 8, "outputTokens": 2,
+        "cacheReadInputTokens": 0, "cacheCreationInputTokens": 0,
+        "thinkingTokens": 0
+      }
+    }
+  })");
+  proto::Usage usage;
+  CHECK(proto::ParseUsage(result, &usage));
+  // Scitane cez modely: session sa da prepnut a potom ani jeden zaznam nie je
+  // cela pravda.
+  CHECK(usage.listUsd > 0.1449 && usage.listUsd < 0.1451);
+  CHECK_EQ(usage.outputTokens, 1200LL);
+  CHECK_EQ(usage.inputTokens, 80LL);
+  CHECK_EQ(usage.cacheReadTokens, 97063LL);
+  CHECK_EQ(usage.cacheCreationTokens, 14781LL);
+  CHECK_EQ(usage.thinkingTokens, 756LL);
+  // Uctovana cena je na predplatnom nula, a nesmie sa tvarit, ze je to cena
+  // z cennika -- preto su to dve polia a nie jedno.
+  CHECK(usage.billedUsd == 0);
+
+  // Zaznam bez modelUsage: cena z total_cost_usd sama o sebe staci.
+  proto::Usage billed;
+  CHECK(proto::ParseUsage(
+      proto::Json::parse(R"({"type": "result", "total_cost_usd": 0.5})"),
+      &billed));
+  CHECK(billed.billedUsd > 0.49 && billed.billedUsd < 0.51);
+  CHECK_EQ(billed.outputTokens, 0LL);
+
+  // Iny typ zaznamu nie je chyba, len nie je result.
+  proto::Usage ignored;
+  CHECK(!proto::ParseUsage(proto::Json::parse(R"({"type": "assistant"})"),
+                           &ignored));
+  CHECK(!proto::ParseUsage(proto::Json::parse(R"({"type": "result"})"),
+                           &ignored));
+}
+
 void TestNewlinesAreOneCharacter() {
   TEST("transcript: kazdy zlom riadku je prave jeden znak");
   // RichEdit pocita odstavcovy zlom ako jeden znak.  Keby text s "\r\n"
@@ -953,6 +1007,7 @@ int main(int argc, char** argv) {
   TestToolResultsSitBehindTheirCall();
   TestBookmarksSurviveCollapsing();
   TestRateLimitParsing();
+  TestUsageParsing();
   TestNewlinesAreOneCharacter();
   TestAnsiEscapesAreStripped();
   TestToolPathsAreShortened();

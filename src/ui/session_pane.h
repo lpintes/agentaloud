@@ -23,6 +23,7 @@
 #include "model/bookmarks.h"
 #include "model/transcript.h"
 #include "proto/session.h"
+#include "ui/session_details.h"
 #include "ui/speech.h"
 #include "ui/status_bar.h"
 
@@ -78,6 +79,15 @@ class SessionPane {
   // because both the transcript and the prompt reach it -- see the note on
   // PromptProc about why one arrives as a character and the other as a key.
   bool Navigate(wchar_t key);
+
+  // F2: what this session is and what it has cost, in a modal dialog.  See
+  // ui/session_details.h for why a dialog and not the status bar.
+  void ShowDetails();
+  // Ctrl+Shift+C: the session id onto the clipboard, so that `claude -r <id>`
+  // in a terminal reaches the same conversation.  Its own key and not just a
+  // button in the dialog, because it is the one thing in there that is never
+  // read -- it is pasted.
+  void CopySessionId();
 
   // Ctrl+Shift+<digit> marks, Ctrl+<digit> comes back.  Digit 0 is not
   // markable: it is where the reader was standing when new blocks arrived, and
@@ -136,6 +146,9 @@ class SessionPane {
   // Says that the turn is over.  The answer itself was already read as it
   // arrived, so this only marks the end.
   void SignalTurnEnd();
+  // Takes the id off the Session at the moment it is needed.  See the note on
+  // the definition for why it is not kept up to date instead.
+  void RefreshSessionId();
   // Says what the turn is doing, in the order it does it: the text, the tool
   // calls and the tool results made since the given block id.
   void AnnounceProgress(size_t firstNewId);
@@ -186,6 +199,10 @@ class SessionPane {
   // The folder name, kept because the bar is rewritten field by field and the
   // project one has to be put back after anything that clears it.
   std::wstring project_;
+  // Everything the dialog shows, gathered as it arrives.  Kept here rather
+  // than asked for when the dialog opens, because most of it comes off records
+  // that have long gone past by then.
+  SessionDetails details_;
 };
 
 }  // namespace ui

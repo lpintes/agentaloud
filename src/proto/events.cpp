@@ -89,6 +89,50 @@ bool ParseRateLimit(const Json& record, RateLimit* out) {
   return true;
 }
 
+bool ParseUsage(const Json& record, Usage* out) {
+  if (StringField(record, "type") != "result") return false;
+
+  Usage usage;
+  bool anything = false;
+  auto billed = record.find("total_cost_usd");
+  if (billed != record.end() && billed->is_number()) {
+    usage.billedUsd = billed->get<double>();
+    anything = true;
+  }
+
+  auto models = record.find("modelUsage");
+  if (models != record.end() && models->is_object()) {
+    // Summed over models, not taken from one: a session may switch models,
+    // and then there are two entries and neither is the whole of it.
+    const std::pair<const char*, long long*> counts[] = {
+        {"inputTokens", &usage.inputTokens},
+        {"outputTokens", &usage.outputTokens},
+        {"cacheReadInputTokens", &usage.cacheReadTokens},
+        {"cacheCreationInputTokens", &usage.cacheCreationTokens},
+        {"thinkingTokens", &usage.thinkingTokens},
+    };
+    for (const auto& entry : models->items()) {
+      const Json& model = entry.value();
+      if (!model.is_object()) continue;
+      anything = true;
+      auto cost = model.find("costUSD");
+      if (cost != model.end() && cost->is_number()) {
+        usage.listUsd += cost->get<double>();
+      }
+      for (const auto& [name, into] : counts) {
+        auto value = model.find(name);
+        if (value != model.end() && value->is_number()) {
+          *into += value->get<long long>();
+        }
+      }
+    }
+  }
+
+  if (!anything) return false;
+  *out = usage;
+  return true;
+}
+
 const char* KindName(EventKind kind) {
   switch (kind) {
     case EventKind::SystemInit: return "system/init";
