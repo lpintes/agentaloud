@@ -337,6 +337,39 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    menšie alebo orezané popisky — a to je chyba, ktorú autor tejto aplikácie
    neuvidí.
 
+10. **Dieťa nesmie prežiť rodiča.** Keď appka zomrie inak než poriadne —
+    `taskkill /F`, pád — nebeží pri tom **žiadny náš kód**: ani deštruktor,
+    ani `atexit`, ani handler. Upratovanie v `~Process()` teda principiálne
+    nemôže stačiť, lebo nie je kam ho napísať, a osirelé `claude.exe` zostane
+    visieť s pol gigabajtom a nikým na druhom konci rúry.
+
+    Drží to jadro, nie my: `win::Process` dáva dieťa do job objectu
+    s `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`. Keď zomrie posledný handle na job
+    — a ten držíme my — jadro pozabíja všetko vnútri. Handle mŕtveho procesu
+    zatvára OS bez ohľadu na príčinu smrti, takže to platí aj pre pád.
+
+    Tri veci na tom zlyhávajú ticho:
+
+      • **`CREATE_SUSPENDED`, potom `AssignProcessToJobObject`, potom
+        `ResumeThread`.** `claude.exe` je len launcher a robotu robí node,
+        ktorý spustí. Priradenie až po štarte nechá vnuka vzniknutého v tom
+        okne mimo jobu — čiže práve ten proces, kvôli ktorému to celé je.
+      • **Handle jobu nesmie byť dediteľný.** `CreateProcessW` tu dedí handle
+        kvôli rúram; zdedený job by znamenal, že dieťa drží handle na job,
+        v ktorom sedí, posledný handle nezmizne nikdy a mechanizmus nerobí
+        nič — potichu a presne v tom jedinom prípade, pre ktorý existuje.
+      • **Zlyhanie priradenia nie je fatálne.** Session beží ďalej, len bez
+        záruky. Od Windows 8 môže byť proces vo viacerých joboch naraz, takže
+        spustenie z cudzieho jobu (terminál, debugger) to už nerozbije.
+
+    Overiť sa to dá bez kreditu a musí sa to overiť **obojstranne**: rodič,
+    ktorý cez `win::Process` spustí `cmd.exe /c ping -n 300 127.0.0.1` (teda
+    dieťa aj vnuka), sa nechá zabiť cez `taskkill /PID <rodič> /F`. S jobom
+    nezostane ani jeden potomok, bez neho prežijú všetci. Bez tej druhej
+    polovice znamená „prešlo to" iba to, že ping medzitým dobehol.
+
+    Nepomôže to, keď appka visí, ale žije. To je iná úloha.
+
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa
 rozídu, titulok okna sa zmení na **„ClaudeLens — NESÚLAD MAPY ROZSAHOV"**. Ak

@@ -74,6 +74,9 @@ class Process {
   void CloseHandles();
 
   HANDLE process_ = nullptr;
+  // The child and everything it starts, in a job that dies with us.  Null when
+  // the job could not be made, which costs the guarantee and nothing else.
+  HANDLE job_ = nullptr;
   HANDLE inputWrite_ = nullptr;   // our end of the child's stdin
   HANDLE outputRead_ = nullptr;   // our end of the child's stdout
   std::thread reader_;
