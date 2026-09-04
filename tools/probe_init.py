@@ -44,16 +44,20 @@ def prune(value):
 
 
 def main():
+    # probe_init.py [sekundy] [dalsie prepinace pre claude...]
+    # Napriklad '--bare' vypne hooky, cim sa da zistit, co z toho, co chodi pri
+    # starte, je zasluha hooku a co povie CLI samo.
     seconds = float(sys.argv[1]) if len(sys.argv) > 1 else 10.0
     child = subprocess.Popen(
-        ARGS, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        ARGS + sys.argv[2:], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         stderr=subprocess.PIPE, text=True, encoding="utf-8", shell=True)
 
     lines = []
+    started = time.time()
 
     def read():
         for line in child.stdout:
-            lines.append(line)
+            lines.append((time.time() - started, line))
 
     threading.Thread(target=read, daemon=True).start()
     child.stdin.write(json.dumps(INITIALIZE) + "\n")
@@ -61,7 +65,7 @@ def main():
     time.sleep(seconds)
     child.kill()
 
-    for line in lines:
+    for when, line in lines:
         try:
             record = json.loads(line)
         except ValueError:
@@ -69,7 +73,8 @@ def main():
             continue
         kind = record.get("type")
         subtype = record.get("subtype", "")
-        print("=== %s %s" % (kind, subtype))
+        print("=== %5.1fs %s %s  session_id=%s" %
+              (when, kind, subtype, record.get("session_id", "-")))
         print(json.dumps(prune(record), indent=1, ensure_ascii=False)[:4000])
     if not lines:
         print("(nic neprislo)")
