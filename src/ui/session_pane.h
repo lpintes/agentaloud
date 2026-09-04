@@ -113,11 +113,11 @@ class SessionPane {
   void Announce(const std::wstring& text);
   // Puts the caret at an offset and says the line it landed on.
   void GoToOffset(size_t offset);
-  // Reads out what this turn answered, or beeps when there was no text answer
-  // or no screen reader listening.
-  void SpeakAnswer();
-  // Says what the turn is doing right now: the tool calls made since the given
-  // block id.  Called while the turn is still running, unlike SpeakAnswer.
+  // Says that the turn is over.  The answer itself was already read as it
+  // arrived, so this only marks the end.
+  void SignalTurnEnd();
+  // Says what the turn is doing, in the order it does it: the text, the tool
+  // calls and the tool results made since the given block id.
   void AnnounceProgress(size_t firstNewId);
 
   HWND host_ = nullptr;
@@ -158,6 +158,10 @@ class SessionPane {
   // it is said once per stretch and not once per record -- there are dozens of
   // thinking_tokens per turn.
   bool thinkingSaid_ = false;
+  // Whether anything at all was said during this turn.  Decides how its end is
+  // marked: a turn that spoke gets a word, a turn that stayed silent gets the
+  // beep -- see SignalTurnEnd.
+  bool spokeThisTurn_ = false;
   std::wstring status_;
   // The folder name, kept because the bar is rewritten field by field and the
   // project one has to be put back after anything that clears it.

@@ -47,6 +47,13 @@ bool IsMechanism(BlockKind kind);
 
 const wchar_t* KindLabel(BlockKind kind);
 
+// Who said it, written in front of the line: "claude: " and "you: ", empty for
+// everything else.  Not part of the block's text -- the transcript puts it in
+// when it renders, and speech puts it in when it announces, so a copy of the
+// body stays free of it and the two never say a different name for the same
+// speaker.
+const wchar_t* SpeakerPrefix(BlockKind kind);
+
 struct Block {
   // Assigned once and never changed.  The index of a block DOES change: a tool
   // result is inserted next to the call it belongs to, which pushes everything

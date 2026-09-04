@@ -291,11 +291,18 @@ Block MakeToolResult(const proto::Json& blockJson) {
   return block;
 }
 
+}  // namespace
+
 // Who said it, written in front of the line.  Only the two kinds that carry
 // speech get one: a mechanism block already names itself in its heading, and a
-// denied tool was said by neither party.  The prefix lives in the rendering
-// and not in the block's text, so what a screen reader is handed on request --
-// and what a copy of the body produces -- stays free of it.
+// denied tool was said by neither party.
+//
+// The prefix is not part of the block's text, so a copy of the body stays free
+// of it.  It is not private to the rendering either: read aloud, an answer
+// with no name in front of it is indistinguishable from a tool summary, which
+// is exactly what a turn of alternating sentences and tools sounded like.
+// Speech asks for it by the same call the transcript does -- one place decides
+// what a speaker is called.
 const wchar_t* SpeakerPrefix(BlockKind kind) {
   switch (kind) {
     case BlockKind::UserPrompt: return L"you: ";
@@ -303,8 +310,6 @@ const wchar_t* SpeakerPrefix(BlockKind kind) {
     default: return L"";
   }
 }
-
-}  // namespace
 
 bool IsMechanism(BlockKind kind) {
   switch (kind) {

@@ -316,7 +316,14 @@ void SessionPane::OnDrain() {
     // inserted behind its call, so the new blocks are not the tail.
     const size_t idBefore = model_.nextBlockId();
     for (const model::Edit& edit : model_.Append(event)) Apply(edit);
-    if (event.kind == proto::EventKind::Assistant) AnnounceProgress(idBefore);
+    // User as well as Assistant: a tool result comes back on a user record,
+    // and it is half of what the turn is doing.  What each kind of block is
+    // worth saying is AnnounceProgress's business -- our own prompt is a User
+    // record too, and it filters that out by kind.
+    if (event.kind == proto::EventKind::Assistant ||
+        event.kind == proto::EventKind::User) {
+      AnnounceProgress(idBefore);
+    }
     if (event.kind == proto::EventKind::SystemThinkingTokens && !thinkingSaid_) {
       // Once per stretch of thinking, not once per record -- there are dozens
       // of these per turn.  Cleared by anything else that speaks, so a turn
@@ -331,15 +338,15 @@ void SessionPane::OnDrain() {
       // done, and when?  The field is there to answer "is it working right
       // now", and the answer to that, once the turn is over, is nothing.
       SetStatus(L"");
-      // A turn the reader stopped by hand does not read its answer out.  Not
-      // because the answer is worthless -- whatever arrived, arrived whole,
-      // since partial messages are not asked for -- but because Esc was
-      // pressed to make it stop, and the A key is there for reading it back.
-      //
-      // Silence is not an option either.  "Prerušujem" answers the key; this
-      // answers the turn, and without it the reader cannot tell a turn that
-      // stopped from one that never got the request.  It arrived on its own,
+      // A turn the reader stopped by hand ends differently from one that
+      // finished, and the difference has to be audible: "prerušujem" answers
+      // the key, this answers the turn, and without it a turn that stopped
+      // sounds like one that never got the request.  It arrived on its own,
       // so it queues rather than cutting in -- invariant 7.
+      //
+      // Whatever the turn had already said stays said.  It arrived before Esc
+      // did, and unsaying it is not on offer anyway -- see invariant 7 on why
+      // nothing that came on its own may cut into the queue.
       if (interrupted_) {
         interrupted_ = false;
         if (speech_.available()) {
@@ -348,7 +355,7 @@ void SessionPane::OnDrain() {
           MessageBeep(MB_ICONASTERISK);
         }
       } else {
-        SpeakAnswer();
+        SignalTurnEnd();
       }
     } else if (event.kind == proto::EventKind::SystemInit) {
       // The turn field is NOT touched here.  system/init arrives at the start
@@ -392,51 +399,75 @@ LRESULT SessionPane::OnPermission(LPARAM pointer) {
 }
 
 void SessionPane::AnnounceProgress(size_t firstNewId) {
-  // What the turn is doing, while it does it.  Until this was here the whole
-  // turn was silent until its result, and a reader had no way to tell a long
-  // tool call from a session that had died -- the one question the status bar
-  // cannot answer, because NVDA does not read it on its own.
+  // What the turn is doing, while it does it, in the order it does it.
   //
-  // Tool calls only, and only their summary line, which the model already
-  // makes in the form "Bash: git status".  Not the thinking and not the
-  // answer: those are read whole at the end, and reading them twice would be
-  // the chattiness that made the terminal unbearable.
+  // The tool calls alone were not enough, and reading the answer whole at the
+  // end was wrong.  A turn that says "first tool", calls Bash, says "second
+  // tool" and calls Bash again was heard as two bare "Bash: echo ..." lines
+  // with the sentences that explained them arriving afterwards, out of order
+  // and detached from what they introduced.  That is precisely what the
+  // terminal does better, and it does it by showing each piece where it
+  // happened.  Reported from use.
+  //
+  // So all three speaking kinds go out here, as they arrive: the assistant's
+  // text whole -- it is the answer, and between two tools it is one sentence
+  // -- the tool call as its summary line ("Bash: git status"), and the tool
+  // result as its summary too.  The result's summary is a whole one-line
+  // output or else just its size ("výstup (12 riadkov)"), so a tool that
+  // printed a thousand lines costs one short sentence, not a thousand.
+  //
+  // Thinking is still not read: it is dozens of records a turn and it is not
+  // addressed to the reader.  "Premýšľam" stands in for the lot.
   //
   // Queued, never interrupting.  This arrived on its own -- invariant 7.
   for (const model::Block& block : model_.blocks()) {
     if (block.id < firstNewId) continue;
-    if (block.kind != model::BlockKind::ToolUse) continue;
+    const std::wstring* said = nullptr;
+    switch (block.kind) {
+      case model::BlockKind::AssistantText: said = &block.body; break;
+      case model::BlockKind::ToolUse:
+      case model::BlockKind::ToolResult: said = &block.summary; break;
+      default: break;
+    }
+    if (said == nullptr || said->empty()) continue;
     thinkingSaid_ = false;
-    if (speech_.available()) speech_.Say(block.summary, false);
+    spokeThisTurn_ = true;
+    // With the speaker's name in front, exactly as the transcript writes it.
+    // Read aloud, "Nástroj 1." and "Bash: echo ..." are two sentences in the
+    // same voice with nothing to tell them apart; "claude: Nástroj 1." says
+    // which of them the model actually said.  Empty for the mechanism kinds --
+    // a tool summary already names itself.
+    if (speech_.available()) {
+      speech_.Say(model::SpeakerPrefix(block.kind) + *said, false);
+    }
   }
 }
 
-void SessionPane::SpeakAnswer() {
-  // Only what this turn produced, and only the answers -- not the thinking,
-  // not the tool calls.  Those are mechanism; the reader asked for the answer.
-  std::wstring answer;
-  for (const model::Block& block : model_.blocks()) {
-    // Chosen by id, not by position: a tool result lands behind its call, so
-    // this turn's blocks are no longer a tail of the vector.  Ids are handed
-    // out in the order blocks are made, so this is exactly the set made since
-    // the prompt went out.
-    if (block.id < turnFirstId_) continue;
-    if (block.kind != model::BlockKind::AssistantText) continue;
-    if (!answer.empty()) answer += L'\n';
-    answer += block.body;
-  }
-
-  if (!answer.empty() && speech_.available()) {
-    // No interrupt: this arrived on its own and must not cut across whatever
-    // the reader was having read to them.
-    speech_.Say(answer, false);
+void SessionPane::SignalTurnEnd() {
+  // The answer is not read here any more -- AnnounceProgress already said it,
+  // in its place among the tools.  What is left is the one thing the reader
+  // still cannot know: that nothing more is coming.
+  //
+  // It used to be knowable without being said, because the answer arrived only
+  // at the end: hearing it meant the turn was over.  Once the text is spoken
+  // as it arrives, that sign is gone, and a turn that ends on a sentence
+  // sounds exactly like a turn that is about to say another one.
+  //
+  // A word and not a beep, when anything was said.  MessageBeep plays at once
+  // while the speech it belongs after is still in NVDA's queue, so the "done"
+  // would land in the middle of the answer -- and a queued beep is not on
+  // offer, NVDA speaks text.  It queues, like everything that arrived on its
+  // own -- invariant 7.
+  if (spokeThisTurn_ && speech_.available()) {
+    speech_.Say(L"hotovo", false);
     return;
   }
-  // Either there was no text answer -- a turn can end on a tool alone -- or
-  // there is no screen reader listening.  A sound is then the only way to
-  // know the turn is over without going to look.  MessageBeep rather than a
-  // tone of our own: it goes through the system sounds, so it can be silenced
-  // where everything else is.  Asterisk, not the Default Beep -- see Announce.
+  // Nothing was said all turn -- it did no tool and produced no text -- or
+  // there is no screen reader listening.  A sound is then the only way to know
+  // the turn is over without going to look, and nothing is queued for it to
+  // cut across.  MessageBeep rather than a tone of our own: it goes through
+  // the system sounds, so it can be silenced where everything else is.
+  // Asterisk, not the Default Beep -- see Announce.
   MessageBeep(MB_ICONASTERISK);
 }
 
@@ -692,6 +723,7 @@ void SessionPane::Send() {
   SetWindowTextW(prompt_, L"");
   interrupted_ = false;
   thinkingSaid_ = false;
+  spokeThisTurn_ = false;
   busy_ = true;
   SetStatus(L"pracujem");
   // Said as well as written.  The bar is silent until NVDA+End is pressed, and

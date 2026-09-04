@@ -85,6 +85,14 @@ claude-gui-lkk` (epic) a `bd ready`.
 ./build.sh V=1 app   # ukecany vystup: aj cele prikazy prekladaca
 ```
 
+`check` **neprekladá appku**, iba testy — `bin/claudelens.exe` po ňom zostane
+taký, aký bol. Zelené testy teda nie sú dôkaz, že beží nový kód: appka spustená
+po samotnom `check` je stará a odskúšaš zmenu, ktorá v nej nie je. Poznať to
+podľa toho, že `LINK` vypíše len `bin/tests.exe`. Pred manuálnym odskúšaním
+patrí `./build.sh` alebo `./build.sh app`. A keď appka beží, linker do nej
+nezapíše (`cannot open output file ... Permission denied`) — to je jediné
+miesto, kde sa to ohlási nahlas, takže zavri ju skôr, než prekladáš.
+
 `build.sh` je tenká vrstva nad `make`: predradí ucrt64 na PATH a obnoví
 `compile_commands.json`. Argumenty prechádzajú do `make` nezmenené, takže
 `-j8`, `-B` aj ciele fungujú. Holé `PATH=/c/msys64/ucrt64/bin:$PATH make`
@@ -238,15 +246,41 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    nový riadok a nič viac. Preto hovoria všetky tri konce `Send()`: odoslanie
    („pracujem"), bežiaci ťah aj prázdny prompt.
 
-   A ťah, ktorý beží, nesmie byť ticho celý. Ohlasuje sa „premýšľam" pri prvom
-   `system/thinking_tokens` daného úseku a zhrnutie každého nového `ToolUse`
-   bloku (`ui::SessionPane::AnnounceProgress`) — teda to, čo terminál ukazuje
-   ako riadok so spinnerom. Nie po tokenoch: `--include-partial-messages` je
-   zvážený a zamietnutý (claude-gui-lkk.5.17), lebo práve tá reč bola na
-   termináli chaotická. Celé bloky nie sú chaos, je to jedna veta na nástroj.
+   A ťah, ktorý beží, nesmie byť ticho celý — a ohlasuje sa **v poradí, v akom
+   sa deje**: „premýšľam" pri prvom `system/thinking_tokens` daného úseku, text
+   asistenta celý, zhrnutie `ToolUse` a zhrnutie `ToolResult`
+   (`ui::SessionPane::AnnounceProgress`) — teda to, čo terminál ukazuje ako
+   riadok so spinnerom, plus to, čo ukazuje medzi nimi. Nie po tokenoch:
+   `--include-partial-messages` je zvážený a zamietnutý (claude-gui-lkk.5.17),
+   lebo práve tá reč bola na termináli chaotická. Celé bloky nie sú chaos, je
+   to jedna veta na nástroj. Zhrnutie výsledku je pritom buď celý jednoriadkový
+   výstup, alebo len jeho veľkosť („výstup (12 riadkov)"), takže nástroj s
+   tisíckou riadkov stojí jednu vetu.
+
+   Text asistenta sa **nesmie odložiť na koniec ťahu.** Pôvodne sa čítal až po
+   `result`, celý naraz, a bežné striedanie „veta, nástroj, veta, nástroj"
+   znelo ako dve holé „Bash: echo …" a potom obe vety odtrhnuté od toho, čo
+   uvádzali. Poradie je informácia a práve v tom bol terminál lepší. Zistené
+   používaním a odmerané cez NVDA MCP: predtým „pracujem, Bash: …, Bash: …,
+   Nastroj 3. Nastroj 4."; potom „pracujem, claude: Nastroj 5., Bash: …,
+   výstup: piata somarina, claude: Nastroj 6., …, hotovo".
+
+   A hovorí sa **s menom hovoriaceho** — „claude: Nástroj 1.", nie holé
+   „Nástroj 1." Rečou je všetko jeden hlas: bez mena sa veta asistenta nedá
+   odlíšiť od zhrnutia nástroja, a práve to bolo na pôvodnej sťažnosti to
+   druhé. Prefix nie je v `Block::body`, aby kópia textu zostala čistá; dáva ho
+   `model::SpeakerPrefix`, ten istý, ktorým ho píše prepis, nech sa reč
+   a prepis nikdy nerozídu v tom, ako sa hovoriaci volá.
+
+   Koniec ťahu preto musí povedať, že je koniec — „hotovo"
+   (`ui::SessionPane::SignalTurnEnd`). Kým odpoveď chodila až na konci, koniec
+   sa poznal po nej; keď chodí priebežne, ťah končiaci vetou znie ako ťah,
+   ktorý sa chystá povedať ďalšiu. Slovo, nie pípnutie: `MessageBeep` zaznie
+   hneď, kým reč, za ktorú patrí, ešte stojí vo fronte NVDA, a pípnutie sa do
+   tej fronty zaradiť nedá — NVDA hovorí text.
 
    Pípnutie nie je náhrada reči. `MessageBeep` už jeden význam má — „ťah
-   skončil a nebolo čo prečítať" (`SpeakAnswer`) — takže keď naň spadne aj
+   skončil a nič nezaznelo" (`SignalTurnEnd`) — takže keď naň spadne aj
    `Announce`, odpovie každá klávesa tým istým zvukom ako koniec ťahu a znie
    to, akoby ju appka nepoznala. Presne to urobila kópia `.exe` bez
    `nvdaControllerClient.dll` vedľa seba: klávesy vrátane Ctrl+Enter fungovali
