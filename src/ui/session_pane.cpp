@@ -290,6 +290,25 @@ void SessionPane::Layout(int width, int height) {
 
 void SessionPane::Apply(const model::Edit& edit) {
   if (edit.empty()) return;
+  // "The caret is at the end" is true only until the next append, and the
+  // append is exactly what we are here for.  AppendBlocks starts its edit at
+  // the old end, and MoveOffset leaves everything at or before the start
+  // alone -- so a caret standing there ends up ABOVE the text that just
+  // arrived and matches neither test in Following() any more.  A reader who
+  // pressed Ctrl+End to catch up was therefore heard once and then went
+  // silent for the rest of the session, and the next prompt no longer moved
+  // their caret either.  So the moment is taken here, while it is still true,
+  // and turned into the anchor, which the line below then carries along like
+  // any other offset.
+  //
+  // The model has already applied this edit -- Append() returns what it did --
+  // so the end to compare against is the one before it.
+  const size_t before =
+      model_.Text().size() + edit.removed - edit.inserted.size();
+  if (transcript_ != nullptr && !HasSelection(transcript_) &&
+      CaretOffset(transcript_) >= before) {
+    anchor_ = CaretOffset(transcript_);
+  }
   ApplyEdit(transcript_, edit.start, edit.removed, edit.inserted);
   // The anchor is an offset like any other, and an edit above it moves it.
   // Left behind, it would make the next prompt compare the caret against a
@@ -485,7 +504,11 @@ bool SessionPane::Following() const {
   // else means they moved it themselves, and then the place is theirs.
   //
   // anchor_ is carried through every edit (see Apply), so this stays true for
-  // the whole of a turn that the reader is only listening to.
+  // the whole of a turn that the reader is only listening to.  It is also
+  // where "at the end" is kept alive: standing at the end survives no append
+  // on its own, so Apply adopts the caret as the anchor while it is still
+  // there.  The end test below is what covers the moment before that -- a
+  // Ctrl+End with no edit in between.
   if (transcript_ == nullptr) return true;
   const size_t caret = CaretOffset(transcript_);
   return !HasSelection(transcript_) &&

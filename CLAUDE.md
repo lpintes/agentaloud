@@ -395,6 +395,16 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     je**, hoci to tak návrh tvrdil: `OnDrain` ju zapisuje pri každej dávke,
     ktorá pridala blok, bez ohľadu na kurzor.
 
+    „Kurzor je na konci" pritom **neprežije ani jedno pripísanie.** Append
+    začína presne tam, kde kurzor stojí, a `MoveOffset` necháva všetko na
+    začiatku úpravy a pred ním na mieste — takže hneď po prvej dávke je kurzor
+    nad novým textom a nesedí ani jeden z tých dvoch testov. Preto `Apply`
+    kurzor, ktorý na konci stojí, prevezme za `anchor_` ešte kým to platí.
+    Bez toho čitateľ, ktorý dobehol koniec cez Ctrl+End, počul jednu dávku
+    a potom ticho až do konca session — a `Send` mu prestal presúvať kurzor,
+    lebo je to tá istá otázka. Znie to ako pokazená reč, hoci sa pokazila
+    odpoveď na „číta ešte?".
+
     Zvuk pre koniec ťahu na pozadí musí byť **iný než `MB_ICONASTERISK`** — ten
     už znamená užšiu vec („ťah skončil a nič nezaznelo", invariant 6). Jeden
     zvuk na dve udalosti neznamená ani jednu.
