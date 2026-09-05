@@ -343,6 +343,12 @@ bool SessionPane::Start(const proto::Session::Options& options) {
   // read on request and not in one breath with three other fields.
   details_.project = path;
   details_.permissionMode = options.permissionMode;
+  // What was asked for, until system/init says what it actually got.  An alias
+  // ("sonnet") is not the id the usage records are keyed by, but it is only
+  // ever read by a human here: ParseUsage is handed this field too, and it
+  // sees the real id, because system/init arrives before the result of the
+  // turn it opens.
+  details_.model = options.model;
   if (statusBar_) statusBar_->Set(StatusBar::kProject, L"projekt " + project_);
   SetWindowTextW(host_, (L"ClaudeLens — " + path).c_str());
   return session_.Start(

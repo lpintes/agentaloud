@@ -22,9 +22,16 @@ namespace {
 // The project, and the permission mode if one was asked for.  The mode is not
 // guessed either: a session that quietly ran with bypassPermissions because
 // the last one did is worse than one that asks too much.
+//
+// The model is here for a plainer reason: without it the CLI takes the one
+// from the settings, which is the expensive one, and there is no way from
+// inside the application to say "this piece of work is worth a cheaper model".
+// A terminal session has /model for that; a headless one is told once, at
+// startup, and never again.
 struct Arguments {
   std::wstring project;
   std::wstring permissionMode;
+  std::wstring model;
 };
 
 // "." is a perfectly good thing to type and a useless thing to read back: the
@@ -59,6 +66,11 @@ Arguments ReadArguments() {
       // in this file would be a list that goes stale.
       if (argument == L"--permission-mode" && i + 1 < argc) {
         arguments.permissionMode = argv[++i];
+      // An alias -- sonnet, haiku, opus -- or a full model id.  Not validated
+      // here for the same reason: the list of what the CLI takes is the CLI's,
+      // and a copy of it here would be a copy that goes stale.
+      } else if (argument == L"--model" && i + 1 < argc) {
+        arguments.model = argv[++i];
       } else if (arguments.project.empty()) {
         arguments.project = argument;
       }
@@ -115,6 +127,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   proto::Session::Options options;
   options.workingDir = arguments.project;
   options.permissionMode = arguments.permissionMode;
+  options.model = arguments.model;
 
   ui::MainWindow window;
   if (!window.Open(instance, options)) {
