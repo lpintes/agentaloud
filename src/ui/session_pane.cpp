@@ -1,6 +1,7 @@
 #include "ui/session_pane.h"
 
 #include <commctrl.h>
+#include <mmsystem.h>
 #include <richedit.h>
 
 #include <ctime>
@@ -476,9 +477,51 @@ void SessionPane::OnDrain() {
   if (model_.blocks().size() != blocksBefore) bookmarks_.Set(0, reading);
 }
 
+void SessionPane::SignalWaiting() const {
+  // Nothing to do when the window is in front: the box takes the focus and
+  // NVDA reads it, which is the whole of the notification.
+  if (InForeground()) return;
+  const HWND top = host_ ? GetAncestor(host_, GA_ROOT) : nullptr;
+  if (top == nullptr) return;
+
+  // Measured 2026-09-05, and it corrected the assumption this was filed under:
+  // Windows does NOT let a background process take the foreground, so the box
+  // does not interrupt anyone -- it just stands there.  Nothing said so, and
+  // the reader came back on their own a minute later to a stopped turn.  The
+  // turn cannot go on without an answer, so being told is not a courtesy here.
+  FLASHWINFO flash = {};
+  flash.cbSize = sizeof(flash);
+  flash.hwnd = top;
+  // Until the window comes to the front -- and it can only come to the front
+  // to be answered.  A fixed count would stop while the question still stands.
+  flash.dwFlags = FLASHW_ALL | FLASHW_TIMERNOFG;
+  FlashWindowEx(&flash);
+
+  // The flash is the half a sighted user gets; this is the other half, and for
+  // this application it is the important one.  Speech is not on offer -- see
+  // invariant 11: on a background window it is cancelled by the reader's next
+  // keystroke and never arrives.
+  //
+  // Not MessageBeep, and that is the point.  Both of its usable sounds already
+  // mean something ("the turn ended and nothing was said", "the turn ended
+  // behind the window"), and a sound that answers two questions answers
+  // neither.  MB_ICONQUESTION would have been the obvious third, but the
+  // Windows default scheme leaves that event unassigned, so it would have
+  // failed the only way that matters here: silently.
+  //
+  // Without SND_NODEFAULT an alias that is not assigned falls back to the
+  // system default sound rather than to nothing, which is the behaviour wanted
+  // on a machine whose scheme has been cut down.
+  PlaySoundW(L"Notification.Default", nullptr, SND_ALIAS | SND_ASYNC);
+}
+
 LRESULT SessionPane::OnPermission(LPARAM pointer) {
   PendingPermission* pending = reinterpret_cast<PendingPermission*>(pointer);
   const proto::PermissionRequest& request = *pending->request;
+
+  // Before either box goes up, not after: the call below does not return until
+  // there is an answer.
+  SignalWaiting();
 
   // AskUserQuestion is not a permission at all, however it travels.  It is the
   // model asking the reader something, and the answer goes back in the field

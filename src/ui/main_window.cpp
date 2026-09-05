@@ -75,13 +75,34 @@ LRESULT MainWindow::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
       return 0;
     }
 
+    case WM_ACTIVATE:
+      // Coming back to a window that is waiting for an answer.  A modal box
+      // DISABLES its owner, and focus cannot be put on a child of a disabled
+      // window -- SetFocus just fails, and it fails silently.  Measured
+      // 2026-09-05: the reader came back to a permission box, heard the window
+      // title and nothing else, and had to press Tab to reach the box at all.
+      //
+      // The box is where the focus belongs then, and Windows knows which one
+      // it is: GW_ENABLEDPOPUP exists for exactly this question.  Handled on
+      // WM_ACTIVATE rather than WM_SETFOCUS because a disabled window is not
+      // where the focus lands in the first place.
+      if (LOWORD(wParam) != WA_INACTIVE && !IsWindowEnabled(hwnd_)) {
+        if (HWND waiting = GetWindow(hwnd_, GW_ENABLEDPOPUP)) {
+          SetForegroundWindow(waiting);
+        }
+      }
+      return 0;
+
     case WM_SETFOCUS:
       // The window itself is never a useful place for focus to sit; a screen
       // reader would announce the window and then nothing.  Where it goes is
       // the pane's business: back to the box the reader left, not always the
       // prompt -- coming back from another application used to cost them
       // their place in the transcript.
-      if (pane_) pane_->RestoreFocus();
+      //
+      // Not while a modal box is up: see WM_ACTIVATE above.  RestoreFocus
+      // would aim at a child of a disabled window and quietly do nothing.
+      if (IsWindowEnabled(hwnd_) && pane_) pane_->RestoreFocus();
       return 0;
 
     case kMsgDrain:

@@ -146,6 +146,11 @@ class SessionPane {
   // Says that the turn is over.  The answer itself was already read as it
   // arrived, so this only marks the end.
   void SignalTurnEnd();
+  // A modal box is about to go up while the reader is somewhere else.  Flashes
+  // the taskbar button and plays a sound; silent when the window is in front,
+  // where the box speaks for itself.  See the definition for why speech is not
+  // an option here and why the sound is neither of the two already in use.
+  void SignalWaiting() const;
   // Takes the id and the permission mode off the Session at the moment they
   // are needed.  See the note on the definition for why they are not kept up
   // to date instead.

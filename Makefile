@@ -50,7 +50,9 @@ GUI_SUBSYSTEM := -mwindows
 
 CXXFLAGS := -std=c++20 -O2 $(WARN) -I. -Isrc \
             -DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00 -DUNICODE -D_UNICODE
-LDLIBS   := -lole32 -lshell32 -lcomctl32 -luuid -lgdi32
+# winmm je kvoli PlaySound: zvuk pre cakajuci modal sa neda dat cez
+# MessageBeep, oba jeho pouzitelne zvuky uz maju iny vyznam (invariant 11).
+LDLIBS   := -lole32 -lshell32 -lcomctl32 -luuid -lgdi32 -lwinmm
 
 # Nezavisle na ClaudeLens, da sa vziat do ineho projektu tak ako je.
 WIN_SRCS   := src/win/window.cpp src/win/dialog.cpp src/win/process.cpp \

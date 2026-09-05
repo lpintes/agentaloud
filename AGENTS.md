@@ -477,6 +477,32 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     už znamená užšiu vec („ťah skončil a nič nezaznelo", invariant 6). Jeden
     zvuk na dve udalosti neznamená ani jednu.
 
+    **Modálne okno na pozadí je tretia udalosť a potrebuje tretí zvuk.**
+    Otázka od modelu aj žiadosť o povolenie ťah **zastavia**, takže mlčať sa tu
+    nedá — a odmerané (5. 9. 2026) je aj to, že Windows appke na pozadí
+    popredie nedá: okno nevyskočí, len tam stojí. Bez ohlásenia to znamená
+    zastavený ťah, o ktorom nikto nevie; čitateľ sa vrátil sám po minúte.
+    Ohlasuje to `ui::SessionPane::SignalWaiting`: `FlashWindowEx`
+    s `FLASHW_TIMERNOFG` (bliká, kým okno nepríde do popredia — a prísť môže
+    len preto, aby sa odpovedalo) a zvuk. Reč nie, z toho istého dôvodu ako pri
+    „hotovo".
+
+    Zvuk **nie je** `MessageBeep`, a to je pointa: jeho dva použiteľné zvuky už
+    významy majú (`MB_ICONASTERISK`, `MB_ICONEXCLAMATION` vyššie) a
+    `MB_ICONQUESTION`, ktorý sa sám ponúka ako tretí, nemá vo východiskovej
+    schéme Windows priradený **žiadny súbor** — zlyhal by presne tým jediným
+    spôsobom, na ktorom tu záleží, teda ticho. Preto `PlaySoundW` s aliasom
+    `Notification.Default`, a **bez** `SND_NODEFAULT`: nepriradený alias potom
+    spadne na systémový východiskový zvuk namiesto na ticho.
+
+    A keď sa čitateľ vráti, fokus musí pristáť **v tom okne**. Modál svojho
+    vlastníka **zakáže**, a na dieťa zakázaného okna sa `SetFocus` nedá —
+    zlyhá, a zlyhá ticho. Preto sa `MainWindow::RestoreFocus` na `WM_SETFOCUS`
+    nevolá, kým je okno zakázané, a `WM_ACTIVATE` namiesto toho vytiahne
+    dopredu `GetWindow(hwnd, GW_ENABLEDPOPUP)` — tá konštanta existuje presne
+    na túto otázku. Bez toho NVDA prečítala titulok okna a stíchla a do
+    dialógu sa dalo dostať až Tabom.
+
     `Announce` (odozva na klávesu) sa toto **netýka** a nikdy sa netlmí: môže
     prísť len vtedy, keď okno fokus má, a podľa invariantu 6 musí znieť vždy.
 
