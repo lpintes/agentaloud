@@ -6,6 +6,8 @@
 #include <ctime>
 
 #include "model/utf.h"
+#include "proto/ask.h"
+#include "ui/ask_dialog.h"
 #include "ui/resource.h"
 #include "win/clipboard.h"
 
@@ -477,6 +479,34 @@ void SessionPane::OnDrain() {
 LRESULT SessionPane::OnPermission(LPARAM pointer) {
   PendingPermission* pending = reinterpret_cast<PendingPermission*>(pointer);
   const proto::PermissionRequest& request = *pending->request;
+
+  // AskUserQuestion is not a permission at all, however it travels.  It is the
+  // model asking the reader something, and the answer goes back in the field
+  // that edits a tool's arguments -- see proto/ask.h, where the shape and the
+  // measurement behind it are written down.  Until this branch existed the
+  // question was put through the box below, so a question with three options
+  // was offered with Yes and No and the answer was lost.
+  //
+  // The parse has to succeed as well as the name match: an input we cannot
+  // draw falls through to the general prompt, which at least shows it.
+  std::vector<proto::AskQuestion> questions;
+  if (request.toolName == proto::kAskUserQuestionTool &&
+      proto::ParseAskUserQuestion(request.input, &questions)) {
+    std::vector<std::vector<std::string>> chosen;
+    if (AskQuestions(host_, questions, &chosen)) {
+      pending->decision.allow = true;
+      pending->decision.updatedInput =
+          proto::MakeAskAnswers(request.input, questions, chosen);
+    } else {
+      // Written for the model, like every deny message here.  "Denied" would
+      // read as a rule refusing the tool and invite a retry; this says a
+      // person declined to answer, which is a thing to stop for.
+      pending->decision.denyMessage =
+          "Pouzivatel na otazku neodpovedal a dialog zavrel. Neopakuj ju, "
+          "spytaj sa obycajnym textom, co dalej.";
+    }
+    return 0;
+  }
 
   // A MessageBox, not a dialog from a template, and only until step 6
   // (claude-gui-lkk.6).  It is here rather than nowhere because without it

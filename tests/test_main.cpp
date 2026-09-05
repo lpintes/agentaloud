@@ -29,6 +29,7 @@
 #include "model/bookmarks.h"
 #include "model/transcript.h"
 #include "model/utf.h"
+#include "proto/ask.h"
 #include "proto/control.h"
 #include "proto/events.h"
 #include "proto/jsonl.h"
@@ -922,6 +923,138 @@ void TestSummariesAreOneLine() {
 
 // -------------------------------------------------------------- 2. fixtury
 
+void TestAskUserQuestionRoundTrip() {
+  TEST("ask: otazka s moznostami je can_use_tool a odpoved ide v updatedInput");
+  // Zaznam je odpozorovany naostro cez tools/probe_ask.py (2026-09-05), nie
+  // vymysleny -- a prave to je na nom to podstatne. Navrh (claude-gui-lkk.15)
+  // predpokladal subtyp 'request_user_dialog'; v skutocnosti pride obycajny
+  // 'can_use_tool' pre nastroj AskUserQuestion, s 'requires_user_interaction'.
+  proto::Json record = proto::Json::parse(R"J({
+    "type": "control_request",
+    "request_id": "574ca6a9-5914-4049-90c0-3dab76a80dcc",
+    "request": {
+      "subtype": "can_use_tool",
+      "tool_name": "AskUserQuestion",
+      "display_name": "AskUserQuestion",
+      "input": {
+        "questions": [
+          {
+            "question": "Čo piješ radšej?",
+            "header": "Nápoj",
+            "options": [
+              {"label": "Čaj", "description": "Horúci čaj."},
+              {"label": "Káva", "description": "Espresso alebo filtrovaná."},
+              {"label": "Voda", "description": "Obyčajná alebo perlivá."}
+            ],
+            "multiSelect": false
+          }
+        ]
+      },
+      "tool_use_id": "toolu_01BtCsVpXnUEpU3vD2DbphcQ",
+      "requires_user_interaction": true
+    }
+  })J");
+
+  proto::PermissionRequest request;
+  CHECK(proto::ParsePermissionRequest(record, &request));
+  CHECK_EQ(request.toolName, std::string("AskUserQuestion"));
+  CHECK(request.requiresUserInteraction);
+
+  std::vector<proto::AskQuestion> questions;
+  CHECK(proto::ParseAskUserQuestion(request.input, &questions));
+  CHECK_EQ(questions.size(), size_t{1});
+  CHECK_EQ(questions[0].question, std::string("Čo piješ radšej?"));
+  CHECK_EQ(questions[0].header, std::string("Nápoj"));
+  CHECK(!questions[0].multiSelect);
+  CHECK_EQ(questions[0].options.size(), size_t{3});
+  CHECK_EQ(questions[0].options[1].label, std::string("Káva"));
+  CHECK_EQ(questions[0].options[2].description,
+           std::string("Obyčajná alebo perlivá."));
+
+  // Odpoved je klucovana TEXTOM OTAZKY, nie indexom ani hlavickou, a pre
+  // jednovyberovu otazku je to retazec. Overene naostro: na tuto odpoved CLI
+  // vratilo tool_result 'Your questions have been answered: ...="Čaj"'.
+  const proto::Json updated = proto::MakeAskAnswers(
+      request.input, questions, {{std::string("Čaj")}});
+  CHECK_EQ(updated["answers"]["Čo piješ radšej?"].get<std::string>(),
+           std::string("Čaj"));
+  // updatedInput NAHRADZUJE argumenty nastroja, takze otazky v nom musia
+  // zostat -- inak by sa volanie odoslalo bez toho, na co odpoveda.
+  CHECK(updated.contains("questions"));
+  CHECK_EQ(updated["questions"].size(), size_t{1});
+
+  // Neoznacena otazka sa vynecha. Je to legalne: CLI vtedy povie modelu, nech
+  // sa spyta znova. Dialog to nerobi -- Esc je zamietnutie celeho volania --
+  // ale vrstva pod nim to musi zniest.
+  const proto::Json none =
+      proto::MakeAskAnswers(request.input, questions, {{}});
+  CHECK(none["answers"].empty());
+
+  // Viacnasobny vyber sa posiela ako pole, jednoduchy ako retazec. Rozdiel
+  // nie je kozmeticky: validator CLI pole pri multiSelect=false neuzna a
+  // vysledok potom znie inak.
+  proto::Json multiInput = request.input;
+  multiInput["questions"][0]["multiSelect"] = true;
+  std::vector<proto::AskQuestion> multi;
+  CHECK(proto::ParseAskUserQuestion(multiInput, &multi));
+  CHECK(multi[0].multiSelect);
+  const proto::Json both = proto::MakeAskAnswers(
+      multiInput, multi, {{std::string("Čaj"), std::string("Voda")}});
+  CHECK(both["answers"]["Čo piješ radšej?"].is_array());
+  CHECK_EQ(both["answers"]["Čo piješ radšej?"].size(), size_t{2});
+
+  // Co sa neda nakreslit, to sa neparsuje: otazka bez moznosti (kind "text"
+  // a "number" su za prepinacom a na tomto streame sa nikdy neobjavili) by
+  // znamenala dialog s prazdnym zoznamom. Vtedy je lepsi vseobecny prompt.
+  std::vector<proto::AskQuestion> rejected;
+  CHECK(!proto::ParseAskUserQuestion(
+      proto::Json::parse(R"J({"questions": []})J"), &rejected));
+  CHECK(!proto::ParseAskUserQuestion(
+      proto::Json::parse(R"J({"questions": [{"question": "a?"}]})J"),
+      &rejected));
+  CHECK(!proto::ParseAskUserQuestion(proto::Json::parse(R"J({})J"), &rejected));
+
+  // Bezny nastroj sa nezmenil: bez pola je priznak nepravdivy.
+  proto::PermissionRequest bash;
+  CHECK(proto::ParsePermissionRequest(
+      proto::Json::parse(
+          R"J({"type": "control_request", "request_id": "r1",
+               "request": {"subtype": "can_use_tool", "tool_name": "Bash",
+                           "input": {"command": "echo"}}})J"),
+      &bash));
+  CHECK(!bash.requiresUserInteraction);
+}
+
+void TestQuestionsReadAsText() {
+  TEST("transcript: otazka s moznostami nie je v prepise dump JSON");
+  model::Transcript transcript;
+  proto::Json call = proto::Json::parse(R"J({
+    "type": "assistant",
+    "message": {"content": [
+      {"type": "tool_use", "id": "toolu_Q", "name": "AskUserQuestion",
+       "input": {"questions": [
+         {"question": "Čo piješ radšej?", "header": "Nápoj",
+          "multiSelect": false,
+          "options": [{"label": "Čaj", "description": "Horúci."},
+                      {"label": "Voda", "description": ""}]}
+       ]}}
+    ]}
+  })J");
+  transcript.Append(proto::Classify(call));
+  const std::vector<model::Block>& blocks = transcript.blocks();
+  CHECK_EQ(blocks.size(), size_t{1});
+
+  // Zhrnutie je otazka, nie "{"questions":[{"question":...". Riadok, ktory
+  // pocuje citatel pri prechode blokmi, musi povedat, na co sa islo pytat.
+  CHECK_EQ(blocks[0].summary,
+           std::wstring(L"AskUserQuestion: Čo piješ radšej?"));
+  // Telo je otazka a jej moznosti pod nou -- prepis je jedine miesto, kde sa
+  // da otazka precitat este raz, ked uz dialog nie je na obrazovke.
+  CHECK_EQ(blocks[0].body,
+           std::wstring(L"1. Čo piješ radšej?\n   Čaj — Horúci.\n   Voda"));
+  CHECK(blocks[0].body.find(L"questions") == std::wstring::npos);
+}
+
 void TestFixtureBasic(const std::string& dir) {
   TEST("fixtura basic: vsetky druhy blokov, ziadny neznamy zaznam");
   bool ok = false;
@@ -1102,6 +1235,8 @@ int main(int argc, char** argv) {
   TestEmptyBlocksAreDropped();
   TestSpeakerPrefix();
   TestSummariesAreOneLine();
+  TestAskUserQuestionRoundTrip();
+  TestQuestionsReadAsText();
   TestFixtureBasic(fixtures);
   TestFixtureDenied(fixtures);
 

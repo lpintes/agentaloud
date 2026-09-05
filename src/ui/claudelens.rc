@@ -48,3 +48,40 @@ BEGIN
     DEFPUSHBUTTON   "&Skopírovať id", IDC_DETAILS_COPY, 190, 142, 66, 14
     PUSHBUTTON      "&Zavrieť", IDCANCEL, 262, 142, 50, 14
 END
+
+// The question with options.  One question per dialog, shown in turn, which is
+// what lets a fixed template cover the whole tool: the count of questions and
+// of options varies, the shape of one question does not.
+//
+// Two list boxes in the same place and only one of them ever shown.  A list
+// box cannot be told after creation whether it takes one selection or several,
+// and the answer to that is in the request; a checkbox for each option would
+// need the count baked into the template instead.  The one not in use is
+// hidden AND disabled, so the tab order skips it -- see ui/ask_dialog.cpp.
+//
+// The option's description is part of its line rather than a box of its own.
+// Read aloud, one line per option is one thing to listen to; a description
+// beside the list is a second place to go and look for every option tried.
+IDD_ASK_QUESTION DIALOGEX 0, 0, 300, 196
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "ClaudeLens — otázka"
+FONT 9, "Segoe UI", 400, 0, 1
+BEGIN
+    LTEXT           "O&tázka:", IDC_ASK_QUESTION_LABEL, 8, 8, 284, 8
+    EDITTEXT        IDC_ASK_QUESTION, 8, 18, 284, 32,
+                    ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL
+
+    LTEXT           "&Možnosti:", IDC_ASK_OPTIONS_LABEL, 8, 56, 284, 8
+    LISTBOX         IDC_ASK_OPTIONS, 8, 66, 284, 76,
+                    LBS_NOTIFY | LBS_HASSTRINGS | WS_BORDER | WS_VSCROLL |
+                    WS_HSCROLL | WS_TABSTOP
+    LISTBOX         IDC_ASK_OPTIONS_MULTI, 8, 66, 284, 76,
+                    LBS_NOTIFY | LBS_HASSTRINGS | LBS_MULTIPLESEL | WS_BORDER |
+                    WS_VSCROLL | WS_HSCROLL | WS_TABSTOP
+
+    LTEXT           "&Vlastná odpoveď:", IDC_ASK_OTHER_LABEL, 8, 148, 284, 8
+    EDITTEXT        IDC_ASK_OTHER, 8, 158, 284, 12, ES_AUTOHSCROLL
+
+    DEFPUSHBUTTON   "&Odpovedať", IDOK, 172, 176, 56, 14
+    PUSHBUTTON      "&Zamietnuť", IDCANCEL, 236, 176, 56, 14
+END

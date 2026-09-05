@@ -63,7 +63,7 @@ WIN_SRCS   := src/win/window.cpp src/win/dialog.cpp src/win/process.cpp \
 # aj win::Process, a preto ho testy nelinkuju -- keby museli, znamenalo by to,
 # ze sa spracovanie protokolu niekde zamotalo so spustanim procesu.
 PROTO_PURE_SRCS := src/proto/jsonl.cpp src/proto/events.cpp \
-                   src/proto/control.cpp
+                   src/proto/control.cpp src/proto/ask.cpp
 PROTO_SRCS := $(PROTO_PURE_SRCS) src/proto/session.cpp
 
 # Transkript a jeho mapa rozsahov.  Nevie o windows.h, a prave preto sa da
@@ -71,7 +71,8 @@ PROTO_SRCS := $(PROTO_PURE_SRCS) src/proto/session.cpp
 MODEL_SRCS := src/model/utf.cpp src/model/transcript.cpp src/model/bookmarks.cpp
 
 UI_SRCS := src/ui/session_pane.cpp src/ui/main_window.cpp src/ui/speech.cpp \
-           src/ui/status_bar.cpp src/ui/session_details.cpp
+           src/ui/status_bar.cpp src/ui/session_details.cpp \
+           src/ui/ask_dialog.cpp
 
 APP_SRCS := $(WIN_SRCS) $(PROTO_SRCS) $(MODEL_SRCS) $(UI_SRCS) src/main.cpp
 APP_OBJS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(APP_SRCS))

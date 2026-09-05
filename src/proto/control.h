@@ -37,6 +37,11 @@ struct PermissionRequest {
   // hook.  Worth showing -- "you asked to be asked about commits" is a better
   // prompt than a bare command line.
   std::string decisionReasonType;
+  // True when the tool's whole job is to put something to a person --
+  // AskUserQuestion is the one that matters here.  It says a human is wanted;
+  // it does NOT say what the input looks like, so nothing may branch on it to
+  // read a payload.  See proto/ask.h.
+  bool requiresUserInteraction = false;
   Json input;              // the tool's arguments, e.g. {"command": "..."}
 };
 

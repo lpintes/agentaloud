@@ -10,6 +10,7 @@
 // windows.h and are 1 and 2.
 
 #define IDD_SESSION_DETAILS 100
+#define IDD_ASK_QUESTION    101
 
 #define IDC_DETAILS_ID          1000
 #define IDC_DETAILS_MODEL       1001
@@ -30,5 +31,17 @@
 #define IDC_DETAILS_CONTEXT_LABEL 1014
 #define IDC_DETAILS_COST_LABEL    1015
 #define IDC_DETAILS_TOKENS_LABEL  1016
+
+// The question dialog.  One question at a time, so a fixed template covers the
+// two-to-four options every question has -- which of the two lists is used
+// depends on multiSelect, and the other one is hidden.  See ui/ask_dialog.h.
+#define IDC_ASK_QUESTION        1030
+#define IDC_ASK_OPTIONS         1031
+#define IDC_ASK_OPTIONS_MULTI   1032
+#define IDC_ASK_OTHER           1033
+
+#define IDC_ASK_QUESTION_LABEL  1040
+#define IDC_ASK_OPTIONS_LABEL   1041
+#define IDC_ASK_OTHER_LABEL     1042
 
 #endif

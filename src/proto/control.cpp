@@ -29,6 +29,10 @@ bool ParsePermissionRequest(const Json& record, PermissionRequest* out) {
   out->description = StringField(*request, "description");
   out->toolUseId = StringField(*request, "tool_use_id");
   out->decisionReasonType = StringField(*request, "decision_reason_type");
+  auto interaction = request->find("requires_user_interaction");
+  out->requiresUserInteraction = interaction != request->end() &&
+                                 interaction->is_boolean() &&
+                                 interaction->get<bool>();
   auto input = request->find("input");
   out->input = input != request->end() ? *input : Json::object();
   return true;

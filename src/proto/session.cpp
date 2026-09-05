@@ -98,9 +98,18 @@ void Session::OnLine(std::string_view line) {
                                            ? "The user declined."
                                            : decision.denyMessage));
     } else {
-      // request_user_dialog and elicitation land here.  Answering with an
-      // error is deliberate: it is worse to leave the CLI waiting for a
-      // dialog that no one will ever show than to say we cannot.
+      // elicitation lands here, and so would request_user_dialog -- but that
+      // second one cannot actually arrive.  The CLI fails closed on it: a
+      // dialog kind is only ever sent to a client that named it in
+      // `initialize.supportedDialogKinds`, and we name none.  See invariant 12
+      // in CLAUDE.md, and proto/ask.h for the request that DOES bring the
+      // model's questions here -- it is an ordinary can_use_tool.
+      //
+      // Answering with an error is still right for what is left: it is worse
+      // to leave the CLI waiting for a dialog no one will show than to say we
+      // cannot.  For a parked dialog it would not even be heard -- the CLI
+      // discards error-shaped answers to one, on the grounds that an error is
+      // not a human's choice.
       const std::string requestId =
           event.raw.value("request_id", std::string());
       SendJson(MakeError(requestId, "not handled by this client yet"));

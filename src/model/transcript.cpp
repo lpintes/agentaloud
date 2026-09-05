@@ -166,6 +166,54 @@ std::wstring ShortenPath(const std::wstring& path, const std::wstring& root) {
   return path;
 }
 
+// The questions of an AskUserQuestion call, as text.  Its arguments are an
+// array of objects, so both the summary line and the body would otherwise fall
+// through to a JSON dump -- and this is the one tool whose call the reader has
+// to be able to go back and re-read, because it is a question that was put to
+// them.  See proto/ask.h for the shape and ui/ask_dialog.h for the answering.
+//
+// `full` picks the body from the summary: the summary is one line and gets the
+// first question, the body gets every question with its options under it.
+std::wstring RenderQuestions(const proto::Json& input, bool full) {
+  auto questions = input.find("questions");
+  if (questions == input.end() || !questions->is_array() ||
+      questions->empty()) {
+    return {};
+  }
+  std::wstring text;
+  size_t number = 0;
+  for (const proto::Json& item : *questions) {
+    if (!item.is_object()) continue;
+    const std::wstring question = Widen(StringField(item, "question"));
+    if (question.empty()) continue;
+    ++number;
+    if (!full) {
+      // "(+2 ďalšie)" and not the rest of them: this is the line heard when
+      // arrowing past the block, and the block itself is one keystroke away.
+      const size_t rest = questions->size() - 1;
+      return rest == 0
+                 ? question
+                 : question + L" (+" + std::to_wstring(rest) + L" ďalšie)";
+    }
+    if (!text.empty()) text += L'\n';
+    text += std::to_wstring(number) + L". " + question;
+    if (item.value("multiSelect", false)) text += L" (dá sa označiť viac)";
+    auto options = item.find("options");
+    if (options == item.end() || !options->is_array()) continue;
+    for (const proto::Json& option : *options) {
+      if (!option.is_object()) continue;
+      const std::wstring label = Widen(StringField(option, "label"));
+      if (label.empty()) continue;
+      const std::wstring description =
+          Widen(StringField(option, "description"));
+      text += L'\n';
+      text += L"   " + label;
+      if (!description.empty()) text += L" — " + description;
+    }
+  }
+  return text;
+}
+
 // The field that says what a tool call actually does.  Falling back to the
 // whole input would put a diff into a summary line.
 std::wstring PrimaryInput(const std::string& toolName, const proto::Json& input,
@@ -188,6 +236,10 @@ std::wstring PrimaryInput(const std::string& toolName, const proto::Json& input,
       const std::wstring wide = Widen(value);
       return entry.isPath ? ShortenPath(wide, root) : wide;
     }
+  }
+  if (toolName == "AskUserQuestion") {
+    const std::wstring asked = RenderQuestions(input, false);
+    if (!asked.empty()) return asked;
   }
   const std::string description = StringField(input, "description");
   if (!description.empty()) return Widen(description);
@@ -240,6 +292,10 @@ std::wstring RenderToolInput(const std::string& toolName,
     if (content != input.end() && content->is_string()) {
       return L"obsah:\n" + Widen(content->get<std::string>());
     }
+  }
+  if (toolName == "AskUserQuestion") {
+    const std::wstring asked = RenderQuestions(input, true);
+    if (!asked.empty()) return asked;
   }
   return RenderFields(input);
 }

@@ -418,6 +418,41 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     nedá porovnávať s prerušením, ktoré bez druhej hlášky znelo ako ticho,
     lebo po ňom nezostávalo nič.
 
+12. **`AskUserQuestion` nie je žiadosť o povolenie, hoci ňou pricestuje.** Keď
+    sa model spýta na výber z možností, na control kanál nepríde nový subtyp —
+    príde obyčajný `can_use_tool` pre nástroj menom `AskUserQuestion`, s
+    `requires_user_interaction: true`, a odpoveď sa vracia v poli, ktoré inak
+    slúži na úpravu argumentov nástroja:
+
+        allow + `updatedInput` = vstup nástroja doplnený o `answers`,
+        objekt kľúčovaný **textom otázky** — nie indexom a nie hlavičkou.
+
+    Odmerané cez `tools/probe_ask.py` (5. 9. 2026) celým okruhom: odpoveď
+    `{"Čo piješ radšej?": "Čaj"}` dala `tool_result` „Your questions have been
+    answered…" a model pokračoval. Jednovýberová otázka sa odpovedá reťazcom,
+    viacvýberová poľom — validátor CLI ich rozlišuje a pri nezhode preformuluje
+    výsledok. Odpoveď mimo ponúknutých návestí je dovolená; CLI ju prepustí
+    modelu, len ju uvedie inak.
+
+    Kým to appka nevedela, otázka s tromi možnosťami sa ukázala ako povolenie
+    s „Áno" a „Nie": otázka na obrazovke bola a odpovedať sa na ňu nedalo.
+    **Zlyháva to ticho v tom najhoršom zmysle** — vyzerá to ako odpovedaná
+    otázka, len s nezmyselnou odpoveďou. Preto sa `AskUserQuestion` musí vetviť
+    **pred** všeobecným promptom na povolenie (`ui::SessionPane::OnPermission`)
+    a vetví sa podľa **mena nástroja**, nie podľa `requires_user_interaction`:
+    ten príznak hovorí, že sa čaká na človeka, nie ako vyzerá payload, a čítať
+    payload podľa neho je to isté hádanie o krok neskôr.
+
+    `request_user_dialog` je pritom skutočný subtyp so skutočnými druhmi
+    (`permission_bash`, `permission_ask_user_question`, `refusal_fallback_prompt`
+    a ďalších vyše tridsať, nájdené v binárke), ale CLI na ňom **zlyháva
+    zatvorene**: druh pošle len klientovi, ktorý ho vymenoval v
+    `initialize.supportedDialogKinds`, a my nevymenúvame žiadny. Tá vetva teda
+    nie je neobslúžená, je nedosiahnuteľná — a chybová odpoveď, ktorou na ňu
+    `session.cpp` odpovedá, je dvojnásobne neškodná: chybovú odpoveď na dialóg
+    CLI zahadzuje a dialóg necháva zaparkovaný. Prihlásiť sa o druh je vlastný
+    krok, nie oprava tohto (claude-gui-lkk.25).
+
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa
 rozídu, titulok okna sa zmení na **„ClaudeLens — NESÚLAD MAPY ROZSAHOV"**. Ak
