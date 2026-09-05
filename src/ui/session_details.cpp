@@ -106,6 +106,8 @@ bool SessionDetailsDialog::OnInit() {
   SetText(IDC_DETAILS_MODE, OrUnknown(details_.permissionMode));
   SetText(IDC_DETAILS_PROJECT, OrUnknown(details_.project));
   SetText(IDC_DETAILS_CONTEXT, FormatContext(details_));
+  // Directly above the cost, because that is the question it answers.
+  SetText(IDC_DETAILS_ACCOUNT, OrUnknown(details_.account));
   SetText(IDC_DETAILS_COST, FormatCost(details_));
   SetText(IDC_DETAILS_TOKENS, FormatTokens(details_));
   // There is nothing here to copy when there is no id, and a button that does

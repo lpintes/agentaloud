@@ -32,6 +32,10 @@ struct SessionDetails {
   std::wstring id;              // empty until the first system/init
   std::wstring model;
   std::wstring permissionMode;  // empty means the CLI's own default
+  // Who is paying, out of the initialize handshake.  Here because the cost
+  // field below reads as "this was free" on a subscription and nothing else
+  // on screen says why.
+  std::wstring account;
   std::wstring project;         // the full path, not the folder name
   bool haveUsage = false;       // false until the first result record
   proto::Usage usage;

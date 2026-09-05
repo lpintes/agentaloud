@@ -515,6 +515,38 @@ void TestInitializeResponseParsing() {
   CHECK_EQ(info.requestId, std::string("init-1"));
   CHECK_EQ(info.permissionMode, std::string("acceptEdits"));
 
+  // Ucet je v tej istej odpovedi, teda sa vie tiez pred prvym tahom.
+  // Odpozorovane cez tools/probe_dialog.py 2026-09-05. 'organization' sa
+  // zamerne necita: na osobnom ucte je vyrobena z adresy ("<email>'s
+  // Organization"), takze by to bol ten isty udaj druhy raz.
+  proto::Json withAccount = proto::Json::parse(R"({
+    "type": "control_response",
+    "response": {
+      "subtype": "success",
+      "request_id": "init-2",
+      "response": {
+        "current_permission_mode": "default",
+        "account": {
+          "email": "niekto@example.com",
+          "organization": "niekto@example.com's Organization",
+          "subscriptionType": "Claude Pro",
+          "apiProvider": "firstParty"
+        }
+      }
+    }
+  })");
+  proto::InitializeInfo account;
+  CHECK(proto::ParseInitializeResponse(withAccount, &account));
+  CHECK_EQ(account.accountEmail, std::string("niekto@example.com"));
+  CHECK_EQ(account.subscriptionType, std::string("Claude Pro"));
+  CHECK_EQ(account.apiProvider, std::string("firstParty"));
+
+  // Odpoved bez uctu je stale platna odpoved: rezim je to jedine, co o nej
+  // rozhoduje. Keby chybajuci ucet parsovanie zhodil, prestal by sa vediet aj
+  // rezim -- a ten sa vie vzdy.
+  CHECK_EQ(info.accountEmail, std::string());
+  CHECK_EQ(info.subscriptionType, std::string());
+
   // Odpoved na nieco ine, chybova odpoved a zaznam bez modu nie su chyba, len
   // sa z nich rezim dozvediet neda.
   proto::InitializeInfo ignored;

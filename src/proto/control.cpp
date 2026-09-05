@@ -52,7 +52,16 @@ bool ParseInitializeResponse(const Json& record, InitializeInfo* out) {
   InitializeInfo info;
   info.requestId = StringField(*outer, "request_id");
   info.permissionMode = StringField(*inner, "current_permission_mode");
+  // The mode decides whether this was an answer at all: it is the one field
+  // the handshake always carries.  The account is read after that test and not
+  // as part of it -- a response without it is still a response.
   if (info.permissionMode.empty()) return false;
+  auto account = inner->find("account");
+  if (account != inner->end() && account->is_object()) {
+    info.accountEmail = StringField(*account, "email");
+    info.subscriptionType = StringField(*account, "subscriptionType");
+    info.apiProvider = StringField(*account, "apiProvider");
+  }
   *out = info;
   return true;
 }

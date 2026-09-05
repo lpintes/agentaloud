@@ -83,8 +83,12 @@ class Session {
   // into a string another thread may be assigning is a race that shows up as
   // a truncated id once in a hundred runs.
   std::string sessionId() const;
-  // What the CLI says it is running as, out of the initialize handshake --
-  // available before the first turn, unlike everything in `system/init`.
+  // What the initialize handshake said: the permission mode and the account.
+  // Available before the first turn, unlike everything in `system/init`.
+  //
+  // Handed out whole rather than field by field, because it all arrives in one
+  // record and a second accessor would only be a second chance to read it at a
+  // different moment.
   //
   // Empty until the answer arrives, and that is NOT immediate: the CLI answers
   // the handshake only after its SessionStart hooks have run.  Measured in
@@ -92,7 +96,7 @@ class Session {
   // after 8 seconds and was after 25.  So "known at startup" means "known once
   // the CLI has finished starting", and a caller that reads this too early
   // gets an empty string rather than a wrong one.
-  std::string permissionMode() const;
+  InitializeInfo handshake() const;
 
  private:
   void OnBytes(std::string_view bytes);
@@ -118,7 +122,7 @@ class Session {
   bool turnInFlight_ = false;
   // Under mutex_: written by the reader thread, read by whoever asks.
   std::string sessionId_;
-  std::string permissionMode_;
+  InitializeInfo handshake_;
 
   // Writes come from the caller's thread and from the reader thread answering
   // a permission request, so the handle needs its own lock.

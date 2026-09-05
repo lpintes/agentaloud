@@ -83,7 +83,7 @@ void Session::OnLine(std::string_view line) {
     if (ParseInitializeResponse(event.raw, &info) &&
         info.requestId == initRequestId_) {
       std::lock_guard<std::mutex> lock(mutex_);
-      permissionMode_ = info.permissionMode;
+      handshake_ = info;
     }
   }
 
@@ -132,9 +132,9 @@ std::string Session::sessionId() const {
   return sessionId_;
 }
 
-std::string Session::permissionMode() const {
+InitializeInfo Session::handshake() const {
   std::lock_guard<std::mutex> lock(mutex_);
-  return permissionMode_;
+  return handshake_;
 }
 
 bool Session::SendJson(const Json& value) {

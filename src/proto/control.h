@@ -66,9 +66,23 @@ Json MakeInitialize(const std::string& requestId);
 // resolves to claude-sonnet-5 -- so reading the model out of that list would
 // have shown the wrong model until the first turn quietly replaced it.  The
 // model waits for system/init; the mode does not have to.
+// The account, on the other hand, IS in it -- under `account`, and measured
+// there (tools/probe_dialog.py, 2026-09-05) rather than assumed.  It matters
+// for one reason: on a subscription the billed cost of a session is zero, so
+// the cost shown in the details dialog reads as "this was free" with nothing
+// on screen to say why.  "Claude Pro" one row above is the why.
+//
+// `organization` is deliberately not taken: on a personal account it is made
+// out of the address ("<email>'s Organization") and would be the same fact
+// read twice.  A team account would want it, and that is a bead, not a guess.
 struct InitializeInfo {
   std::string requestId;       // echoes ours, so a stray response is ignored
   std::string permissionMode;  // current_permission_mode
+  std::string accountEmail;
+  std::string subscriptionType;  // "Claude Pro"
+  // "firstParty", or Bedrock/Vertex.  Worth carrying because it changes what
+  // the cost numbers mean, not because it is interesting in itself.
+  std::string apiProvider;
 };
 
 // False when the record is not a successful control_response, or carries none

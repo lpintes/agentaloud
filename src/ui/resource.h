@@ -20,6 +20,7 @@
 #define IDC_DETAILS_COST        1005
 #define IDC_DETAILS_TOKENS      1006
 #define IDC_DETAILS_COPY        1007
+#define IDC_DETAILS_ACCOUNT     1008
 
 // Labels need their own ids only because a static with IDC_STATIC (-1) cannot
 // be told apart from any other, and each of these is the accessible name of
@@ -31,6 +32,7 @@
 #define IDC_DETAILS_CONTEXT_LABEL 1014
 #define IDC_DETAILS_COST_LABEL    1015
 #define IDC_DETAILS_TOKENS_LABEL  1016
+#define IDC_DETAILS_ACCOUNT_LABEL 1017
 
 // The question dialog.  One question at a time, so a fixed template covers the
 // two-to-four options every question has -- which of the two lists is used

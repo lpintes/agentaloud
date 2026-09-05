@@ -1018,8 +1018,27 @@ void SessionPane::RefreshFacts() {
   // the first turn -- so this is the one fact here that does not have to say
   // "not yet".  Not overwritten with nothing when the answer has not arrived:
   // what was asked for on the command line is better than a blank.
-  const std::string mode = session_.permissionMode();
-  if (!mode.empty()) details_.permissionMode = model::Utf16FromUtf8(mode);
+  const proto::InitializeInfo handshake = session_.handshake();
+  if (!handshake.permissionMode.empty()) {
+    details_.permissionMode = model::Utf16FromUtf8(handshake.permissionMode);
+  }
+  // The address and what it is paying with, in one field: separately they
+  // would be two rows to tab through for one fact.  Nothing is invented when a
+  // piece is missing -- the field is only as complete as the answer was.
+  std::wstring account = model::Utf16FromUtf8(handshake.accountEmail);
+  if (!handshake.subscriptionType.empty()) {
+    if (!account.empty()) account += L", ";
+    account += model::Utf16FromUtf8(handshake.subscriptionType);
+  }
+  // Said only when it is NOT the ordinary one.  Through Bedrock or Vertex the
+  // billing is somebody else's, so "0 účtované" would mean something different
+  // again -- and on the usual account the word would be noise in a field whose
+  // whole job is to be read in one breath.
+  if (!handshake.apiProvider.empty() && handshake.apiProvider != "firstParty") {
+    if (!account.empty()) account += L", ";
+    account += model::Utf16FromUtf8(handshake.apiProvider);
+  }
+  if (!account.empty()) details_.account = account;
 }
 
 void SessionPane::ShowDetails() {
