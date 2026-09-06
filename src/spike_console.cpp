@@ -78,6 +78,9 @@ int wmain(int argc, wchar_t** argv) {
   options.workingDir = argv[1];
   options.model = L"haiku";
   options.extraArgs = {L"--tools", L"Bash"};
+  // Filled in here rather than left to Start, so that the line printed below
+  // is the line that really runs -- id included.
+  options.sessionId = proto::NewSessionId();
 
   std::printf("spustam: %ls\n", proto::BuildCommandLine(options).c_str());
   std::printf("rozhodnutie o povoleni: %s\n\n", allow ? "allow" : "deny");

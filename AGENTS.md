@@ -571,6 +571,25 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     prvok, takže „povolenie: Bash" a samotný príkaz prídu ako jedno ohlásenie
     a v tomto poradí. V poli by bolo meno o Tab ďalej než odpoveď.
 
+14. **Id session si appka určuje sama a pozná ho pred štartom procesu.** Zo
+    streamu príde až so záznamom, ktorý ho nesie, a odpoveď na `initialize` ho
+    nemá: v projekte bez `SessionStart` hookov je teda známe až po prvom ťahu
+    (odmerané `tools/probe_init.py`). To, že ho F2 na tomto stroji ukázalo
+    hneď, bola zásluha hooku `bd prime`, čiže vlastnosť stroja, nie appky.
+    Preto `proto::Session::Start` vyrobí `--session-id` sám (`NewSessionId`,
+    holý UUID malými písmenami z `CoCreateGuid`) a id platí od chvíle, keď
+    proces vznikne. Pod tým menom leží aj súbor v `~/.claude/projects/…`.
+
+    To isté id sa druhýkrát použiť **nedá** a `--session-id` nie je náhrada za
+    obnovenie: CLI povie „Error: Session ID … is already in use.", skončí
+    s kódom 1 a na stdout nepovie nič. Obnovuje `--resume`, ktoré si obnovené
+    id ponechá, a druhé `--session-id` k nemu CLI odmietne bez
+    `--fork-session`. Obe hlášky idú na stderr — a ten appka preložená
+    s `-mwindows` nemá kam vypísať, takže sa to prejaví ako session, ktorá sa
+    spustila a mlčí. `Start` preto id nevyrobí, keď o rozhovore hovoria už
+    `extraArgs` (`--resume`, `-r`, `--continue`, `-c`, vlastné `--session-id`).
+    Odmerané 6. 9. 2026, `tools/probe_session_id.py`.
+
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa
 rozídu, titulok okna sa zmení na **„ClaudeLens — NESÚLAD MAPY ROZSAHOV"**. Ak

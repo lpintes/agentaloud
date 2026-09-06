@@ -1,8 +1,27 @@
 #include "proto/session.h"
 
+#include <objbase.h>
+
 #include <chrono>
 
 namespace proto {
+
+std::wstring NewSessionId() {
+  GUID guid = {};
+  if (CoCreateGuid(&guid) != S_OK) return std::wstring();
+  wchar_t braced[40] = {};
+  if (StringFromGUID2(guid, braced, 40) == 0) return std::wstring();
+  // StringFromGUID2 writes {XXXXXXXX-XXXX-...} in upper case.  The CLI asks
+  // for a UUID and the canonical spelling of one has neither braces nor
+  // capitals; whether it would take them anyway is a question not worth
+  // having, since the id also ends up as a file name on disk.
+  std::wstring id(braced + 1);
+  if (!id.empty() && id.back() == L'}') id.pop_back();
+  for (wchar_t& character : id) {
+    if (character >= L'A' && character <= L'F') character += L'a' - L'A';
+  }
+  return id;
+}
 
 std::wstring BuildCommandLine(const Session::Options& options) {
   std::wstring line = L"claude";
@@ -31,12 +50,39 @@ std::wstring BuildCommandLine(const Session::Options& options) {
     line += L' ';
     line += win::Process::Quote(options.model);
   }
+  if (!options.sessionId.empty()) {
+    add(L"--session-id");
+    line += L' ';
+    line += win::Process::Quote(options.sessionId);
+  }
   for (const std::wstring& argument : options.extraArgs) {
     line += L' ';
     line += win::Process::Quote(argument);
   }
   return line;
 }
+
+namespace {
+
+// Does the caller already say something about which conversation this is?
+// Asked before Start makes an id of its own, because the CLI refuses the two
+// together: "--session-id can only be used with --continue or --resume if
+// --fork-session is also specified" -- exit code 1, nothing on stdout, and in
+// a windowed process nothing anywhere the user can see (measured 2026-09-06,
+// tools/probe_session_id.py).  Resuming keeps the id it resumes, so a session
+// started this way has one either way.
+bool SaysWhichConversation(const std::vector<std::wstring>& extraArgs) {
+  for (const std::wstring& argument : extraArgs) {
+    if (argument == L"--resume" || argument == L"-r" ||
+        argument == L"--continue" || argument == L"-c" ||
+        argument == L"--session-id") {
+      return true;
+    }
+  }
+  return false;
+}
+
+}  // namespace
 
 Session::~Session() { Stop(5000); }
 
@@ -46,7 +92,20 @@ bool Session::Start(const Options& options, EventCallback onEvent,
   onPermission_ = std::move(onPermission);
   assembler_ = std::make_unique<LineAssembler>(
       [this](std::string_view line) { OnLine(line); });
-  if (!process_.Start(BuildCommandLine(options), options.workingDir,
+  // The id is ours to decide, and deciding it here is the point: told to the
+  // CLI it is true from the moment the process exists, whereas read off the
+  // stream it would arrive whenever the first record that carries one does --
+  // in a project without SessionStart hooks that is after the first turn.
+  // Written before the reader thread exists, like initRequestId_.
+  Options effective = options;
+  if (effective.sessionId.empty() && !SaysWhichConversation(options.extraArgs)) {
+    effective.sessionId = NewSessionId();
+  }
+  // A UUID is ASCII, so this is the whole of the conversion.  Empty when the
+  // conversation is someone else's to name -- a resumed one keeps its own id,
+  // and that one does arrive on the stream.
+  sessionId_.assign(effective.sessionId.begin(), effective.sessionId.end());
+  if (!process_.Start(BuildCommandLine(effective), options.workingDir,
                       [this](std::string_view bytes) { OnBytes(bytes); })) {
     return false;
   }
@@ -72,7 +131,9 @@ void Session::OnLine(std::string_view line) {
   Event event = Classify(std::move(record));
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    // The first one wins; every later record carries the same id.
+    // Normally a no-op: Start already knows the id, because it chose it.
+    // This is what is left for the run where CoCreateGuid failed and the
+    // session was launched without --session-id after all.
     if (sessionId_.empty()) sessionId_ = event.sessionId;
   }
 

@@ -43,6 +43,18 @@ class Session {
     // session: settings, hooks and CLAUDE.md carry over into a headless one,
     // that does not.
     std::wstring permissionMode;
+    // The conversation's id, decided here rather than read off the stream.
+    // Empty means Start() makes one with NewSessionId() -- unless extraArgs
+    // already say which conversation this is, in which case it makes none.
+    //
+    // It has to be a UUID the CLI has not seen in this project.  A second run
+    // with an id that already has a file on disk does not resume it, it dies:
+    // "Error: Session ID ... is already in use." on stderr, exit code 1,
+    // nothing at all on stdout.  Resuming is --resume, it keeps the id it
+    // resumes, and it refuses to be given another one without --fork-session.
+    // Measured 2026-09-06 with tools/probe_session_id.py; see
+    // claude-gui-lkk.7.2.
+    std::wstring sessionId;
     std::vector<std::wstring> extraArgs;  // for spikes and experiments
   };
 
@@ -78,8 +90,11 @@ class Session {
   // The order is the whole point; see the note in control.h.
   void Stop(unsigned turnTimeoutMs = 120000);
 
-  // Both of these are written on the reader thread and read from whatever
-  // thread asks, so they are handed out by value under the lock.  A reference
+  // The conversation's id.  Known from Start() onwards, because we are the
+  // one who chose it -- the stream would only say it later, and in a project
+  // without SessionStart hooks not until the first turn is over.
+  //
+  // Handed out by value under the lock like handshake() below: a reference
   // into a string another thread may be assigning is a race that shows up as
   // a truncated id once in a hundred runs.
   std::string sessionId() const;
@@ -135,7 +150,17 @@ class Session {
 // The command line Session runs, exposed so a test or a log can show exactly
 // what was launched.  --permission-prompt-tool stdio is not optional: without
 // it no permission is ever put to us.
+//
+// It is the line for the options AS GIVEN: the id Start makes for itself when
+// Options::sessionId is empty is not in it, so a caller that wants to print
+// the real line fills the id in first (see spike_console).
 std::wstring BuildCommandLine(const Session::Options& options);
+
+// A fresh id for a conversation: a bare lower-case UUID, which is the spelling
+// --session-id takes.  Empty when the system refuses to make a GUID, and the
+// caller's answer to that is to launch without the switch rather than not
+// launch -- an id we do not know is worse than nothing only for us.
+std::wstring NewSessionId();
 
 }  // namespace proto
 
