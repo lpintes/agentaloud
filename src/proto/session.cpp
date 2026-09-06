@@ -62,6 +62,16 @@ std::wstring BuildCommandLine(const Session::Options& options) {
   return line;
 }
 
+bool ResumesConversation(const std::vector<std::wstring>& extraArgs) {
+  for (const std::wstring& argument : extraArgs) {
+    if (argument == L"--resume" || argument == L"-r" ||
+        argument == L"--continue" || argument == L"-c") {
+      return true;
+    }
+  }
+  return false;
+}
+
 namespace {
 
 // Does the caller already say something about which conversation this is?
@@ -72,12 +82,9 @@ namespace {
 // tools/probe_session_id.py).  Resuming keeps the id it resumes, so a session
 // started this way has one either way.
 bool SaysWhichConversation(const std::vector<std::wstring>& extraArgs) {
+  if (ResumesConversation(extraArgs)) return true;
   for (const std::wstring& argument : extraArgs) {
-    if (argument == L"--resume" || argument == L"-r" ||
-        argument == L"--continue" || argument == L"-c" ||
-        argument == L"--session-id") {
-      return true;
-    }
+    if (argument == L"--session-id") return true;
   }
   return false;
 }

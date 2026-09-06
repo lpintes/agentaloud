@@ -35,6 +35,7 @@ enum class BlockKind {
   AssistantText,     // the answer
   PermissionDenied,  // a tool a rule would not let through
   Interrupted,       // the turn the reader stopped; added locally, like a prompt
+  Note,              // the application talking about itself; added locally too
   Thinking,
   ToolUse,
   ToolResult,
@@ -124,6 +125,16 @@ class Transcript {
   // Without the mark an interrupted answer, read back later, is indis-
   // tinguishable from one that ended by itself -- it just stops.
   Edit AppendInterrupted();
+
+  // The application's own voice in the transcript, for the things only it
+  // knows: that this session was resumed and the earlier turns are not here,
+  // for instance.  It goes into the text rather than into the status bar
+  // because a status bar is not read unless asked and a note about what is
+  // missing is worth exactly as much as the reader's chance of meeting it.
+  //
+  // Not a stream record dressed up as one: nothing on the wire says this, and
+  // filing it as an assistant answer would put words in Claude's mouth.
+  Edit AppendNote(const std::wstring& text);
 
   // Zero or more blocks, and therefore zero or more edits: a record carrying
   // two tool results for two calls made in parallel writes into two different

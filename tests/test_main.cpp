@@ -333,6 +333,28 @@ void TestInterruptLeavesAMark() {
   CHECK_EQ(transcript.FirstLine(2), std::wstring(L"Prerušené používateľom."));
 }
 
+void TestNoteIsTheApplicationsOwnVoice() {
+  TEST("transcript: poznamka appky je obsah, nie mechanizmus, a nema hovoriaceho");
+  model::Transcript transcript;
+  std::string problem;
+  transcript.AppendNote(L"Obnovená session.");
+  CHECK(transcript.CheckInvariants(&problem));
+  CHECK_EQ(transcript.blocks().size(), size_t{1});
+
+  const model::Block& note = transcript.blocks()[0];
+  CHECK(note.kind == model::BlockKind::Note);
+  // Obsah, nie mechanizmus: nezbali sa sama a nie je za nou co rozbalovat.
+  CHECK(!model::IsMechanism(note.kind));
+  CHECK(!note.collapsed);
+  CHECK(!note.collapsible);
+  // Nehovori ju ani Claude, ani pouzivatel -- ziadna predpona hovoriaceho.
+  CHECK_EQ(std::wstring(model::SpeakerPrefix(note.kind)), std::wstring(L""));
+  CHECK_EQ(transcript.FirstLine(0), std::wstring(L"Obnovená session."));
+
+  // A nie je to chyba: klavesa E hlada miesta, kde praca neprebehla.
+  CHECK(!note.isError);
+}
+
 void TestToolResultsSitBehindTheirCall() {
   TEST("transcript: vysledok stoji za svojim volanim, nie na konci");
   model::Transcript transcript;
@@ -1312,6 +1334,7 @@ int main(int argc, char** argv) {
   TestBlockAtAndNavigation();
   TestErrorNavigationAndFirstLine();
   TestInterruptLeavesAMark();
+  TestNoteIsTheApplicationsOwnVoice();
   TestToolResultsSitBehindTheirCall();
   TestBookmarksSurviveCollapsing();
   TestRateLimitParsing();

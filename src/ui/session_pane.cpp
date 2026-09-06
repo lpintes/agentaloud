@@ -355,6 +355,17 @@ bool SessionPane::Start(const proto::Session::Options& options) {
   details_.model = options.model;
   if (statusBar_) statusBar_->Set(StatusBar::kProject, L"projekt " + project_);
   SetWindowTextW(host_, (L"ClaudeLens — " + path).c_str());
+  // A resumed session opens on an empty transcript, because the stream does
+  // not replay what was said before -- reading it back off disk is
+  // claude-gui-lkk.7 and is not done yet.  An empty window is indis-
+  // tinguishable from a session that failed to resume at all, which is the
+  // very symptom --resume was asked for to cure, so the window says which one
+  // it is.  When the history does get restored this note is what it replaces.
+  if (proto::ResumesConversation(options.extraArgs)) {
+    Apply(model_.AppendNote(
+        L"Obnovená session. Predchádzajúce ťahy tu nie sú — "
+        L"appka ich zatiaľ z disku nečíta."));
+  }
   return session_.Start(
       options,
       [this](const proto::Event& event) {

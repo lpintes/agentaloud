@@ -162,6 +162,15 @@ std::wstring BuildCommandLine(const Session::Options& options);
 // launch -- an id we do not know is worse than nothing only for us.
 std::wstring NewSessionId();
 
+// Do these arguments carry on a conversation that already exists -- --resume,
+// -r, --continue, -c?  Two callers ask, and they ask for different reasons:
+// Start(), because such a session keeps the id it resumes and refuses to be
+// given another one, and the pane, because the stream does not replay the
+// history and an empty window otherwise looks exactly like a session that got
+// lost.  A custom --session-id is deliberately NOT one of these: it names a
+// conversation without continuing one.
+bool ResumesConversation(const std::vector<std::wstring>& extraArgs);
+
 }  // namespace proto
 
 #endif

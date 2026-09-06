@@ -9,6 +9,7 @@
 #include <shellapi.h>
 
 #include <string>
+#include <vector>
 
 #include "ui/main_window.h"
 #include "win/dialog.h"
@@ -28,10 +29,15 @@ namespace {
 // inside the application to say "this piece of work is worth a cheaper model".
 // A terminal session has /model for that; a headless one is told once, at
 // startup, and never again.
+//
+// Everything else the CLI is to be told goes into extraArgs, but only by name:
+// "--resume" is spelled out here rather than forwarded generically, because
+// "--foo bar" cannot be told apart from "--foo" followed by the project.
 struct Arguments {
   std::wstring project;
   std::wstring permissionMode;
   std::wstring model;
+  std::vector<std::wstring> extraArgs;
 };
 
 // "." is a perfectly good thing to type and a useless thing to read back: the
@@ -71,6 +77,21 @@ Arguments ReadArguments() {
       // and a copy of it here would be a copy that goes stale.
       } else if (argument == L"--model" && i + 1 < argc) {
         arguments.model = argv[++i];
+      // Carry on an earlier conversation.  Passed straight through, value and
+      // all, exactly like the two above -- so `ClaudeLens --resume <id> .`
+      // works and `ClaudeLens . --resume <id>` works too.
+      //
+      // The value is not checked against the shape of a UUID, because the CLI
+      // takes a session title there as well ("--resume requires a valid
+      // session ID or session title when used with --print"), and a check
+      // here would be a second, narrower idea of what is legal.  A --resume
+      // with nothing after it is passed on bare and the CLI says so itself:
+      // measured 2026-09-06, it does NOT open the interactive picker under
+      // --print, it refuses with that message and ends the turn with a
+      // `result` carrying is_error.
+      } else if (argument == L"--resume" || argument == L"-r") {
+        arguments.extraArgs.push_back(argument);
+        if (i + 1 < argc) arguments.extraArgs.push_back(argv[++i]);
       } else if (arguments.project.empty()) {
         arguments.project = argument;
       }
@@ -128,6 +149,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   options.workingDir = arguments.project;
   options.permissionMode = arguments.permissionMode;
   options.model = arguments.model;
+  options.extraArgs = arguments.extraArgs;
 
   ui::MainWindow window;
   if (!window.Open(instance, options)) {

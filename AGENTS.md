@@ -590,6 +590,27 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     `extraArgs` (`--resume`, `-r`, `--continue`, `-c`, vlastné `--session-id`).
     Odmerané 6. 9. 2026, `tools/probe_session_id.py`.
 
+    Obnovuje sa `--resume <id|titul>` a appka ho prepúšťa z príkazového riadku
+    (`main.cpp::ReadArguments`) do `extraArgs` aj s hodnotou, presne tak ako
+    `--model`. Hodnota sa nekontroluje proti tvaru UUID: CLI tam berie aj
+    titul session. Holé `--resume` pod `--print` **neotvorí picker** — odmietne
+    sa hláškou „--resume requires a valid session ID or session title when used
+    with --print" a ťah skončí `result`om s `is_error` (odmerané 6. 9. 2026).
+
+    **Obnovená session otvára prázdny prepis a musí to povedať.** Stream
+    históriu neposiela — čítanie z disku je claude-gui-lkk.7 — a prázdne okno
+    sa nedá odlíšiť od session, ktorá sa neobnovila, čiže práve od symptómu,
+    kvôli ktorému sa `--resume` písalo. Preto `ui::SessionPane::Start` pri
+    `proto::ResumesConversation(extraArgs)` zapíše `model::Transcript::
+    AppendNote` — vlastný hlas appky v prepise, `BlockKind::Note`, nie
+    `AssistantText`: to by boli slová vložené Claudovi do úst. Keď sa história
+    z disku raz načíta, nahradí práve tú poznámku.
+
+    `ResumesConversation` je pritom **užšia otázka** než `SaysWhichConversation`,
+    ktorou sa riadi vlastné id vyššie: `--session-id` rozhovor pomenúva, ale
+    v žiadnom nepokračuje, takže prepis po ňom je prázdny oprávnene a poznámka
+    by po ňom klamala.
+
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa
 rozídu, titulok okna sa zmení na **„ClaudeLens — NESÚLAD MAPY ROZSAHOV"**. Ak
