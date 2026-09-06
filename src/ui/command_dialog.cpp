@@ -225,6 +225,14 @@ LRESULT CALLBACK CommandDialog::FilterProc(HWND window, UINT message,
                                            WPARAM wParam, LPARAM lParam,
                                            UINT_PTR id, DWORD_PTR data) {
   CommandDialog* dialog = reinterpret_cast<CommandDialog*>(data);
+  // The dialog manager asks every control which keys it wants before handing
+  // one over, and an arrow it is not asked for it keeps for group navigation
+  // -- which in a group of one control means the key does nothing at all and
+  // says nothing about it.  So the box asks for the arrows explicitly rather
+  // than relying on what a plain EDIT answers.
+  if (message == WM_GETDLGCODE) {
+    return DefSubclassProc(window, message, wParam, lParam) | DLGC_WANTARROWS;
+  }
   if (message == WM_KEYDOWN && wParam == VK_DOWN) {
     const HWND list = dialog->Item(IDC_CMD_LIST);
     if (SendMessageW(list, LB_GETCOUNT, 0, 0) > 0) {
