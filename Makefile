@@ -47,6 +47,16 @@ UNICODE_ENTRY := -municode
 # konzolu, ci ju chce alebo nie, a vedla okna sa zjavi cierny obdlznik --
 # presne to, od coho sa tu odchadza.  Spike konzolu naopak potrebuje.
 GUI_SUBSYSTEM := -mwindows
+# Symboly von z posielanej appky: 4,69 MB -> 1,81 MB, teda cez tri stvrtiny
+# suboru.  Nie je to hlavne DWARF (531 KB, a pozna 64 zdrojakov CRT z msys2
+# a ani jeden nas -- CXXFLAGS nema -g), ale COFF tabulka mien: 30 716
+# symbolov, ich mena spolu 1,4 MB, najdlhsie 366 znakov.  Take su signatury,
+# v ktorych sa vyskytne nlohmann::json.  Straca sa tym gdb backtrace s menami
+# funkcii -- bez cisel riadkov, lebo -g tam nie je, a bez toho, kto by ho pri
+# pade zachytil: ziadny SetUnhandledExceptionFilter v projekte nie je.  Ked
+# raz bude, vrati to `make STRIPFLAG=`.  Len appka: spike ani testy sa nikomu
+# neposielaju.
+STRIPFLAG ?= -s
 
 CXXFLAGS := -std=c++20 -O2 $(WARN) -I. -Isrc \
             -DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00 -DUNICODE -D_UNICODE
@@ -111,7 +121,7 @@ check: test
 
 $(BIN)/claudelens.exe: $(APP_OBJS) $(APP_RES) | $(BIN)
 	@echo "  LINK   $@"
-	$(Q)$(CXX) $(STATIC) $(UNICODE_ENTRY) $(GUI_SUBSYSTEM) -o $@ $^ $(LDLIBS)
+	$(Q)$(CXX) $(STATIC) $(UNICODE_ENTRY) $(GUI_SUBSYSTEM) $(STRIPFLAG) -o $@ $^ $(LDLIBS)
 
 $(BIN)/spike_console.exe: $(SPIKE_OBJS) | $(BIN)
 	@echo "  LINK   $@"
