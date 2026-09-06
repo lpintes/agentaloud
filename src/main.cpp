@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+#include "model/utf.h"
+#include "proto/sessions.h"
 #include "ui/main_window.h"
 #include "win/dialog.h"
 
@@ -38,6 +40,12 @@ struct Arguments {
   std::wstring permissionMode;
   std::wstring model;
   std::vector<std::wstring> extraArgs;
+  // What the window is to say about how this session came to be open.  Empty
+  // for the ordinary case, where there is nothing to say: a fresh session
+  // asked for on the command line is exactly what the empty transcript looks
+  // like.  It is filled in by -c, which decided something on the reader's
+  // behalf and therefore owes them the decision.
+  std::wstring openingNote;
 };
 
 // "." is a perfectly good thing to type and a useless thing to read back: the
@@ -59,8 +67,56 @@ std::wstring Expand(const std::wstring& path) {
   return full;
 }
 
+// A prompt is a whole turn's worth of text and this one goes into a single
+// sentence.  Cut on a space where there is one, so the sentence ends on a word
+// rather than mid-syllable -- it is read aloud.
+std::wstring Shorten(const std::wstring& text, size_t limit = 70) {
+  if (text.size() <= limit) return text;
+  size_t cut = text.rfind(L' ', limit);
+  if (cut == std::wstring::npos || cut < limit / 2) cut = limit;
+  return text.substr(0, cut) + L"…";
+}
+
+// `-c` means "carry on the last conversation in this folder".  Which one that
+// is gets decided here and turned into a plain --resume, rather than passed to
+// the CLI as --continue: the CLI answers that question out of
+// ~/.claude/history.jsonl, where only interactively typed prompts are written,
+// so for a folder used from both a terminal and ClaudeLens it would carry on
+// the terminal's conversation and call it ours.  See proto/sessions.h.
+//
+// Which one it picked has to be said out loud.  Otherwise the reader carries
+// on in something other than what they had in mind and has no way to find out
+// -- the transcript is empty either way.
+void ContinueLatest(Arguments* arguments) {
+  // `-c --resume <id>` is not a contradiction to argue about: the one that
+  // names a conversation wins, because it was typed by someone who knew which
+  // one they wanted.  Two --resume on one command line would be the CLI's
+  // problem to report, and it reports it on a stderr this process has not got.
+  if (proto::ResumesConversation(arguments->extraArgs)) return;
+  proto::SessionSummary latest;
+  if (!proto::LatestSession(arguments->project, &latest)) {
+    // Not an error and not a reason to refuse: a folder nobody has worked in
+    // yet has nothing to carry on, and a new session is what was wanted.
+    arguments->openingNote =
+        L"V tomto projekte zatiaľ žiadny rozhovor nie je, začínam nový.";
+    return;
+  }
+  arguments->extraArgs.push_back(L"--resume");
+  arguments->extraArgs.push_back(latest.id);
+  std::wstring note = L"Pokračujem v poslednom rozhovore projektu z ";
+  note += proto::LocalTimeText(latest.lastStamp);
+  if (!latest.firstPrompt.empty()) {
+    note += L", začínal sa slovami „";
+    note += Shorten(model::Utf16FromUtf8(latest.firstPrompt));
+    note += L"“";
+  }
+  note += L".";
+  arguments->openingNote = note;
+}
+
 Arguments ReadArguments() {
   Arguments arguments;
+  bool continueLatest = false;
   int argc = 0;
   wchar_t** argv = CommandLineToArgvW(GetCommandLineW(), &argc);
   if (argv) {
@@ -92,6 +148,11 @@ Arguments ReadArguments() {
       } else if (argument == L"--resume" || argument == L"-r") {
         arguments.extraArgs.push_back(argument);
         if (i + 1 < argc) arguments.extraArgs.push_back(argv[++i]);
+      // Not forwarded and not remembered as itself: it is a question about
+      // this folder, and the folder may still be several arguments away, so
+      // the answer waits until the whole line has been read.
+      } else if (argument == L"--continue" || argument == L"-c") {
+        continueLatest = true;
       } else if (arguments.project.empty()) {
         arguments.project = argument;
       }
@@ -102,6 +163,9 @@ Arguments ReadArguments() {
     arguments.project = win::PickFolder(nullptr, L"Vyberte priečinok projektu");
   }
   arguments.project = Expand(arguments.project);
+  // After the expansion, because the folder is what the list of conversations
+  // is keyed by and "." is not a key.
+  if (continueLatest && !arguments.project.empty()) ContinueLatest(&arguments);
   return arguments;
 }
 
@@ -152,7 +216,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   options.extraArgs = arguments.extraArgs;
 
   ui::MainWindow window;
-  if (!window.Open(instance, options)) {
+  if (!window.Open(instance, options, arguments.openingNote)) {
     MessageBoxW(nullptr, L"Nepodarilo sa spustiť session.", L"ClaudeLens",
                 MB_OK | MB_ICONERROR);
     return 1;

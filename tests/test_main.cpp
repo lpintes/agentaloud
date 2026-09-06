@@ -18,8 +18,10 @@
 //      CLAUDELENS_CORPUS a bezi rucne.
 
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <map>
 #include <set>
@@ -33,6 +35,7 @@
 #include "proto/control.h"
 #include "proto/events.h"
 #include "proto/jsonl.h"
+#include "proto/sessions.h"
 
 namespace {
 
@@ -1168,6 +1171,118 @@ void TestQuestionsReadAsText() {
   CHECK(blocks[0].body.find(L"questions") == std::wstring::npos);
 }
 
+// Ktoru session vybere '-c'.  Su to testy prvej kategorie -- overuju MOJE
+// pravidlo (najnovsia podla casu posledneho zaznamu, ktory cas nesie), nie
+// format.  Zaznamy su preto minimalne, ale ich tvar vymysleny nie je: typy
+// 'last-prompt' a 'atis-latch' bez pola 'timestamp' su odcitane zo skutocnych
+// suborov v ~/.claude/projects (2026-09-06) a prave ony su dovod, preco sa
+// nesmie triedit podla mtime.
+void WriteFile(const std::filesystem::path& path, const std::string& text) {
+  std::ofstream file(path, std::ios::binary);
+  file << text;
+}
+
+void TestSessionPickIgnoresMtime() {
+  TEST("sessions: najnovsia je podla casu zaznamu, nie podla mtime");
+  namespace fs = std::filesystem;
+  const fs::path root = fs::temp_directory_path() / "claudelens-sessions-test";
+  std::error_code code;
+  fs::remove_all(root, code);
+  const std::wstring project = L"C:\\demo\\projekt";
+  const fs::path directory =
+      root / "projects" / proto::ProjectKey(project);
+  fs::create_directories(directory, code);
+  CHECK(!code);
+  // Cez CLAUDE_CONFIG_DIR, lebo ho CLI pozna a appka podla neho hlada -- takze
+  // tento test overuje aj to.
+  _wputenv_s(L"CLAUDE_CONFIG_DIR", root.wstring().c_str());
+
+  // Starsia session, ale zapisana ako druha, takze ma NOVSI mtime.  Presne to
+  // sa stane, ked sa dva rozhovory zavru tesne po sebe.
+  WriteFile(directory / "novsia.jsonl",
+            "{\"type\":\"user\",\"timestamp\":\"2026-09-02T09:00:00.000Z\","
+            "\"message\":{\"content\":\"aku farbu ma obloha\"}}\n"
+            "{\"type\":\"last-prompt\",\"lastPrompt\":\"aku farbu\"}\n");
+  WriteFile(directory / "starsia.jsonl",
+            "{\"type\":\"user\",\"timestamp\":\"2026-09-01T10:00:00.000Z\","
+            "\"message\":{\"content\":\"nieco davne\"}}\n"
+            "{\"type\":\"atis-latch\",\"atis\":{}}\n");
+  // Nastavene rukou, nie ponechane na poradie zapisu: keby sa oba casy zmestili
+  // do jedneho tiku hodin, test by presiel aj s triedenim podla mtime, cize
+  // presne v pripade, ktory ma chytit.
+  const auto now = fs::last_write_time(directory / "starsia.jsonl");
+  fs::last_write_time(directory / "novsia.jsonl", now - std::chrono::hours(48));
+  CHECK(fs::last_write_time(directory / "starsia.jsonl") >
+        fs::last_write_time(directory / "novsia.jsonl"));
+
+  proto::SessionSummary latest;
+  CHECK(proto::LatestSession(project, &latest));
+  CHECK_EQ(latest.id, std::wstring(L"novsia"));
+  CHECK_EQ(latest.firstPrompt, std::string("aku farbu ma obloha"));
+  CHECK_EQ(latest.lastStamp, std::string("2026-09-02T09:00:00.000Z"));
+
+  // Projekt bez adresara nie je chyba, len nema co obnovit.
+  CHECK(!proto::LatestSession(L"C:\\demo\\prazdny", &latest));
+
+  fs::remove_all(root, code);
+  _wputenv_s(L"CLAUDE_CONFIG_DIR", L"");
+}
+
+void TestSessionSummaryFindsTheHumanPrompt() {
+  TEST("sessions: prvy prompt je to, co napisal clovek");
+  namespace fs = std::filesystem;
+  const fs::path file =
+      fs::temp_directory_path() / "claudelens-summary-test.jsonl";
+  // Prve dva 'user' zaznamy nie su prompt: vypis slash prikazu (otvara sa
+  // znackou) a vysledok nastroja (nema textovu cast).  Keby sa niektory z nich
+  // ratal, session by sa v ohlaseni volala menom, ktore nikto nepovedal.
+  WriteFile(file,
+            "{\"type\":\"queue-operation\"}\n"
+            "{\"type\":\"user\",\"timestamp\":\"2026-09-03T08:00:00.000Z\","
+            "\"message\":{\"content\":[{\"type\":\"text\","
+            "\"text\":\"<command-name>bd prime</command-name>\"}]}}\n"
+            "{\"type\":\"user\",\"timestamp\":\"2026-09-03T08:00:01.000Z\","
+            "\"message\":{\"content\":[{\"type\":\"tool_result\","
+            "\"content\":\"vystup\"}]}}\n"
+            "{\"type\":\"user\",\"timestamp\":\"2026-09-03T08:00:02.000Z\","
+            "\"message\":{\"content\":\"prvy\\nriadok\\n\\n  a druhy\"}}\n"
+            "{\"type\":\"assistant\",\"timestamp\":\"2026-09-03T08:00:03.000Z\","
+            "\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"ano\"}]}}\n"
+            "{\"type\":\"last-prompt\"}\n");
+  proto::SessionSummary summary;
+  CHECK(proto::ReadSessionSummary(file.wstring(), &summary));
+  // Zlomy riadkov zliate: toto ide do jednej vety, ktora sa cita nahlas.
+  CHECK_EQ(summary.firstPrompt, std::string("prvy riadok a druhy"));
+  CHECK_EQ(summary.lastStamp, std::string("2026-09-03T08:00:03.000Z"));
+  CHECK_EQ(summary.id, std::wstring(L"claudelens-summary-test"));
+
+  // Subor bez jedineho 'user' alebo 'assistant' zaznamu nie je rozhovor.
+  WriteFile(file, "{\"type\":\"summary\",\"summary\":\"nic\"}\n");
+  CHECK(!proto::ReadSessionSummary(file.wstring(), &summary));
+  std::error_code code;
+  std::filesystem::remove(file, code);
+}
+
+void TestProjectKeyAndTime() {
+  TEST("sessions: meno adresara projektu a cas do vety");
+  // Overene na skutocnom adresari: C:\vcs\github.com\lpintes\claude-gui ->
+  // C--vcs-github-com-lpintes-claude-gui.
+  CHECK_EQ(proto::ProjectKey(L"C:\\vcs\\github.com\\lpintes\\claude-gui"),
+           std::wstring(L"C--vcs-github-com-lpintes-claude-gui"));
+  // Lomka na konci by pridala pomlcku a poslala hladanie do neexistujuceho
+  // adresara; koren si ju necha, lebo "C:" bez nej nie je cesta.
+  CHECK_EQ(proto::ProjectKey(L"C:\\b\\mluv\\"), std::wstring(L"C--b-mluv"));
+  CHECK_EQ(proto::ProjectKey(L"C:\\"), std::wstring(L"C--"));
+
+  _putenv_s("TZ", "UTC0");
+  _tzset();
+  CHECK_EQ(proto::LocalTimeText("2026-09-06T12:34:56.789Z"),
+           std::wstring(L"6. 9. 2026 12:34"));
+  // Nezrozumitelny cas sa vrati tak, ako prisiel: prazdno na mieste casu by
+  // vyzeralo ako session bez casu, nie ako pokazeny zaznam.
+  CHECK_EQ(proto::LocalTimeText("neskoro"), std::wstring(L"neskoro"));
+}
+
 void TestFixtureBasic(const std::string& dir) {
   TEST("fixtura basic: vsetky druhy blokov, ziadny neznamy zaznam");
   bool ok = false;
@@ -1352,6 +1467,9 @@ int main(int argc, char** argv) {
   TestSummariesAreOneLine();
   TestAskUserQuestionRoundTrip();
   TestQuestionsReadAsText();
+  TestSessionPickIgnoresMtime();
+  TestSessionSummaryFindsTheHumanPrompt();
+  TestProjectKeyAndTime();
   TestFixtureBasic(fixtures);
   TestFixtureDenied(fixtures);
 

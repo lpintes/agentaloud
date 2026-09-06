@@ -543,6 +543,38 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     v žiadnom nepokračuje, takže prepis po ňom je prázdny oprávnene a poznámka
     by po ňom klamala.
 
+15. **`-c` sa CLI neposiela; najnovšiu session si appka vyberie sama.** CLI
+    odpovedá na otázku „ktorý rozhovor bol v tomto adresári posledný" z
+    `~/.claude/history.jsonl`, a tam sa zapisuje **iba interaktívne napísaný
+    prompt**. Žiadna session ClaudeLens tam teda nie je ani jedna a `claude -c`
+    by pokračoval v poslednom **terminálovom** rozhovore a tváril sa, že je náš.
+    Zoznam si preto robí `proto::sessions` zo súborov v
+    `~/.claude/projects/<kľúč>/*.jsonl` — tie headless session píše rovnako ako
+    ktorékoľvek iné — a `main.cpp::ContinueLatest` z toho urobí obyčajné
+    `--resume <id>`. Kľúč adresára je cesta projektu, v ktorej sa každý znak
+    mimo `[A-Za-z0-9]` zmenil na pomlčku (odtiaľ to dvojité `--` za písmenom
+    disku).
+
+    **Najnovšia je podľa času posledného záznamu, ktorý čas nesie — nie podľa
+    mtime.** Zatváranie session dopisuje záznamy bez `timestamp`
+    (`last-prompt`, `atis-latch`), takže mtime hovorí, kedy sa naposledy
+    zapisovalo, nie kedy sa naposledy rozprávalo; o poradí dvoch session
+    zavretých tesne po sebe by rozhodlo niečo, čo s rozhovorom nemá nič
+    spoločné. Čas sa preto hľadá odzadu, prvý záznam, ktorý ho má. ISO 8601
+    so `Z` sa dá triediť ako text, takže sa nikdy neparsuje.
+
+    A **ktorú session otvorilo, musí appka povedať** — čas a prvý prompt, nie
+    id: id nikomu nepovie, v čom pokračuje, a prepis je prázdny rovnako pri
+    správnej aj pri nesprávnej voľbe. Ide to do tej istej poznámky ako
+    invariant 14, jednou vetou, nie dvoma blokmi. Prvý prompt je ten, ktorý
+    napísal **človek**: `user` záznam nesie aj výsledky nástrojov a výpisy
+    slash príkazov (tie sa poznajú podľa značky na začiatku) a session
+    pomenovaná niečím, čo nikto nepovedal, je horšia než nepomenovaná.
+
+    Explicitné `--resume <id>` vyhráva nad `-c` — kto napísal id, vie, čo chce.
+    A projekt bez jediného rozhovoru nie je chyba: začne sa nový a poznámka to
+    povie.
+
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa
 rozídu, titulok okna sa zmení na **„ClaudeLens — NESÚLAD MAPY ROZSAHOV"**. Ak

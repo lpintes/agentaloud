@@ -6,6 +6,7 @@
 // they go, and the pane will not have to change.
 
 #include <memory>
+#include <string>
 
 #include "ui/session_pane.h"
 #include "ui/status_bar.h"
@@ -15,7 +16,10 @@ namespace ui {
 
 class MainWindow : public win::Window {
  public:
-  bool Open(HINSTANCE instance, const proto::Session::Options& options);
+  // The note is what the window is to say about how this session came to be
+  // open -- see SessionPane::Start.  Empty when there is nothing to say.
+  bool Open(HINSTANCE instance, const proto::Session::Options& options,
+            const std::wstring& openingNote = {});
 
  protected:
   LRESULT HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) override;

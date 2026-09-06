@@ -331,7 +331,8 @@ void SessionPane::Apply(const model::Edit& edit) {
   }
 }
 
-bool SessionPane::Start(const proto::Session::Options& options) {
+bool SessionPane::Start(const proto::Session::Options& options,
+                        const std::wstring& openingNote) {
   // The folder name in the bar, the whole path in the title.  The bar is read
   // out in one breath along with three other fields, and a path of eight
   // components there buries everything after it; the title is announced when
@@ -361,11 +362,17 @@ bool SessionPane::Start(const proto::Session::Options& options) {
   // tinguishable from a session that failed to resume at all, which is the
   // very symptom --resume was asked for to cure, so the window says which one
   // it is.  When the history does get restored this note is what it replaces.
+  //
+  // Both sentences land in ONE note, not two: they are one thought -- which
+  // conversation this is and what of it is missing -- and two notes would be
+  // two blocks to walk through to read it.
+  std::wstring note = openingNote;
   if (proto::ResumesConversation(options.extraArgs)) {
-    Apply(model_.AppendNote(
-        L"Obnovená session. Predchádzajúce ťahy tu nie sú — "
-        L"appka ich zatiaľ z disku nečíta."));
+    if (note.empty()) note = L"Obnovená session.";
+    note +=
+        L" Predchádzajúce ťahy tu nie sú — appka ich zatiaľ z disku nečíta.";
   }
+  if (!note.empty()) Apply(model_.AppendNote(note));
   return session_.Start(
       options,
       [this](const proto::Event& event) {
