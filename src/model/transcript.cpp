@@ -804,8 +804,17 @@ std::optional<size_t> Transcript::NextWhere(
 std::optional<size_t> Transcript::PreviousWhere(
     size_t offset, const BlockPredicate& match) const {
   const std::optional<size_t> here = BlockAt(offset);
-  if (!here.has_value() || *here == 0) return std::nullopt;
-  for (size_t i = *here; i-- > 0;) {
+  if (!here.has_value()) return std::nullopt;
+  // Backwards means "the nearest block whose start is before the caret", so
+  // the block the caret is standing in counts as long as the caret is not
+  // already at its start.  Skipping it unconditionally makes the last block
+  // unreachable from the end of the buffer -- Ctrl+End and then 'A' landed on
+  // the last but one answer, and there is no key that goes back to the one it
+  // stepped over.  At the start of a block the caret has already arrived
+  // there (that is where GoToBlock puts it), so it must move on, or the key
+  // would answer with the same block for ever.
+  const size_t from = offset > blocks_[*here].start ? *here + 1 : *here;
+  for (size_t i = from; i-- > 0;) {
     if (match(blocks_[i])) return i;
   }
   return std::nullopt;

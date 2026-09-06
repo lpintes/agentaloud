@@ -207,10 +207,26 @@ void TestBlockAtAndNavigation() {
   CHECK(nextPrompt.has_value());
   CHECK_EQ(*nextPrompt, size_t{3});  // preskoci ten, v ktorom kurzor stoji
 
+  // Dozadu z vnutra bloku sa ide na zaciatok toho bloku, nie za neho: kurzor
+  // tam este nebol, takze je to pohyb dozadu. Preskocit ho by znamenalo, ze
+  // posledny blok sa z konca prepisu neda dosiahnut vobec.
   const auto previousPrompt = transcript.PreviousOfKind(
       transcript.Text().size() - 1, model::BlockKind::UserPrompt);
   CHECK(previousPrompt.has_value());
-  CHECK_EQ(*previousPrompt, size_t{0});
+  CHECK_EQ(*previousPrompt, size_t{3});
+  // Az zo zaciatku toho isteho bloku sa ide dalej -- inak by klavesa vracala
+  // donekonecna to iste miesto.
+  const auto beforeThat = transcript.PreviousOfKind(
+      transcript.blocks()[3].start, model::BlockKind::UserPrompt);
+  CHECK(beforeThat.has_value());
+  CHECK_EQ(*beforeThat, size_t{0});
+
+  // Ctrl+End a potom 'A': kurzor stoji za vsetkym, takze predchadzajuca
+  // odpoved je ta posledna, nie predposledna.
+  const auto lastPrompt = transcript.PreviousOfKind(
+      transcript.Text().size(), model::BlockKind::UserPrompt);
+  CHECK(lastPrompt.has_value());
+  CHECK_EQ(*lastPrompt, size_t{3});
 
   // Ziadny dalsi nastroj za poslednym blokom.
   CHECK(!transcript
@@ -254,10 +270,16 @@ void TestErrorNavigationAndFirstLine() {
       transcript.NextWhere(transcript.blocks()[1].start, trouble);
   CHECK(secondTrouble.has_value());
   CHECK_EQ(*secondTrouble, size_t{2});
+  // Z konca prepisu je najblizsia chyba dozadu to zamietnutie, na ktorom
+  // kurzor stoji -- kurzor je za nim, nie na jeho zaciatku.
   const auto lastTrouble =
-      transcript.PreviousWhere(transcript.Text().size() - 1, trouble);
+      transcript.PreviousWhere(transcript.Text().size(), trouble);
   CHECK(lastTrouble.has_value());
-  CHECK_EQ(*lastTrouble, size_t{1});
+  CHECK_EQ(*lastTrouble, size_t{2});
+  const auto troubleBefore =
+      transcript.PreviousWhere(transcript.blocks()[2].start, trouble);
+  CHECK(troubleBefore.has_value());
+  CHECK_EQ(*troubleBefore, size_t{1});
 
   // FirstLine je presne to, co je v bufferi po zaciatok prveho zlomu -- to,
   // co by citatel pocul, keby na ten riadok prisiel sipkou sam.
