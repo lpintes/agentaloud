@@ -9,6 +9,7 @@
 #include "model/utf.h"
 #include "proto/ask.h"
 #include "ui/ask_dialog.h"
+#include "ui/permission_dialog.h"
 #include "ui/resource.h"
 #include "win/clipboard.h"
 
@@ -551,22 +552,7 @@ LRESULT SessionPane::OnPermission(LPARAM pointer) {
     return 0;
   }
 
-  // A MessageBox, not a dialog from a template, and only until step 6
-  // (claude-gui-lkk.6).  It is here rather than nowhere because without it
-  // every tool that hits an "ask" rule would be refused, and this milestone
-  // is meant to be usable for a day's work.  What it cannot do is let the
-  // command be read line by line, which is the whole point of the real one.
-  std::wstring text = L"Nástroj: " + model::Utf16FromUtf8(request.toolName);
-  if (!request.decisionReasonType.empty()) {
-    text += L"  (dôvod: " + model::Utf16FromUtf8(request.decisionReasonType) +
-            L")";
-  }
-  text += L"\n\n" + model::Utf16FromUtf8(request.input.dump(2));
-  text += L"\n\nPovoliť?";
-
-  const int answer = MessageBoxW(host_, text.c_str(), L"ClaudeLens — povolenie",
-                                 MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2);
-  pending->decision.allow = answer == IDYES;
+  pending->decision.allow = AskPermission(host_, request);
   pending->decision.denyMessage =
       "Používateľ to zamietol. Nepokračuj a spýtaj sa, čo ďalej.";
   return 0;

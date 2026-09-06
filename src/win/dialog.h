@@ -49,6 +49,12 @@ class Dialog {
   void SetChecked(int id, bool on) const;
   bool IsChecked(int id) const;
   void SetText(int id, const std::wstring& text) const;
+  // The same, for text that has line breaks in it.  An edit control breaks a
+  // line on CR LF and draws a lone LF as a box glyph -- which a screen reader
+  // reads out as nothing at all -- so text written with '\n' has to be put into
+  // the widget's own spelling on the way in.  Everything this application holds
+  // is written with '\n'; that is invariant 4, and it stops at the widget.
+  void SetTextLines(int id, const std::wstring& text) const;
   std::wstring GetText(int id) const;
   void SetEnabled(int id, bool on) const;
 

@@ -274,8 +274,14 @@ std::wstring RenderFields(const proto::Json& input) {
 // exactly right: a command IS its arguments.  This list stays short on
 // purpose -- it is knowledge about tools, and the place for that is next to
 // kPrimary, not spread over the file.
-std::wstring RenderToolInput(const std::string& toolName,
-                             const proto::Json& input) {
+//
+// It is out of the anonymous namespace because the permission dialog shows the
+// call before it runs and the transcript shows it after -- and those two have
+// to be the same text, or the reader allows one thing and then reads another.
+}  // namespace
+
+std::wstring RenderToolCall(const std::string& toolName,
+                            const proto::Json& input) {
   if (!input.is_object()) return Widen(input.dump(2));
   if (toolName == "Edit") {
     const std::string before = StringField(input, "old_string");
@@ -299,6 +305,8 @@ std::wstring RenderToolInput(const std::string& toolName,
   }
   return RenderFields(input);
 }
+
+namespace {
 
 // The size of what a call is about to do, said in the summary so that it does
 // not have to be unfolded to be judged.  "Edit: transcript.cpp" and "Edit:
@@ -394,7 +402,7 @@ Block MakeToolUse(const proto::Json& blockJson, const std::wstring& root) {
   block.kind = BlockKind::ToolUse;
   block.toolUseId = StringField(blockJson, "id");
   block.toolName = Widen(name);
-  block.body = RenderToolInput(name, arguments);
+  block.body = RenderToolCall(name, arguments);
   block.summary = Widen(name) + L": " +
                   OneLine(PrimaryInput(name, arguments, root), kSummaryLimit);
   const std::wstring detail = InputDetail(name, arguments);

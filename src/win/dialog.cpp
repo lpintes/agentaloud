@@ -50,6 +50,19 @@ void Dialog::SetText(int id, const std::wstring& text) const {
   SetDlgItemTextW(hwnd_, id, text.c_str());
 }
 
+void Dialog::SetTextLines(int id, const std::wstring& text) const {
+  std::wstring widget;
+  widget.reserve(text.size());
+  for (wchar_t character : text) {
+    // Any CR already there is dropped rather than doubled: text that came from
+    // somewhere without invariant 4 would otherwise end up with CR CR LF.
+    if (character == L'\r') continue;
+    if (character == L'\n') widget.push_back(L'\r');
+    widget.push_back(character);
+  }
+  SetText(id, widget);
+}
+
 std::wstring Dialog::GetText(int id) const {
   const HWND item = Item(id);
   if (!item) return {};

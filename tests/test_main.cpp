@@ -821,6 +821,43 @@ void TestEditAndWriteSayWhatChanged() {
   CHECK_EQ(other.blocks()[0].body, std::wstring(L"command: echo ahoj"));
 }
 
+// Dialog povolenia ukazuje volanie skor, nez sa spusti, prepis ho drzi potom.
+// Ked by to boli dva rozne texty, citatel povoli jedno a precita si druhe --
+// preto to obe strany beru z RenderToolCall a preto to kontroluje test.
+void TestPermissionTextMatchesTranscript() {
+  TEST("povolenie: dialog ukazuje ten isty text ako prepis");
+  const std::string command =
+      "git commit -m \"prva veta\n\ndruhy odstavec\"";
+  proto::Json input = proto::Json::object();
+  input["command"] = command;
+  input["description"] = "Run the requested git commit command";
+
+  // To iste volanie, raz ako blok prepisu.
+  proto::Json call = proto::Json::object();
+  call["type"] = "assistant";
+  call["message"]["content"] = proto::Json::array();
+  proto::Json use = proto::Json::object();
+  use["type"] = "tool_use";
+  use["id"] = "toolu_C";
+  use["name"] = "Bash";
+  use["input"] = input;
+  call["message"]["content"].push_back(use);
+
+  model::Transcript transcript;
+  transcript.Append(proto::Classify(call));
+  CHECK_EQ(transcript.blocks().size(), size_t{1});
+  CHECK_EQ(model::RenderToolCall("Bash", input), transcript.blocks()[0].body);
+
+  // A hlavne: zlomy riadkov su zlomy riadkov.  MessageBox pred tymto krokom
+  // ukazoval input.dump(2), kde je viacriadkova commit sprava jeden riadok
+  // s "\n" v nom -- nahlas "spatna lomka en" a po riadkoch sa neda prejst.
+  const std::wstring shown = model::RenderToolCall("Bash", input);
+  CHECK(shown.find(L"command: git commit") != std::wstring::npos);
+  CHECK(shown.find(L"prva veta\n\ndruhy odstavec") != std::wstring::npos);
+  CHECK(shown.find(L"\\n") == std::wstring::npos);
+  CHECK(shown.find(L'\r') == std::wstring::npos);
+}
+
 void TestFailedToolResultReadsLikeAnError() {
   TEST("transcript: neuspesny nastroj povie, co sa pokazilo");
   model::Transcript transcript;
@@ -1263,6 +1300,7 @@ int main(int argc, char** argv) {
   TestAnsiEscapesAreStripped();
   TestToolPathsAreShortened();
   TestEditAndWriteSayWhatChanged();
+  TestPermissionTextMatchesTranscript();
   TestFailedToolResultReadsLikeAnError();
   TestEmptyBlocksAreDropped();
   TestSpeakerPrefix();

@@ -54,6 +54,18 @@ const wchar_t* KindLabel(BlockKind kind);
 // speaker.
 const wchar_t* SpeakerPrefix(BlockKind kind);
 
+// A tool call's arguments, written to be read rather than parsed: one field
+// per line, the long ones (a command, a file's new contents, the two halves of
+// an edit) as text of their own rather than as JSON.  Escapes are stripped and
+// newlines normalised, like everything else that enters a block.
+//
+// It is public because the same call is shown twice -- the permission dialog
+// puts it up before it runs, the transcript keeps it afterwards -- and those
+// two must be the same text.  A reader who allows a command has to be allowing
+// the one they are then going to read.
+std::wstring RenderToolCall(const std::string& toolName,
+                            const proto::Json& input);
+
 struct Block {
   // Assigned once and never changed.  The index of a block DOES change: a tool
   // result is inserted next to the call it belongs to, which pushes everything

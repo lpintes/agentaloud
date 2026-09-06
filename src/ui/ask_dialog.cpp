@@ -33,20 +33,6 @@ std::wstring OneLine(std::wstring text) {
   return text;
 }
 
-// An edit control breaks lines on CR LF and shows a lone LF as a box.  The
-// stream speaks LF -- invariant 4 -- so anything from it has to be put back
-// into the widget's own spelling before it is shown.
-std::wstring ForEdit(const std::wstring& text) {
-  std::wstring result;
-  result.reserve(text.size());
-  for (wchar_t character : text) {
-    if (character == L'\r') continue;
-    if (character == L'\n') result += L'\r';
-    result += character;
-  }
-  return result;
-}
-
 // One question, on screen.  The answers come back as labels rather than
 // indices because that is what the wire wants -- see proto/ask.h.
 class AskDialog : public win::Dialog {
@@ -94,8 +80,7 @@ bool AskDialog::OnInit() {
   }
   SetWindowTextW(hwnd_, caption.c_str());
 
-  SetText(IDC_ASK_QUESTION,
-          ForEdit(model::Utf16FromUtf8(question_.question)));
+  SetTextLines(IDC_ASK_QUESTION, model::Utf16FromUtf8(question_.question));
   // Whether one answer is wanted or several is in the label, and so in the
   // name NVDA reads out when the list takes the focus.  Without it the two
   // lists are indistinguishable until something is tried.

@@ -88,3 +88,36 @@ BEGIN
     DEFPUSHBUTTON   "&Odpovedať", IDOK, 172, 176, 56, 14
     PUSHBUTTON      "&Zamietnuť", IDCANCEL, 236, 176, 56, 14
 END
+
+// The permission prompt.  What it replaced was a MessageBox with the tool's
+// arguments in it as input.dump(2) -- one line of JSON with the line breaks
+// spelled "\n", which is read out as "backslash en" and cannot be walked by
+// line or by word at all.  A commit message went past that box unread.
+//
+// Three read-only fields and no field for the tool's name: the name is in the
+// caption, which is what NVDA reads first when the dialog opens, and the focus
+// is put in the arguments.  So opening it says the tool and then the command,
+// in that order, without a Tab.
+//
+// The default button is Zamietnuť, so Enter and Esc agree.  Allowing is the
+// answer that has to be aimed at.
+IDD_PERMISSION DIALOGEX 0, 0, 320, 212
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "ClaudeLens — povolenie"
+FONT 9, "Segoe UI", 400, 0, 1
+BEGIN
+    LTEXT           "P&opis:", IDC_PERM_DESCRIPTION_LABEL, 8, 10, 60, 8
+    EDITTEXT        IDC_PERM_DESCRIPTION, 72, 8, 240, 12,
+                    ES_AUTOHSCROLL | ES_READONLY
+
+    LTEXT           "&Dôvod:", IDC_PERM_REASON_LABEL, 8, 28, 60, 8
+    EDITTEXT        IDC_PERM_REASON, 72, 26, 240, 12,
+                    ES_AUTOHSCROLL | ES_READONLY
+
+    LTEXT           "&Argumenty:", IDC_PERM_INPUT_LABEL, 8, 46, 304, 8
+    EDITTEXT        IDC_PERM_INPUT, 8, 56, 304, 128,
+                    ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL
+
+    PUSHBUTTON      "&Povoliť", IDOK, 196, 190, 56, 14
+    DEFPUSHBUTTON   "&Zamietnuť", IDCANCEL, 256, 190, 56, 14
+END

@@ -288,6 +288,12 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    vo widgete. Výstup nástrojov `\r\n` obsahuje — sú to windowsové programy.
    Normalizuje `model::NormalizeNewlines`, ktorým prechádza **každý** text
    vstupujúci do bloku, vrátane promptu z editačného poľa.
+
+   Von z modelu to platí presne po hranicu widgetu. Obyčajné `EDIT` pole
+   (dialógy, nie RichEdit) zlomí riadok len na `\r\n` a osamotený `\n` nakreslí
+   ako obdĺžnik — čo NVDA prečíta ako nič. Preklad späť do pravopisu widgetu
+   robí `win::Dialog::SetTextLines` a robí ho na jednom mieste, aby si ho
+   nekopíroval každý nový dialóg.
 5. **Index bloku sa hýbe, `Block::id` nie.** Výsledok nástroja sa vkladá za
    svoje volanie, nie na koniec — Claude volá nástroje paralelne a v poradí
    príchodu sa nedá zistiť, ktorý výstup patrí ku ktorému príkazu. Vloženie
@@ -546,6 +552,24 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     `session.cpp` odpovedá, je dvojnásobne neškodná: chybovú odpoveď na dialóg
     CLI zahadzuje a dialóg necháva zaparkovaný. Prihlásiť sa o druh je vlastný
     krok, nie oprava tohto (claude-gui-lkk.25).
+
+13. **Čo dialóg ukáže pred spustením nástroja, to prepis drží po ňom — a je to
+    ten istý text.** Povolenie sa pýta na volanie, ktoré o chvíľu ukáže prepis
+    znova. Keby to boli dve rôzne vykreslenia, čitateľ povolí jedno a prečíta
+    si druhé, a ten rozdiel by nikto nenašiel: obe by vyzerali rozumne. Preto
+    `model::RenderToolCall` vyšiel z anonymného priestoru `transcript.cpp` a
+    berú ho obaja — `ui::AskPermission` aj `MakeToolUse`.
+
+    Dovtedy tam bol `input.dump(2)` v `MessageBoxe` a bol to posledný zvyšok
+    surového JSONu v UI. Dump je pravdivý a nečitateľný naraz: viacriadková
+    commit správa je v ňom jeden riadok so `\n` namiesto zlomov — nahlas
+    „spätná lomka en" — a `MessageBox` sa nedá prejsť po riadkoch ani po
+    slovách. Taká správa sa neprečítala, iba odklikla.
+
+    Meno nástroja je v **titulku** dialógu, nie v poli, a fokus štartuje
+    v argumentoch. NVDA číta pri otvorení najprv titulok a potom zameraný
+    prvok, takže „povolenie: Bash" a samotný príkaz prídu ako jedno ohlásenie
+    a v tomto poradí. V poli by bolo meno o Tab ďalej než odpoveď.
 
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa

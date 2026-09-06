@@ -11,6 +11,7 @@
 
 #define IDD_SESSION_DETAILS 100
 #define IDD_ASK_QUESTION    101
+#define IDD_PERMISSION      102
 
 #define IDC_DETAILS_ID          1000
 #define IDC_DETAILS_MODEL       1001
@@ -45,5 +46,17 @@
 #define IDC_ASK_QUESTION_LABEL  1040
 #define IDC_ASK_OPTIONS_LABEL   1041
 #define IDC_ASK_OTHER_LABEL     1042
+
+// The permission prompt.  The tool's name is in the caption rather than in a
+// field of its own: the focus starts in the arguments, and NVDA reads the
+// title first, so the two together are one announcement that says both what
+// is about to run and with what.  See ui/permission_dialog.h.
+#define IDC_PERM_INPUT          1050
+#define IDC_PERM_DESCRIPTION    1051
+#define IDC_PERM_REASON         1052
+
+#define IDC_PERM_INPUT_LABEL        1060
+#define IDC_PERM_DESCRIPTION_LABEL  1061
+#define IDC_PERM_REASON_LABEL       1062
 
 #endif
