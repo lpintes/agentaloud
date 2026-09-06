@@ -18,3 +18,6 @@ bin/
 
 # Generuje `make compdb` z Makefile; stroj od stroja iny (absolutne cesty).
 compile_commands.json
+
+# Docasna poznamka pre dalsiu session, nie zdroj pravdy -- ta je v beads.
+next-task.md
