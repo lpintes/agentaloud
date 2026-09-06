@@ -238,6 +238,62 @@ void TestBlockAtAndNavigation() {
              .has_value());
 }
 
+void TestControlCharactersNeverReachTheBuffer() {
+  TEST("transcript: NUL a spol. sa do bufferu nedostanu");
+  // Odmerane 6. 9. 2026 na skutocnej session: `grep -a` nad .exe vratil
+  // vysledok, v ktorom bolo 19 NULov -- retazce v binarke su UTF-16LE, takze
+  // kazdy druhy bajt je nula. Prepis ide do RichEditu cez EM_REPLACESEL, teda
+  // ako retazec ukonceny nulou: widget vzal prvych 47 znakov z 502 a od toho
+  // miesta prestala platit mapa rozsahov. Titulok to povedal, ale az potom,
+  // co uz bola navigacia mimo.
+  //
+  // JSON escapy, nie surove bajty v zdrojaku: JSON riadiaci znak v retazci
+  // nedovoli, takze surovy NUL by neprosiel uz parserom -- a v diffe ho nikto
+  // neuvidi.
+  model::Transcript transcript;
+  proto::Json binary = proto::Json::parse(R"({
+    "type": "user",
+    "message": {"content": [
+      {"type": "tool_result", "tool_use_id": "toolu_bin",
+       "content": "command-name\u0000$\u0000\u0000 function kge\u000b\u001c koniec"}
+    ]}
+  })");
+  transcript.Append(proto::Classify(binary));
+
+  std::string problem;
+  CHECK(transcript.CheckInvariants(&problem));
+  const std::wstring& text = transcript.Text();
+  bool clean = true;
+  for (wchar_t character : text) {
+    if (character == L'\n' || character == L'\t') continue;
+    if (character < 0x20 || character == 0x7F) clean = false;
+  }
+  CHECK(clean);
+  // Zahodili sa riadiace znaky, nie obsah okolo nich.
+  CHECK(text.find(L"command-name") != std::wstring::npos);
+  CHECK(text.find(L"koniec") != std::wstring::npos);
+  // A po prvom NULe uz text nekonci -- prave v tom bola ta chyba: retazec
+  // ukonceny nulou je kratsi nez retazec, ktoreho dlzku drzi model.
+  CHECK_EQ(std::wstring(text.c_str()).size(), text.size());
+
+  // To iste pre prompt: do editacneho pola sa da vlozit text odkial-kolvek.
+  // Znaky sa skladaju po jednom a nie escapmi, aby bolo v zdrojaku vidiet,
+  // ktore to su.
+  model::Transcript typed;
+  std::wstring pasted = L"prvy";
+  pasted.push_back(0x0D);  // osamotene CR: zlom riadku, nie znak na zahodenie
+  pasted += L"druhy";
+  pasted.push_back(0x0B);  // VT: pre RichEdit zlom riadku, pre model nie
+  pasted += L" treti";
+  typed.AppendUserPrompt(pasted);
+  CHECK(typed.CheckInvariants(&problem));
+  CHECK_EQ(typed.Text().find(static_cast<wchar_t>(0x0B)), std::wstring::npos);
+  // Poradie NormalizeNewlines a StripControls rozhoduje prave o tomto: keby
+  // sa riadiace znaky zahadzovali skor, osamotene CR by zmizlo namiesto toho,
+  // aby sa stalo zlomom riadku.
+  CHECK(typed.Text().find(L"prvy\ndruhy") != std::wstring::npos);
+}
+
 void TestErrorNavigationAndFirstLine() {
   TEST("transcript: klavesa ! a riadok, na ktorom kurzor pristane");
   model::Transcript transcript;
@@ -1458,6 +1514,19 @@ void SoakOverCorpus(const std::string& root) {
       continue;
     }
     blocks += transcript.blocks().size();
+    // Ziadny riadiaci znak v bufferi -- nad skutocnymi datami, nie nad
+    // vymyslenym vstupom. NUL by widgetu utrhol zvysok bloku (viz
+    // StripControls), zvysok by NVDA precitala ako nic. Hlasi sa prvy vyskyt
+    // a subor, lebo tie dva udaje staci na to, aby sa dal najst.
+    for (wchar_t character : transcript.Text()) {
+      if (character == L'\n' || character == L'\t') continue;
+      if (character >= 0x20 && character != 0x7F) continue;
+      char detail[64] = {};
+      std::snprintf(detail, sizeof(detail), ": riadiaci znak 0x%02X v prepise",
+                    static_cast<unsigned>(character));
+      Fail(__FILE__, __LINE__, path + detail);
+      break;
+    }
     for (const std::string& type : transcript.unknownTypes()) {
       bool known = false;
       for (const char* candidate : kKnownDiskOnlyTypes) {
@@ -1484,6 +1553,7 @@ int main(int argc, char** argv) {
   TestUtfRoundTrip();
   TestRangeMap();
   TestBlockAtAndNavigation();
+  TestControlCharactersNeverReachTheBuffer();
   TestErrorNavigationAndFirstLine();
   TestInterruptLeavesAMark();
   TestNoteIsTheApplicationsOwnVoice();

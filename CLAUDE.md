@@ -323,6 +323,25 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    v streame naozaj chodí (`tests/fixtures/basic.jsonl`), takže sa číta prvé —
    hádať chybu z obsahu by bolo horšie než prečítať pole.
 
+   **Ani riadiaci znak, a `NUL` je z nich ten, ktorý nielen šumí.** Prepis
+   sa do RichEditu podáva ako reťazec ukončený nulou (`EM_REPLACESEL`), takže
+   `NUL` uprostred bloku **ukončí vkladanie**: model drží text, ktorý widget
+   nedostal, mapa rozsahov od toho miesta neplatí a každý skok za ním pristane
+   inde. Odmerané 6. 9. 2026 na živej session — `grep -a` nad `.exe` vrátil 502
+   znakov s 19 nulami (reťazce v binárke sú UTF-16LE, čiže každý druhý bajt je
+   nula), widget zobral prvých 47 a titulok povedal „NESÚLAD MAPY ROZSAHOV" až
+   vtedy, keď už bola navigácia mimo. Výstup nástrojov je výstup terminálových
+   programov a niektoré z nich čítajú binárky, takže je to bežný prípad, nie
+   exotika.
+
+   Zahadzuje ich `StripControls` vo `Widen()`, a **až za `NormalizeNewlines`**:
+   `CR` je tiež riadiaci znak a osamotené `CR` je zlom riadku, takže zahodiť ho
+   skôr by ten riadok stratilo namiesto toho, aby sa z neho stal `\n`. `TAB`
+   a `\n` zostávajú, tie sú text. `VT` (0x0B) a `FF` (0x0C) idú preč aj kvôli
+   invariantu 4 — pre RichEdit sú to zlomy, o ktorých model nevie. Tou istou
+   cestou ide aj prompt (`AppendUserPrompt`): do editačného poľa sa dá vložiť
+   text odkiaľkoľvek.
+
 9. **Proces je DPI-aware, a nie kvôli ostrému textu.** Bez
    `SetProcessDpiAwarenessContext` (prvý riadok `wWinMain`) škáluje okno
    Windows sám a súradnice, ktoré si prečíta iný proces, sa pritom
@@ -667,7 +686,16 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa
 rozídu, titulok okna sa zmení na **„ClaudeLens — NESÚLAD MAPY ROZSAHOV"**. Ak
-to niekedy uvidíš, neladí invariant 3 alebo 4 a navigácia bude zameriavať zle.
+to niekedy uvidíš, neladí invariant 3, 4 alebo 8 a navigácia bude zameriavať
+zle. Raz sa to už stalo (6. 9. 2026) a bol to `NUL` z binárky — hľadaj teda
+najprv znak, ktorý widget spočíta inak než model, a hľadaj ho v poslednom
+výstupe nástroja pred tým, než sa titulok zmenil. Nájsť sa to dá aj po
+skončení: session je na disku, a čo hľadať, ukazuje soak nad korpusom, ktorý
+odvtedy riadiace znaky v prepise hlási.
+
+Titulok je pritom **jediné**, čo appka spraví — zotaviť sa z toho zatiaľ nevie
+(claude-gui-lkk.31), takže session, ktorá to raz ohlási, má navigáciu zlú až do
+zatvorenia.
 
 Bez `--permission-prompt-tool stdio` sa z pravidla „ask" stane „deny" a nikto
 sa nás na nič nespýta. Prepínač je z `--help` vypadnutý, ale CLI ho prijíma.

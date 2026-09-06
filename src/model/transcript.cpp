@@ -83,8 +83,45 @@ std::wstring StripEscapes(const std::wstring& text) {
   return out;
 }
 
+// Control characters, thrown away like the escapes above -- and one of them
+// for a harder reason than noise.
+//
+// NUL is the one that breaks something.  The transcript reaches RichEdit as a
+// null-terminated string (EM_REPLACESEL), so a NUL inside a block ENDS the
+// insertion there: the model keeps text the widget never got, the range map is
+// wrong from that offset on, and every jump after it lands somewhere else.
+// Measured 6. 9. 2026 on a real session: `grep -a` over an .exe answered with
+// 502 characters carrying 19 NULs -- strings in a binary are UTF-16LE, so
+// every second byte is zero -- the widget took the first 47, and the title bar
+// said NESÚLAD MAPY ROZSAHOV for the rest of the session.  Tool output is the
+// output of terminal programs and some of them read binaries, so this is
+// ordinary, not exotic.
+//
+// The others go for the two reasons already written down: VT (0x0B) and FF
+// (0x0C) are a line break and a page break to RichEdit, so they would break a
+// line the model does not know about -- that is invariant 4 -- and the rest
+// are read out by a screen reader as nothing at all, which is invariant 8.
+// Tab and newline stay: they are text.
+//
+// After NormalizeNewlines, never before it.  CR is a control character too,
+// and dropping it first would turn a lone CR -- a line break on its own in
+// older output -- into nothing instead of into a newline.
+std::wstring StripControls(const std::wstring& text) {
+  std::wstring out;
+  out.reserve(text.size());
+  for (wchar_t character : text) {
+    if (character == L'\t' || character == L'\n') {
+      out.push_back(character);
+      continue;
+    }
+    if (character < 0x20 || character == 0x7F) continue;
+    out.push_back(character);
+  }
+  return out;
+}
+
 std::wstring Widen(const std::string& text) {
-  return NormalizeNewlines(StripEscapes(Utf16FromUtf8(text)));
+  return StripControls(NormalizeNewlines(StripEscapes(Utf16FromUtf8(text))));
 }
 
 std::string StringField(const proto::Json& object, const char* name) {
@@ -613,8 +650,10 @@ Edit Transcript::AppendUserPrompt(const std::wstring& text) {
   Block block;
   block.kind = BlockKind::UserPrompt;
   // The prompt comes straight out of a multiline edit control, which hands
-  // back "\r\n"; it needs the same normalising as anything off the stream.
-  block.body = NormalizeNewlines(text);
+  // back "\r\n"; it needs the same normalising as anything off the stream --
+  // and the same throwing away of control characters, because text pasted into
+  // that box came from somewhere with rules of its own.
+  block.body = StripControls(NormalizeNewlines(text));
   block.summary = OneLine(block.body, kSummaryLimit);
   return AppendBlocks({std::move(block)});
 }
