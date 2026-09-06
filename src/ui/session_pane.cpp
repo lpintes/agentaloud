@@ -9,6 +9,7 @@
 #include "model/utf.h"
 #include "proto/ask.h"
 #include "ui/ask_dialog.h"
+#include "ui/command_dialog.h"
 #include "ui/permission_dialog.h"
 #include "ui/resource.h"
 #include "win/clipboard.h"
@@ -1056,6 +1057,49 @@ void SessionPane::ShowDetails() {
   dialog.ShowModal(host_, IDD_SESSION_DETAILS);
 }
 
+void SessionPane::ShowCommands() {
+  const std::vector<proto::SlashCommand> commands =
+      session_.handshake().commands;
+  // The list comes with the answer to the initialize handshake, and that
+  // answer is not immediate -- in this project, whose SessionStart hook runs
+  // bd prime, it took over twenty seconds.  So "no list yet" is a normal state
+  // of a session that has only just started, and the one thing it must not do
+  // is open an empty dialog: an empty list reads as "this session has no
+  // commands", which is a different and false statement.
+  if (commands.empty()) {
+    Announce(L"zoznam príkazov ešte neprišiel, skús o chvíľu");
+    return;
+  }
+
+  proto::SlashCommand chosen;
+  if (!PickCommand(host_, commands, &chosen)) return;
+
+  // Into the prompt, at the caret, as text -- not sent, and not run.  A
+  // headless session does not expand slash commands itself: measured
+  // 2026-09-06 (tools/probe_slash.py), the text reaches the model and the
+  // model launches what is behind it with the Skill tool.  So this key saves
+  // the typing and the remembering of the name, and the sending stays where
+  // every other prompt's sending is, on Ctrl+Enter.
+  std::wstring text = L"/" + model::Utf16FromUtf8(chosen.name);
+  // The trailing space only when there is something to type after it.  With
+  // it, a command that takes no arguments would go out with a space on the
+  // end; without it, one that does needs the space typed first.
+  if (!chosen.argumentHint.empty()) text += L" ";
+  SetFocus(prompt_);
+  SendMessageW(prompt_, EM_REPLACESEL, TRUE,
+               reinterpret_cast<LPARAM>(text.c_str()));
+
+  // Said out loud, because the caret moving in the prompt box is exactly the
+  // kind of move NVDA does not announce -- invariant 6.  The hint goes with
+  // it: it is the answer to "and what do I type now", and reading it off the
+  // dialog is not possible any more, the dialog has closed.
+  std::wstring said = L"vložené " + text;
+  if (!chosen.argumentHint.empty()) {
+    said += L", argumenty: " + model::Utf16FromUtf8(chosen.argumentHint);
+  }
+  Announce(said);
+}
+
 LRESULT CALLBACK SessionPane::PromptProc(HWND window, UINT message,
                                          WPARAM wParam, LPARAM lParam,
                                          UINT_PTR id, DWORD_PTR data) {
@@ -1083,6 +1127,10 @@ LRESULT CALLBACK SessionPane::PromptProc(HWND window, UINT message,
     // all, which is one whole class of trap it cannot fall into.
     if (wParam == VK_F2) {
       pane->ShowDetails();
+      return 0;
+    }
+    if (wParam == VK_F4) {
+      pane->ShowCommands();
       return 0;
     }
     if (IsCopyIdChord(wParam)) {
@@ -1145,6 +1193,13 @@ LRESULT CALLBACK SessionPane::TranscriptProc(HWND window, UINT message,
   }
   if (message == WM_KEYDOWN && wParam == VK_F2) {
     pane->ShowDetails();
+    return 0;
+  }
+  // The same key in both boxes, like everything else here.  It inserts into
+  // the prompt from either side, which is also why it may be pressed while
+  // reading the transcript.
+  if (message == WM_KEYDOWN && wParam == VK_F4) {
+    pane->ShowCommands();
     return 0;
   }
   if (message == WM_KEYDOWN && IsCopyIdChord(wParam)) {

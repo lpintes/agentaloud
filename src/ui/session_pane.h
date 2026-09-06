@@ -89,6 +89,16 @@ class SessionPane {
   // F2: what this session is and what it has cost, in a modal dialog.  See
   // ui/session_details.h for why a dialog and not the status bar.
   void ShowDetails();
+  // F4: the CLI's list of slash commands, and the chosen one typed into the
+  // prompt for you.  It inserts rather than sends: most commands take
+  // arguments, and one that does not is one Ctrl+Enter away.
+  //
+  // F4 and not Ctrl+/ as the design said.  "/" is not a key on the Slovak
+  // layout -- measured, VK_OEM_2 there produces "=" -- so a chord named after
+  // the character would be a chord whose name is wrong on the keyboard this is
+  // written for.  A function key is positional, produces no WM_CHAR, and sits
+  // beside F2, which already opens the other dialog.
+  void ShowCommands();
   // Ctrl+Shift+C: the session id onto the clipboard, so that `claude -r <id>`
   // in a terminal reaches the same conversation.  Its own key and not just a
   // button in the dialog, because it is the one thing in there that is never

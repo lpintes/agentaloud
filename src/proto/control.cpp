@@ -62,6 +62,27 @@ bool ParseInitializeResponse(const Json& record, InitializeInfo* out) {
     info.subscriptionType = StringField(*account, "subscriptionType");
     info.apiProvider = StringField(*account, "apiProvider");
   }
+  // An entry without a name is dropped rather than kept empty: the name is the
+  // only part of it that can be typed, so a nameless one is a row in a list
+  // that cannot be chosen.
+  auto commands = inner->find("commands");
+  if (commands != inner->end() && commands->is_array()) {
+    for (const Json& entry : *commands) {
+      if (!entry.is_object()) continue;
+      SlashCommand command;
+      command.name = StringField(entry, "name");
+      if (command.name.empty()) continue;
+      command.description = StringField(entry, "description");
+      command.argumentHint = StringField(entry, "argumentHint");
+      auto aliases = entry.find("aliases");
+      if (aliases != entry.end() && aliases->is_array()) {
+        for (const Json& alias : *aliases) {
+          if (alias.is_string()) command.aliases.push_back(alias.get<std::string>());
+        }
+      }
+      info.commands.push_back(std::move(command));
+    }
+  }
   *out = info;
   return true;
 }

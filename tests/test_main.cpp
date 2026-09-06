@@ -594,6 +594,43 @@ void TestInitializeResponseParsing() {
   CHECK_EQ(info.accountEmail, std::string());
   CHECK_EQ(info.subscriptionType, std::string());
 
+  // Zoznam slash prikazov je v tej istej odpovedi a je to JEDINY zdroj, ktory
+  // nesie popis aj argumentHint -- 'slash_commands' v system/init su hole mena.
+  // Tvar odmerany 2026-09-06 cez tools/probe_commands.py: 79 poloziek, z toho
+  // 22 s neprazdnym argumentHint a 25 pluginovych s 'aliases'.
+  proto::Json withCommands = proto::Json::parse(R"({
+    "type": "control_response",
+    "response": {
+      "subtype": "success",
+      "request_id": "init-3",
+      "response": {
+        "current_permission_mode": "default",
+        "commands": [
+          {"name": "code-review",
+           "description": "Review the current diff.",
+           "argumentHint": "[low|medium|high] [<pr#>]"},
+          {"name": "mattpocock-skills:tdd",
+           "description": "Test-driven development.",
+           "argumentHint": "",
+           "aliases": ["tdd"]},
+          {"description": "Polozka bez mena sa zahadzuje"},
+          "toto nie je objekt"
+        ]
+      }
+    }
+  })");
+  proto::InitializeInfo withList;
+  CHECK(proto::ParseInitializeResponse(withCommands, &withList));
+  CHECK_EQ(withList.commands.size(), size_t{2});
+  CHECK_EQ(withList.commands[0].name, std::string("code-review"));
+  CHECK_EQ(withList.commands[0].argumentHint,
+           std::string("[low|medium|high] [<pr#>]"));
+  CHECK(withList.commands[0].aliases.empty());
+  CHECK_EQ(withList.commands[1].aliases.size(), size_t{1});
+  CHECK_EQ(withList.commands[1].aliases[0], std::string("tdd"));
+  // Odpoved bez prikazov je stale platna odpoved, presne ako odpoved bez uctu.
+  CHECK(info.commands.empty());
+
   // Odpoved na nieco ine, chybova odpoved a zaznam bez modu nie su chyba, len
   // sa z nich rezim dozvediet neda.
   proto::InitializeInfo ignored;

@@ -21,10 +21,28 @@
 //     Session enforces the ordering; nothing else should close the handle.
 
 #include <string>
+#include <vector>
 
 #include "proto/jsonl.h"
 
 namespace proto {
+
+// One entry of the CLI's own list of slash commands.  Measured 2026-09-06 with
+// tools/probe_commands.py: 79 of them on this account, each carrying a name, a
+// description and an argumentHint that is usually empty (22 of the 79 had
+// one), and the plugin ones carrying `aliases` -- the same command under its
+// short name.
+//
+// `system/init` has a list too and it is NOT a second source to fall back on:
+// it carries BARE NAMES, no description and no hint, and it is a per-turn
+// record, so it says less and says it later.  Everything here comes from the
+// handshake.
+struct SlashCommand {
+  std::string name;          // "code-review", or "plugin:command"
+  std::string description;
+  std::string argumentHint;  // "[low|medium|high] [<pr#>]", often empty
+  std::vector<std::string> aliases;
+};
 
 // The CLI asking to run a tool.  Field names are the wire's, not ours.
 struct PermissionRequest {
@@ -83,6 +101,9 @@ struct InitializeInfo {
   // "firstParty", or Bedrock/Vertex.  Worth carrying because it changes what
   // the cost numbers mean, not because it is interesting in itself.
   std::string apiProvider;
+  // What may be typed with a leading slash.  Empty until the handshake is
+  // answered, which is not immediate -- see the note on Session::handshake().
+  std::vector<SlashCommand> commands;
 };
 
 // False when the record is not a successful control_response, or carries none

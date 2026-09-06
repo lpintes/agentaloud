@@ -625,6 +625,45 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     kto napísal preklep aj `--help`, chce zoznam volieb, a ten je lepšou
     odpoveďou na oboje.
 
+17. **Slash príkaz sa v headless režime nevykoná — vykoná ho model.** Text
+    `/foo bar` poslaný ako prompt CLI nerozvinie a nespracuje; príde modelu
+    tak, ako bol napísaný, a ten sám siahne po nástroji `Skill`
+    (`{"skill": "probe-noop", "args": "pokus"}`, `tool_result` „Launching
+    skill: …", potom `user` záznam s rozvinutým textom príkazu). Odmerané
+    6. 9. 2026 cez `tools/probe_slash.py` na dočasnom projektovom príkaze.
+
+    Z toho plynú tri veci, a každá zlyháva ticho:
+
+      • **Príkaz sa nemusí vykonať vôbec.** Rozhoduje sa model, nie CLI. Pri
+        tom istom texte poslanom cez `--input-format stream-json` sa raz
+        namiesto spustenia rozbehlo hľadanie súborov po disku. Príkaz teda nie
+        je volanie funkcie, je to prosba — a appka to nesmie sľubovať inak.
+      • **Lokálne príkazy terminálu (`/model`, `/clear`, `/context`) tam
+        nefungujú vôbec.** V zozname od CLI sú (79 položiek, z toho 43
+        skillov), ale nič ich neodlišuje: položka má len `name`,
+        `description`, `argumentHint` a niekedy `aliases`. Appka ich preto
+        nefiltruje — vymyslieť si delenie, ktoré protokol nehovorí, je horšie
+        než ponúknuť všetko, čo CLI ponúklo.
+      • Preto `ui::SessionPane::ShowCommands` príkaz **vloží do promptu**
+        a neodošle. Odosiela sa všetko rovnako, Ctrl+Enter.
+
+    Zoznam je **len z odpovede na `initialize`**. `system/init` nesie
+    `slash_commands` tiež, ale ako holé mená — bez popisu a bez
+    `argumentHint`, a navyše až so začiatkom ťahu. Nie je to teda druhý zdroj,
+    je to chudobnejší; obsahom je vlastnou podmnožinou (`commands` ⊇
+    `slash_commands` ⊇ `skills`). Odpoveď na handshake pritom **nechodí hneď**
+    — v tomto projekte, kde `SessionStart` hook púšťa `bd prime`, prišla až po
+    dvadsiatich sekundách — takže „zoznam ešte nie je" je normálny stav
+    a musí sa **povedať**. Prázdny dialóg by znel ako „táto session nemá
+    príkazy", čo je iné a nepravdivé tvrdenie.
+
+    Otvára sa to **F4, nie Ctrl+/**, ako hovoril návrh. Znak „/" na slovenskej
+    klávesnici nie je: `VK_OEM_2`, teda kláves, na ktorom leží na americkom
+    rozložení, tam dáva „=" (odmerané `MapVirtualKeyW`). Chord pomenovaný podľa
+    znaku by mal na tejto klávesnici nesprávne meno — je to tá istá pasca ako
+    pri číslach v záložkách. Funkčný kláves je polohový, negeneruje `WM_CHAR`
+    a stojí vedľa F2, ktorý otvára ten druhý dialóg.
+
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa
 rozídu, titulok okna sa zmení na **„ClaudeLens — NESÚLAD MAPY ROZSAHOV"**. Ak

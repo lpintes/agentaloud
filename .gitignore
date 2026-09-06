@@ -8,6 +8,10 @@
 # Surovy zaznam spiku -- obsahuje session id a ceny, nie je to zdroj pravdy.
 tools/spike_control.log
 
+# To iste pre sondu na slash prikazy: pise cele zaznamy do cwd, lebo konzola
+# je cp1250 a print by na sipke v popise spadol.
+probe_slash.out
+
 # Vysledky zostavenia.
 build/
 bin/

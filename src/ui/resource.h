@@ -12,6 +12,7 @@
 #define IDD_SESSION_DETAILS 100
 #define IDD_ASK_QUESTION    101
 #define IDD_PERMISSION      102
+#define IDD_COMMANDS        103
 
 #define IDC_DETAILS_ID          1000
 #define IDC_DETAILS_MODEL       1001
@@ -58,5 +59,18 @@
 #define IDC_PERM_INPUT_LABEL        1060
 #define IDC_PERM_DESCRIPTION_LABEL  1061
 #define IDC_PERM_REASON_LABEL       1062
+
+// The slash command picker.  The list's label carries the count of what the
+// filter left ("Príkazy (12 z 79)"), because that is the one thing a screen
+// reader reads by itself on the way into the list -- the filtering itself
+// happens in another control and is announced by nobody.  See
+// ui/command_dialog.h.
+#define IDC_CMD_FILTER          1070
+#define IDC_CMD_LIST            1071
+#define IDC_CMD_DETAIL          1072
+
+#define IDC_CMD_FILTER_LABEL    1080
+#define IDC_CMD_LIST_LABEL      1081
+#define IDC_CMD_DETAIL_LABEL    1082
 
 #endif

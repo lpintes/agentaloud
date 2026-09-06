@@ -121,3 +121,35 @@ BEGIN
     PUSHBUTTON      "&Povoliť", IDOK, 196, 190, 56, 14
     DEFPUSHBUTTON   "&Zamietnuť", IDCANCEL, 256, 190, 56, 14
 END
+
+// The slash command picker.  A filter box above a list, because the list is
+// seventy-nine entries long on this account and walking it with the arrow keys
+// means listening to seventy-nine descriptions.
+//
+// The description is in a box of its own here, unlike in the question dialog
+// where it is folded into the option's line.  The reason is length: an option
+// in a question is a phrase, while a command's description runs to over a
+// thousand characters, and a list line that long is unusable both to read and
+// to hear.  The line therefore carries the name, the argument hint and as much
+// of the description as fits on one line, and the box has the whole of it for
+// the one command being considered.
+IDD_COMMANDS DIALOGEX 0, 0, 320, 204
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "ClaudeLens — príkazy"
+FONT 9, "Segoe UI", 400, 0, 1
+BEGIN
+    LTEXT           "&Filter:", IDC_CMD_FILTER_LABEL, 8, 10, 40, 8
+    EDITTEXT        IDC_CMD_FILTER, 52, 8, 260, 12, ES_AUTOHSCROLL
+
+    LTEXT           "&Príkazy:", IDC_CMD_LIST_LABEL, 8, 26, 304, 8
+    LISTBOX         IDC_CMD_LIST, 8, 36, 304, 92,
+                    LBS_NOTIFY | LBS_HASSTRINGS | WS_BORDER | WS_VSCROLL |
+                    WS_HSCROLL | WS_TABSTOP
+
+    LTEXT           "P&opis:", IDC_CMD_DETAIL_LABEL, 8, 132, 304, 8
+    EDITTEXT        IDC_CMD_DETAIL, 8, 142, 304, 38,
+                    ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL
+
+    DEFPUSHBUTTON   "&Vložiť", IDOK, 196, 184, 56, 14
+    PUSHBUTTON      "&Zrušiť", IDCANCEL, 256, 184, 56, 14
+END
