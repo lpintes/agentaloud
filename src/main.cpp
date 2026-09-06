@@ -14,6 +14,7 @@
 #include "model/utf.h"
 #include "proto/sessions.h"
 #include "ui/main_window.h"
+#include "win/console.h"
 #include "win/dialog.h"
 
 namespace {
@@ -46,7 +47,61 @@ struct Arguments {
   // like.  It is filled in by -c, which decided something on the reader's
   // behalf and therefore owes them the decision.
   std::wstring openingNote;
+  // --help was asked for, so nothing else on the line matters and no window is
+  // to be opened.  A separate flag rather than an empty project, because an
+  // empty project means "ask which folder" and that is a dialog -- the one
+  // answer --help must not give.
+  bool help = false;
 };
+
+// Whoever types --help types it at a prompt, so this is the one place the
+// application answers in text rather than in a window.  Written out here, and
+// not read from anywhere: a help text in a resource or a file is a help text
+// that gets out of step with ReadArguments below, and the two are ten lines
+// apart precisely so that they do not.
+//
+// It names every option this process understands, and then says what happens
+// to the ones it does not, because that is the failure nobody would guess:
+// --fork-session does not reach the CLI, it becomes a path.
+std::wstring HelpText() {
+  return
+      L"ClaudeLens — okno namiesto terminálu pre Claude Code.\n"
+      L"\n"
+      L"Použitie:\n"
+      L"  ClaudeLens [voľby] [priečinok]\n"
+      L"\n"
+      L"  priečinok\n"
+      L"      Pracovný adresár session: rozhoduje o tom, ktoré CLAUDE.md\n"
+      L"      a ktorý git repozitár platia a čoho sa smú dotknúť nástroje.\n"
+      L"      Keď sa neuvedie, appka sa naň spýta dialógom.\n"
+      L"\n"
+      L"Voľby:\n"
+      L"  --permission-mode <režim>\n"
+      L"      Režim povolení, v pravopise CLI: acceptEdits, auto,\n"
+      L"      bypassPermissions, manual, dontAsk, plan.  Bez neho platí to,\n"
+      L"      čo má nastavené CLI.\n"
+      L"\n"
+      L"  --model <alias|id>\n"
+      L"      sonnet, haiku, opus alebo úplné id modelu.  Bez neho platí\n"
+      L"      model z nastavení, teda ten drahý.\n"
+      L"\n"
+      L"  --resume <id|titul>, -r <id|titul>\n"
+      L"      Pokračuje v pomenovanom rozhovore.  Prepis sa z disku zatiaľ\n"
+      L"      nečíta, okno teda začne prázdne a povie to.\n"
+      L"\n"
+      L"  --continue, -c\n"
+      L"      Pokračuje v poslednom rozhovore tohto priečinka.  Ktorý to je,\n"
+      L"      vyberá ClaudeLens sám zo súborov v ~/.claude/projects — nie\n"
+      L"      CLI, ktoré o headless session nevie — a v prepise povie čas aj\n"
+      L"      prvé slová toho rozhovoru.  Spolu s --resume vyhráva --resume.\n"
+      L"\n"
+      L"  --help, -h\n"
+      L"      Tento text.\n"
+      L"\n"
+      L"Nič iné sa CLI neposiela.  Prvý argument, ktorý ClaudeLens nepozná,\n"
+      L"sa berie ako priečinok projektu — takže napríklad --fork-session\n"
+      L"skončí ako cesta a session sa nespustí.\n";
+}
 
 // "." is a perfectly good thing to type and a useless thing to read back: the
 // title bar answers "which checkout is this", and the status bar wants the
@@ -153,12 +208,20 @@ Arguments ReadArguments() {
       // the answer waits until the whole line has been read.
       } else if (argument == L"--continue" || argument == L"-c") {
         continueLatest = true;
+      // Read wherever it stands and nothing after it is looked at: `ClaudeLens
+      // . --help` is a request for help, not a session in this folder.
+      } else if (argument == L"--help" || argument == L"-h") {
+        arguments.help = true;
+        break;
       } else if (arguments.project.empty()) {
         arguments.project = argument;
       }
     }
     LocalFree(argv);
   }
+  // Before the folder picker, or --help typed on its own would answer with a
+  // dialog asking which project -- and then, once cancelled, with nothing.
+  if (arguments.help) return arguments;
   if (arguments.project.empty()) {
     arguments.project = win::PickFolder(nullptr, L"Vyberte priečinok projektu");
   }
@@ -197,6 +260,25 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   controls.dwICC = ICC_STANDARD_CLASSES;
   InitCommonControlsEx(&controls);
 
+  // Read before anything is loaded and long before anything is shown, because
+  // --help must end without a window ever existing -- and Msftedit.dll below
+  // is the first thing that would put one on screen if it failed.
+  const Arguments arguments = ReadArguments();
+  if (arguments.help) {
+    // The dialog is the wrong answer here and it is the fallback anyway: it is
+    // reached only when there is no console up the tree and no redirection,
+    // which means Explorer or a shortcut.  AllocConsole would be worse -- the
+    // window it makes dies with the process, so the text would appear and
+    // vanish, which is the same as not printing it.
+    if (!win::WriteToParentConsole(HelpText())) {
+      MessageBoxW(nullptr, HelpText().c_str(), L"ClaudeLens — nápoveda",
+                  MB_OK | MB_ICONINFORMATION);
+    }
+    CoUninitialize();
+    return 0;
+  }
+  if (arguments.project.empty()) return 0;  // cancelled, which is an answer
+
   // RichEdit 4.1 comes from this library and the window class does not exist
   // until it is loaded.  Deliberately not freed: the class must outlive every
   // window that uses it, and that is the whole run.
@@ -205,9 +287,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
                 MB_OK | MB_ICONERROR);
     return 1;
   }
-
-  const Arguments arguments = ReadArguments();
-  if (arguments.project.empty()) return 0;  // cancelled, which is an answer
 
   proto::Session::Options options;
   options.workingDir = arguments.project;

@@ -66,7 +66,7 @@ LDLIBS   := -lole32 -lshell32 -lcomctl32 -luuid -lgdi32 -lwinmm
 
 # Nezavisle na ClaudeLens, da sa vziat do ineho projektu tak ako je.
 WIN_SRCS   := src/win/window.cpp src/win/dialog.cpp src/win/process.cpp \
-              src/win/clipboard.cpp
+              src/win/clipboard.cpp src/win/console.cpp
 # Vsetko, co hovori s Claudom: proces, rury, JSONL aj control kanal.  Su
 # spolu preto, ze prestanu platit naraz -- ked sa zmeni CLI.
 #

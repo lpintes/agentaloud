@@ -643,6 +643,42 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     A projekt bez jediného rozhovoru nie je chyba: začne sa nový a poznámka to
     povie.
 
+16. **Appka nemá kam písať, a keď má niečo povedať pred oknom, musí si to
+    miesto vypýtať.** `-mwindows` znamená žiadnu konzolu, teda ani stdout, ani
+    stderr — a `printf` do neexistujúceho handle sa nesťažuje. Presne tak
+    zmizli hlášky CLI o zle použitom `--session-id` (invariant 14) a presne tak
+    by zmizla nápoveda.
+
+    Miesto sa hľadá v tomto poradí a prvé nájdené vyhráva
+    (`win::WriteToParentConsole`):
+
+      • **Štandardný výstup, keď nejaký je.** Presmerovanie musí byť prvé,
+        inak by `ClaudeLens --help > help.txt` napísalo na obrazovku a nechalo
+        prázdny súbor. Odmerané: cmd.exe aj powershell.exe odovzdajú GUI
+        procesu svoje konzolové handle, takže v bežnom prípade sa končí tu.
+      • **Konzola rodiča** cez `AttachConsole(ATTACH_PARENT_PROCESS)`, a keď
+        ani potom nie sú štandardné handle vyplnené, `CONOUT$` menom.
+        Odmerané vynútením prázdnych handle (`STARTF_USESTDHANDLES` s `NULL`):
+        vetva funguje a text pribudne pod už vypísaný prompt shellu — shell na
+        GUI proces nečaká. Preto sa v tejto vetve, a len v nej, predradí
+        prázdny riadok.
+      • **Dialóg, a to je záchrana, nie voľba.** Ostáva na spustenie
+        z Prieskumníka alebo zo skratky, kde konzola nie je nikde v strome.
+        `AllocConsole` je horšia odpoveď: okno, ktoré vyrobí, zomrie s
+        procesom, takže by text blikol a zmizol, čo je to isté ako nevypísať
+        ho.
+
+    Kódovanie sa pýta rovnako: `WriteConsoleW` berie UTF-16 a codepage si
+    vyrieši sám, do súboru či rúry sa píše UTF-8. Rozlišuje sa podľa toho, či
+    `GetConsoleMode` na tom handle prejde — inak sa to nedá, oba sú `HANDLE`
+    a do oboch sa dá písať.
+
+    Nápoveda samotná je v `main.cpp::HelpText`, o desať riadkov vyššie než
+    `ReadArguments`, ktorý ju napĺňa pravdou. A hovorí aj to, čo appka
+    **nepozná**: nerozpoznaná voľba sa CLI neposiela, prvý argument bez
+    významu sa berie ako priečinok projektu, takže `--fork-session` skončí ako
+    cesta. To je jediná vec z tohto zoznamu, ktorú by nikto neuhádol.
+
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa
 rozídu, titulok okna sa zmení na **„ClaudeLens — NESÚLAD MAPY ROZSAHOV"**. Ak
