@@ -391,7 +391,7 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    v streame naozaj chodí (`tests/fixtures/basic.jsonl`), takže sa číta prvé —
    hádať chybu z obsahu by bolo horšie než prečítať pole.
 
-   **Ani riadiaci znak, a `NUL` je z nich ten, ktorý nielen šumí.** Prepis
+   **Riadiaci znak sa nezahadzuje — vypíše sa ako `\x00`.** Prepis
    sa do RichEditu podáva ako reťazec ukončený nulou (`EM_REPLACESEL`), takže
    `NUL` uprostred bloku **ukončí vkladanie**: model drží text, ktorý widget
    nedostal, mapa rozsahov od toho miesta neplatí a každý skok za ním pristane
@@ -402,13 +402,23 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    programov a niektoré z nich čítajú binárky, takže je to bežný prípad, nie
    exotika.
 
-   Zahadzuje ich `StripControls` vo `Widen()`, a **až za `NormalizeNewlines`**:
-   `CR` je tiež riadiaci znak a osamotené `CR` je zlom riadku, takže zahodiť ho
-   skôr by ten riadok stratilo namiesto toho, aby sa z neho stal `\n`. `TAB`
-   a `\n` zostávajú, tie sú text. `VT` (0x0B) a `FF` (0x0C) idú preč aj kvôli
-   invariantu 4 — pre RichEdit sú to zlomy, o ktorých model nevie. Tou istou
-   cestou ide aj prompt (`AppendUserPrompt`): do editačného poľa sa dá vložiť
-   text odkiaľkoľvek.
+   Robí to `EscapeControls` vo `Widen()`, a **až za `NormalizeNewlines`**:
+   `CR` je tiež riadiaci znak a osamotené `CR` je zlom riadku, takže vypísať ho
+   skôr by z toho riadku spravilo `\x0d` namiesto `\n`. `TAB` a `\n` zostávajú
+   sebou samými, tie sú text. `VT` (0x0B) a `FF` (0x0C) sa vypisujú aj kvôli
+   invariantu 4 — nechané tak sú pre RichEdit zlomy, o ktorých model nevie. Tou
+   istou cestou ide aj prompt (`AppendUserPrompt`): do editačného poľa sa dá
+   vložiť text odkiaľkoľvek.
+
+   **Vypísať, nie zahodiť**, a je to rozdiel medzi dvoma druhmi ticha.
+   Zahodenie bola prvá oprava a bola to zlá polovica odpovede: škodu zastavila
+   a informáciu stratila, čiže prepis by ticho mal menej znakov, než nástroj
+   vypísal. Escape sekvencie sa zahadzujú preto, že sú to **pokyny terminálu**;
+   riadiaci znak uprostred výstupu je **obsah** — niekto čítal binárku — a keď
+   sa vypíše, je aj počuť: „spätná lomka x nula nula" oproti ničomu. Zápis je
+   nerozoznateľný od nástroja, ktorý tie štyri znaky vypísal doslova, a berie
+   sa to: terminál ich nerozozná tiež, a jediná notácia, ktorá by to vedela
+   (U+2400 CONTROL PICTURES), sa nahlas číta ako ticho.
 
 9. **Proces je DPI-aware, a nie kvôli ostrému textu.** Bez
    `SetProcessDpiAwarenessContext` (prvý riadok `wWinMain`) škáluje okno

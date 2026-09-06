@@ -83,8 +83,21 @@ std::wstring StripEscapes(const std::wstring& text) {
   return out;
 }
 
-// Control characters, thrown away like the escapes above -- and one of them
-// for a harder reason than noise.
+// Control characters, written out as "\x00" rather than thrown away.
+//
+// Thrown away was the first fix and it was the wrong half of the answer: it
+// stopped the damage and lost the information, and a transcript that quietly
+// has fewer characters than the tool printed is the same class of thing this
+// application exists to get rid of.  The escapes above are dropped because
+// they are instructions to a terminal; a control character in the middle of
+// output is CONTENT -- somebody read a binary -- and the reader asked to see
+// it.  Written out, it is also audible: a screen reader says "backslash x
+// zero zero", where the character itself is read as nothing at all.
+//
+// The notation is ambiguous with a tool that printed those four characters
+// literally, and that is accepted: a terminal cannot tell them apart either,
+// and the alternative notations that can (U+2400 CONTROL PICTURES) are read
+// aloud as silence, which defeats the point.
 //
 // NUL is the one that breaks something.  The transcript reaches RichEdit as a
 // null-terminated string (EM_REPLACESEL), so a NUL inside a block ENDS the
@@ -97,31 +110,35 @@ std::wstring StripEscapes(const std::wstring& text) {
 // output of terminal programs and some of them read binaries, so this is
 // ordinary, not exotic.
 //
-// The others go for the two reasons already written down: VT (0x0B) and FF
-// (0x0C) are a line break and a page break to RichEdit, so they would break a
-// line the model does not know about -- that is invariant 4 -- and the rest
-// are read out by a screen reader as nothing at all, which is invariant 8.
-// Tab and newline stay: they are text.
+// The others are written out for the two reasons already down here: VT (0x0B)
+// and FF (0x0C) are a line break and a page break to RichEdit, so left as they
+// are they would break a line the model does not know about -- that is
+// invariant 4 -- and the rest are read out by a screen reader as nothing at
+// all, which is invariant 8.  Tab and newline stay as themselves: they are
+// text, and a transcript full of "\x0a" would be unreadable.
 //
 // After NormalizeNewlines, never before it.  CR is a control character too,
-// and dropping it first would turn a lone CR -- a line break on its own in
-// older output -- into nothing instead of into a newline.
-std::wstring StripControls(const std::wstring& text) {
+// and writing it out first would turn a lone CR -- a line break on its own in
+// older output -- into the four characters "\x0d" instead of into a newline.
+std::wstring EscapeControls(const std::wstring& text) {
   std::wstring out;
   out.reserve(text.size());
   for (wchar_t character : text) {
-    if (character == L'\t' || character == L'\n') {
+    if (character == L'\t' || character == L'\n' ||
+        (character >= 0x20 && character != 0x7F)) {
       out.push_back(character);
       continue;
     }
-    if (character < 0x20 || character == 0x7F) continue;
-    out.push_back(character);
+    static const wchar_t kDigits[] = L"0123456789abcdef";
+    out += L"\\x";
+    out.push_back(kDigits[(character >> 4) & 0xF]);
+    out.push_back(kDigits[character & 0xF]);
   }
   return out;
 }
 
 std::wstring Widen(const std::string& text) {
-  return StripControls(NormalizeNewlines(StripEscapes(Utf16FromUtf8(text))));
+  return EscapeControls(NormalizeNewlines(StripEscapes(Utf16FromUtf8(text))));
 }
 
 std::string StringField(const proto::Json& object, const char* name) {
@@ -653,7 +670,7 @@ Edit Transcript::AppendUserPrompt(const std::wstring& text) {
   // back "\r\n"; it needs the same normalising as anything off the stream --
   // and the same throwing away of control characters, because text pasted into
   // that box came from somewhere with rules of its own.
-  block.body = StripControls(NormalizeNewlines(text));
+  block.body = EscapeControls(NormalizeNewlines(text));
   block.summary = OneLine(block.body, kSummaryLimit);
   return AppendBlocks({std::move(block)});
 }

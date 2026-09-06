@@ -269,7 +269,13 @@ void TestControlCharactersNeverReachTheBuffer() {
     if (character < 0x20 || character == 0x7F) clean = false;
   }
   CHECK(clean);
-  // Zahodili sa riadiace znaky, nie obsah okolo nich.
+  // Nezahodili sa: su vidiet, a teda aj pocut -- "\x00" precita citacka ako
+  // 'spatna lomka x nula nula', samotny znak ako nic. Tichy vypadok znakov
+  // z vystupu je ta ista trieda chyby ako to, co sa opravovalo.
+  CHECK(text.find(L"\\x00") != std::wstring::npos);
+  CHECK(text.find(L"\\x0b") != std::wstring::npos);
+  CHECK(text.find(L"\\x1c") != std::wstring::npos);
+  // A obsah okolo nich zostal.
   CHECK(text.find(L"command-name") != std::wstring::npos);
   CHECK(text.find(L"koniec") != std::wstring::npos);
   // A po prvom NULe uz text nekonci -- prave v tom bola ta chyba: retazec
@@ -288,9 +294,10 @@ void TestControlCharactersNeverReachTheBuffer() {
   typed.AppendUserPrompt(pasted);
   CHECK(typed.CheckInvariants(&problem));
   CHECK_EQ(typed.Text().find(static_cast<wchar_t>(0x0B)), std::wstring::npos);
-  // Poradie NormalizeNewlines a StripControls rozhoduje prave o tomto: keby
-  // sa riadiace znaky zahadzovali skor, osamotene CR by zmizlo namiesto toho,
-  // aby sa stalo zlomom riadku.
+  CHECK(typed.Text().find(L"\\x0b") != std::wstring::npos);
+  // Poradie NormalizeNewlines a EscapeControls rozhoduje prave o tomto: keby
+  // sa riadiace znaky vypisovali skor, osamotene CR by skoncilo ako "\x0d"
+  // namiesto toho, aby sa stalo zlomom riadku.
   CHECK(typed.Text().find(L"prvy\ndruhy") != std::wstring::npos);
 }
 
@@ -1516,7 +1523,7 @@ void SoakOverCorpus(const std::string& root) {
     blocks += transcript.blocks().size();
     // Ziadny riadiaci znak v bufferi -- nad skutocnymi datami, nie nad
     // vymyslenym vstupom. NUL by widgetu utrhol zvysok bloku (viz
-    // StripControls), zvysok by NVDA precitala ako nic. Hlasi sa prvy vyskyt
+    // EscapeControls), zvysok by NVDA precitala ako nic. Hlasi sa prvy vyskyt
     // a subor, lebo tie dva udaje staci na to, aby sa dal najst.
     for (wchar_t character : transcript.Text()) {
       if (character == L'\n' || character == L'\t') continue;
