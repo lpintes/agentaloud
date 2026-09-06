@@ -52,6 +52,11 @@ struct Arguments {
   // empty project means "ask which folder" and that is a dialog -- the one
   // answer --help must not give.
   bool help = false;
+  // Something on the command line was not understood.  Non-empty means no
+  // window either: an option that was refused was typed for a reason, and
+  // opening a session without it would be doing something other than what was
+  // asked, silently.  The text goes out the same way the help does.
+  std::wstring error;
 };
 
 // Whoever types --help types it at a prompt, so this is the one place the
@@ -98,9 +103,11 @@ std::wstring HelpText() {
       L"  --help, -h\n"
       L"      Tento text.\n"
       L"\n"
-      L"Nič iné sa CLI neposiela.  Prvý argument, ktorý ClaudeLens nepozná,\n"
-      L"sa berie ako priečinok projektu — takže napríklad --fork-session\n"
-      L"skončí ako cesta a session sa nespustí.\n";
+      L"Nič iné sa CLI neposiela.  Voľba, ktorú ClaudeLens nepozná — napríklad\n"
+      L"--fork-session — sa neprepošle a ani sa z nej nestane cesta: appka to\n"
+      L"povie a skončí.  Priečinok projektu je prvý argument, ktorý sa\n"
+      L"nezačína pomlčkou, takže priečinok s pomlčkou na začiatku mena sa\n"
+      L"takto zadať nedá.\n";
 }
 
 // "." is a perfectly good thing to type and a useless thing to read back: the
@@ -175,18 +182,34 @@ Arguments ReadArguments() {
   int argc = 0;
   wchar_t** argv = CommandLineToArgvW(GetCommandLineW(), &argc);
   if (argv) {
+    // The first complaint is the one that gets said, and the reading carries
+    // on regardless: --help typed after a typo is still a request for help,
+    // and the help text is the better answer to both.
+    auto complain = [&arguments](const std::wstring& text) {
+      if (arguments.error.empty()) arguments.error = text;
+    };
     for (int i = 1; i < argc; ++i) {
       const std::wstring argument = argv[i];
+      // An option that takes a value and stands last on the line would
+      // otherwise fall through to the branches below and be taken for the
+      // project folder -- the same silent swap this whole check exists to
+      // stop, only one argument further along.
+      const bool wantsValue = argument == L"--permission-mode" ||
+                              argument == L"--model";
+      if (wantsValue && i + 1 >= argc) {
+        complain(L"voľba " + argument + L" potrebuje hodnotu");
+        break;
+      }
       // The CLI's own spelling, and its own values -- acceptEdits, auto,
       // bypassPermissions, manual, dontAsk, plan.  Not validated here: the
       // CLI rejects what it does not know, and a second list of legal values
       // in this file would be a list that goes stale.
-      if (argument == L"--permission-mode" && i + 1 < argc) {
+      if (argument == L"--permission-mode") {
         arguments.permissionMode = argv[++i];
       // An alias -- sonnet, haiku, opus -- or a full model id.  Not validated
       // here for the same reason: the list of what the CLI takes is the CLI's,
       // and a copy of it here would be a copy that goes stale.
-      } else if (argument == L"--model" && i + 1 < argc) {
+      } else if (argument == L"--model") {
         arguments.model = argv[++i];
       // Carry on an earlier conversation.  Passed straight through, value and
       // all, exactly like the two above -- so `ClaudeLens --resume <id> .`
@@ -213,6 +236,15 @@ Arguments ReadArguments() {
       } else if (argument == L"--help" || argument == L"-h") {
         arguments.help = true;
         break;
+      // Anything else that starts with a dash is an option this process does
+      // not have, and the one thing it must not become is the project folder:
+      // that is how --fork-session used to end up as a path and the session
+      // started somewhere that does not exist, with nothing said about why.
+      // A bare "-" is caught by the same rule rather than by an exception --
+      // it is not a folder anybody means on Windows, and a rule with one
+      // exception is a rule nobody remembers.
+      } else if (!argument.empty() && argument[0] == L'-') {
+        complain(L"neznáma voľba " + argument);
       } else if (arguments.project.empty()) {
         arguments.project = argument;
       }
@@ -221,7 +253,10 @@ Arguments ReadArguments() {
   }
   // Before the folder picker, or --help typed on its own would answer with a
   // dialog asking which project -- and then, once cancelled, with nothing.
+  // A refused option gets out ahead of the picker for the same reason: being
+  // asked which folder is a strange answer to "there is no such option".
   if (arguments.help) return arguments;
+  if (!arguments.error.empty()) return arguments;
   if (arguments.project.empty()) {
     arguments.project = win::PickFolder(nullptr, L"Vyberte priečinok projektu");
   }
@@ -276,6 +311,20 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     }
     CoUninitialize();
     return 0;
+  }
+  if (!arguments.error.empty()) {
+    // Out the same way as the help, and for the same reason: whoever typed the
+    // option typed it at a prompt.  The whole text of the help is not repeated
+    // here -- a complaint that scrolls the offending line off the screen is a
+    // complaint nobody reads -- but where to get it is.
+    const std::wstring text =
+        L"ClaudeLens: " + arguments.error + L".\n" +
+        L"Zoznam volieb vypíše ClaudeLens --help.\n";
+    if (!win::WriteToParentConsole(text)) {
+      MessageBoxW(nullptr, text.c_str(), L"ClaudeLens", MB_OK | MB_ICONERROR);
+    }
+    CoUninitialize();
+    return 2;
   }
   if (arguments.project.empty()) return 0;  // cancelled, which is an answer
 

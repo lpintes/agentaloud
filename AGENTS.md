@@ -674,10 +674,24 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     a do oboch sa dá písať.
 
     Nápoveda samotná je v `main.cpp::HelpText`, o desať riadkov vyššie než
-    `ReadArguments`, ktorý ju napĺňa pravdou. A hovorí aj to, čo appka
-    **nepozná**: nerozpoznaná voľba sa CLI neposiela, prvý argument bez
-    významu sa berie ako priečinok projektu, takže `--fork-session` skončí ako
-    cesta. To je jediná vec z tohto zoznamu, ktorú by nikto neuhádol.
+    `ReadArguments`, ktorý ju napĺňa pravdou.
+
+    Tou istou cestou chodí aj odmietnutie, a je to tá druhá polovica toho
+    istého pravidla: **argument začínajúci pomlčkou, ktorý appka nepozná, sa
+    nesmie stať priečinkom projektu.** Povie sa „neznáma voľba X" a skončí sa
+    kódom 2. Kým to tak nebolo, `--fork-session` sa ticho stal cestou a session
+    sa spustila nikde — presne tá trieda chyby, kvôli ktorej vznikol tento
+    invariant. To isté platí pre voľbu s chýbajúcou hodnotou: `--model` na
+    konci riadku by inak zjedol priečinok o argument ďalej. Holá pomlčka spadá
+    pod to isté pravidlo zámerne — na Windows to nie je cesta, ktorú by niekto
+    myslel vážne, a pravidlo s jednou výnimkou si nikto nezapamätá. Cena je, že
+    priečinok s pomlčkou na začiatku mena sa zadať nedá; `--` ako oddeľovač by
+    bolo druhé pravidlo pre prípad, ktorý na Windows nenastáva. Nápoveda tú
+    cenu hovorí, lebo neuhádol by ju nikto.
+
+    `--help` pritom vyhráva nad odmietnutím, hoci stojí na riadku až za ním:
+    kto napísal preklep aj `--help`, chce zoznam volieb, a ten je lepšou
+    odpoveďou na oboje.
 
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa
