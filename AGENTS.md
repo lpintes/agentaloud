@@ -946,8 +946,17 @@ kroku:
 3. **Nový invariant → do sekcie Invarianty vyššie**, nielen do komentára. Ak
    pravidlo platí pre viac než jeden súbor, patrí sem.
 4. **`bd create`** na všetko, čo z kroku vypadlo alebo pribudlo.
-5. **Commit** so správou, ktorá hovorí prečo, nie čo. Diff hovorí čo.
-6. **`bd close`** až nakoniec.
+5. **`bd close`**, a až potom commit. `.beads/issues.jsonl` je pasívny export,
+   ktorý sa prepíše pri zavretí — keď sa commituje skôr, zostane v ňom bead
+   otvorený a treba druhý commit, ktorý nehovorí nič než „doexportované".
+   Poradie bolo dlho opačné a stálo presne toľko.
+6. **Commit** so správou, ktorá hovorí prečo, nie čo. Diff hovorí čo. Píše sa
+   **cez PowerShell a jeho here-string `@'…'@`**, nie do súboru a `git commit
+   -F`: v dialógu na schválenie musí byť vidieť **text správy**, nie len
+   príkaz, ktorý ju odniekiaľ prečíta. Súbor z toho robí schvaľovanie naslepo.
+   Bashový heredoc na to nie je — toto prostredie mu žerie spätné lomky (viď
+   Conventions). Uzatváracie `'@` musí stáť na začiatku riadku, inak to
+   PowerShell neprečíta.
 
 Bod 2 a 3 sú tie, ktoré sa vynechávajú, a sú to práve tie, ktoré rozhodujú
 o tom, či sa dá pokračovať zajtra.
