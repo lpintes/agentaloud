@@ -136,14 +136,17 @@ z `~/.claude/projects`** — ten formát, z ktorého sa obnovuje história po
 a nie preto, že by sa nechcelo, ale preto, že sa to už nedá. CLI prestalo
 posielať text premýšľania: bloky `thinking` chodia s prázdnym textom a samotným
 podpisom, takže `Transcript` z nich blok nespraví — a je to správne,
-„premýšľanie (0 riadkov)" je šum. Odmerané nad korpusom: z vyše 6000 častí
-`thinking` v 197 súboroch má text **32**, a všetkých 32 je z CLI 2.1.258
-a modelu haiku (2. 9. 2026); od 2.1.260 má haiku nulu a opus so sonnetom
-nemali text ani raz, na žiadnej verzii. `thinking.jsonl` je teda jediný
-skutočný záznam premýšľania s obsahom, ktorý existuje, a preto stojí bokom od
-`basic.jsonl` (claude-gui-lkk.35). Každý súbor má zároveň vlastný `Scrubber`:
-spoločné číslovanie identifikátorov by fixtúry zviazalo tak, že zahodenie
-jednej by zneplatnilo druhú.
+„premýšľanie (0 riadkov)" je šum. Odmerané dvakrát. Nad korpusom: z vyše 6000
+častí `thinking` v 197 súboroch má text **32**, a všetkých 32 je z CLI 2.1.258
+a modelu haiku (2. 9. 2026) — pričom opus mal na **tej istej** verzii nulu zo
+478, takže nerozhoduje len verzia, ale dvojica verzia + model. A priamo,
+lebo korpus o sonnete nehovorí nič (na 2.1.258 nikdy nebežal):
+`tools/probe_thinking.py` na CLI 2.1.263 dá pri haiku, sonnete aj opuse blok
+bez textu. `thinking.jsonl` je teda jediný skutočný záznam premýšľania
+s obsahom, ktorý existuje, a preto stojí bokom od `basic.jsonl`
+(claude-gui-lkk.35). Každý súbor má zároveň vlastný `Scrubber`: spoločné
+číslovanie identifikátorov by fixtúry zviazalo tak, že zahodenie jednej by
+zneplatnilo druhú.
 
 **Do fixtúry nesmie vojsť to, čo CLI poskladalo z tohto stroja.** Diskový
 formát má typ `attachment` a v ňom sedí globálny `CLAUDE.md` používateľa, jeho

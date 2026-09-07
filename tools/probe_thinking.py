@@ -1,25 +1,29 @@
-"""Nesie stream bloky `thinking`, ked prompt pride cez --input-format stream-json?
+"""Ktory model a ktora verzia CLI posiela TEXT premyslania, a ktora len podpis?
 
 Otazka vznikla z claude-gui-lkk.35: pregenerovana basic.jsonl nemala ani jeden
 blok Thinking, hoci diskovy subor toho isteho behu ich ma sedem.  Model teda
-premyslal a rozdiel je v tom, co CLI posle na stdout -- nie v tom, co spravilo.
+premyslal a rozdiel je v tom, CO CLI POSLE -- nie v tom, ci sa myslelo.  Blok
+`thinking` chodi vzdy; od istej chvile ma prazdny text a ostava z neho len
+`signature`, a z prazdneho model/transcript.cpp blok zamerne nespravi.
 
-Jediny rozdiel oproti sonde, ktora thinking videla, je sposob podania promptu:
-argument na prikazovom riadku verzus zaznam typu user na stdin.  Skript teda
-pusti oba tvary s inak rovnakymi volbami a spocita bloky.
+Prva verzia tohto skriptu skusala, ci na tom nezalezi SPOSOB PODANIA promptu
+(argument verzus zaznam na stdin, so `--permission-prompt-tool stdio` aj bez).
+Nezalezi -- vsetky tri tvary daju to iste -- takze tie vetvy su prec a zostal
+sweep cez modely, lebo prave ten rozdiel korpus ukazal:
 
-ODPOVED (7. 9. 2026): na sposobe podania NEZALEZI -- vsetky tri tvary daju
-rovnaky vysledok.  Zalezi na verzii CLI.  Bloky `thinking` chodia vzdy, ale od
-2.1.260 s PRAZDNYM TEXTOM a samotnym podpisom, takze Transcript z nich blok
-nespravi.  Skript preto uz nepocita len bloky, ale aj dlzku ich textu -- pocet
-sam o sebe klame.
+  na CLI 2.1.258 mal haiku text (32 z 32) a opus na TEJ ISTEJ verzii nulu
+  (0 z 478).  Nerozhoduje teda len verzia, rozhoduje dvojica.  Sonnet na
+  2.1.258 nikdy nebezal, takze o nom korpus nehovori nic -- 128 jeho blokov je
+  z verzii, kde bol prazdny aj haiku.
 
-Krizova tabulka nad korpusom (197 suborov, vyse 6000 casti `thinking`):
-text ma 32 a vsetkych 32 je z CLI 2.1.258 + haiku; 2.1.260 a 2.1.263 maju pri
-haiku nulu a opus so sonnetom nemali text ani raz, na ziadnej z 20 verzii.
-Podrobnosti v claude-gui-lkk.35.
+VYSLEDOK SWEEPU (7. 9. 2026, CLI 2.1.263): haiku NIE, sonnet NIE, opus NIE.
+Vsetky tri poslu blok `thinking` a v nom prazdny text.  Text premyslania sa
+teda dnes neda dostat ziadnym modelom -- a `--effort` (low/high/max) na to
+vplyv nema, skusane.  Dosledky pre appku su v claude-gui-lkk.37.
 
-Beh:  python tools/probe_thinking.py       (tri tahy haiku, mini kredit)
+Skript preto meria DLZKU textu, nie pocet blokov: pocet sam o sebe klame.
+
+Beh:  python tools/probe_thinking.py       (tri kratke tahy, mini kredit)
 """
 import json
 import os
@@ -33,7 +37,6 @@ PROMPT = "Odpovedz jednou vetou: na co je subor README.md?"
 COMMON = [
     "-p", "--verbose",
     "--output-format", "stream-json",
-    "--model", "haiku",
 ]
 
 
@@ -65,18 +68,11 @@ def count_blocks(lines):
     return counts, thinking_lengths
 
 
-def run_argument(cwd):
-    """Prompt ako argument -- tak, ako to robila sonda, ktora thinking videla."""
-    result = subprocess.run(
-        ["claude"] + COMMON + [PROMPT],
-        cwd=cwd, capture_output=True, text=True, encoding="utf-8")
-    return result.stdout.splitlines(), result.returncode, result.stderr
-
-
-def run_stdin(cwd, extra):
+def run_stdin(cwd, extra, model):
     """Prompt ako zaznam na stdin -- tak, ako to robi make_fixtures.py."""
     proc = subprocess.Popen(
-        ["claude"] + COMMON + ["--input-format", "stream-json"] + extra,
+        ["claude"] + COMMON + ["--model", model,
+         "--input-format", "stream-json"] + extra,
         cwd=cwd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         stderr=subprocess.PIPE, text=True, encoding="utf-8", bufsize=1)
     stdin, stdout = proc.stdin, proc.stdout
@@ -114,12 +110,12 @@ def main():
     with open(os.path.join(cwd, "README.md"), "w", encoding="utf-8") as handle:
         handle.write("# Pokus\n")
 
-    cases = [
-        ("prompt ako argument", lambda: run_argument(cwd)),
-        ("prompt cez stdin", lambda: run_stdin(cwd, [])),
-        ("prompt cez stdin + permission-prompt-tool",
-         lambda: run_stdin(cwd, ["--permission-prompt-tool", "stdio"])),
-    ]
+    # Modely, nie tvary podania.  Tvar sa ukazal ako nepodstatny (viz hlavicka)
+    # a rozhoduje dvojica verzia CLI + model: na 2.1.258 mal haiku text
+    # a opus na tej istej verzii nie.  Sonnet na 2.1.258 nikdy nebezal, takze
+    # o nom korpus nehovori nic a musi sa odmerat.
+    cases = [("model " + model, (lambda m: lambda: run_stdin(cwd, [], m))(model))
+             for model in ("haiku", "sonnet", "opus")]
     for name, run in cases:
         lines, code, err = run()
         counts, lengths = count_blocks(lines)
