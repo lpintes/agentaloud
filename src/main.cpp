@@ -78,7 +78,7 @@ std::wstring HelpText() {
       L"  priečinok\n"
       L"      Pracovný adresár session: rozhoduje o tom, ktoré CLAUDE.md\n"
       L"      a ktorý git repozitár platia a čoho sa smú dotknúť nástroje.\n"
-      L"      Keď sa neuvedie, appka sa naň spýta dialógom.\n"
+      L"      Keď sa neuvedie, ClaudeLens sa naň spýta dialógom.\n"
       L"\n"
       L"Voľby:\n"
       L"  --permission-mode <režim>\n"
@@ -91,8 +91,9 @@ std::wstring HelpText() {
       L"      model z nastavení, teda ten drahý.\n"
       L"\n"
       L"  --resume <id|titul>, -r <id|titul>\n"
-      L"      Pokračuje v pomenovanom rozhovore.  Prepis sa z disku zatiaľ\n"
-      L"      nečíta, okno teda začne prázdne a povie to.\n"
+      L"      Pokračuje v pomenovanom rozhovore.  Predchádzajúce ťahy sa\n"
+      L"      prečítajú z disku; keď sa tam súbor nenájde — pod titulom sa\n"
+      L"      nenájde nikdy — okno začne prázdne a povie to.\n"
       L"\n"
       L"  --continue, -c\n"
       L"      Pokračuje v poslednom rozhovore tohto priečinka.  Ktorý to je,\n"
@@ -104,10 +105,13 @@ std::wstring HelpText() {
       L"      Tento text.\n"
       L"\n"
       L"Nič iné sa CLI neposiela.  Voľba, ktorú ClaudeLens nepozná — napríklad\n"
-      L"--fork-session — sa neprepošle a ani sa z nej nestane cesta: appka to\n"
-      L"povie a skončí.  Priečinok projektu je prvý argument, ktorý sa\n"
+      L"--fork-session — sa neprepošle a ani sa z nej nestane cesta: povie to\n"
+      L"a skončí.  Priečinok projektu je prvý argument, ktorý sa\n"
       L"nezačína pomlčkou, takže priečinok s pomlčkou na začiatku mena sa\n"
-      L"takto zadať nedá.\n";
+      L"takto zadať nedá.\n"
+      L"\n"
+      L"Čo vie klávesnica, povie ClaudeLens sám: F1 vypíše všetky klávesy, F2\n"
+      L"podrobnosti session a F4 otvorí zoznam slash príkazov.\n";
 }
 
 // "." is a perfectly good thing to type and a useless thing to read back: the

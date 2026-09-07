@@ -86,6 +86,13 @@ class SessionPane {
   // PromptProc about why one arrives as a character and the other as a key.
   bool Navigate(wchar_t key);
 
+  // F1: the list of keys, in a modal dialog.  The list itself is in
+  // ui/keys_dialog.cpp; this is only the key that opens it.
+  //
+  // F1 and not a menu, because there is no menu bar and adding one for this
+  // would put a second thing in the tab order of a window that has two
+  // controls on purpose.  F1 is what a reader tries first anyway.
+  void ShowKeys();
   // F2: what this session is and what it has cost, in a modal dialog.  See
   // ui/session_details.h for why a dialog and not the status bar.
   void ShowDetails();

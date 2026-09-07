@@ -153,3 +153,29 @@ BEGIN
     DEFPUSHBUTTON   "&Vložiť", IDOK, 196, 184, 56, 14
     PUSHBUTTON      "&Zrušiť", IDCANCEL, 256, 184, 56, 14
 END
+
+// The key list.  One box, read-only, multiline -- not a list box, and not
+// static text.  A list box would make every heading a selectable item and
+// nothing in it could be selected or copied; a static cannot take focus at
+// all, so a screen reader could not walk it line by line, which is the only
+// way a list this long gets read.
+//
+// It is tall and the button is small, because everything here is in the box:
+// the height is the text's twenty-eight lines at eight dialog units each, so
+// that nothing has to be scrolled to.  The scroll bar stays anyway -- the list
+// grows with every key added, and a box that silently cuts the last line off
+// would be the one failure this whole dialog exists to prevent.
+//
+// Zavrieť is the default button as well as the cancel one, so Enter and Esc
+// agree -- there is nothing else to do in this dialog but leave it.
+IDD_KEYS DIALOGEX 0, 0, 320, 274
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "ClaudeLens — klávesy"
+FONT 9, "Segoe UI", 400, 0, 1
+BEGIN
+    LTEXT           "&Klávesy:", IDC_KEYS_TEXT_LABEL, 8, 8, 304, 8
+    EDITTEXT        IDC_KEYS_TEXT, 8, 18, 304, 232,
+                    ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL
+
+    DEFPUSHBUTTON   "&Zavrieť", IDCANCEL, 256, 256, 56, 14
+END

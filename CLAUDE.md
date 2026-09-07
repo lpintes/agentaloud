@@ -141,6 +141,26 @@ míňa kredit, `allow` naozaj vykoná commit):
 Režim `interrupt` vypisuje každý záznam celý: pri ňom je tvar záznamov práve
 ten výsledok, po ktorom siaha.
 
+**Do bežiaceho okna sa dá pozrieť bez očí** — `tools/lens.ps1`. Dot-source ju
+a `Get-LensWindows <pid>`, `Get-LensChildren`, `Get-LensFocus`, `Send-LensKey`
+odpovedia, čo je v ktorom poli a čo má fokus. Text sa ťahá `WM_GETTEXT`om,
+ktorý systém marshaluje aj cez hranicu procesu; `GetWindowText` na to
+nepoužívaj — cez hranicu vráti prázdny reťazec, čiže **zlyhá ticho** a vyzerá
+to ako prázdne pole.
+
+**Skutočné klávesy sa tak posielať nedajú.** `SendKeys` aj `keybd_event` idú do
+okna v popredí, takže by pristáli u používateľa. `PostMessage WM_KEYDOWN`
+priamo prvku obchádza slučku správ, ale pre klávesu, ktorú chytá subclass
+procedúra (F1, F2, F4, chordy), je to plnohodnotné overenie — obsluhuje ju tá
+istá procedúra, do ktorej by prišla aj skutočná správa. Pre klávesu, o ktorej
+rozhoduje až dialógová slučka, nedokazuje nič. A `SendMessage` do modálneho
+dialógu zablokuje volajúci shell, kým sa dialóg nezavrie; na otvorenie dialógu
+teda `PostMessage`.
+
+Testovaciu inštanciu zatváraj **podľa PID**, nikdy `taskkill /IM` — používateľ
+má vlastnú ClaudeLens spustenú.
+
+
 ucrt64, nie mingw64 — UCRT je systémové CRT novších Windowsov a odpadá
 `msvcrt` a jeho zaobchádzanie s UTF-8. Prekladač sa volá absolútnou cestou;
 globálnemu PATH sa never (viď poznámku o 32/64-bit v globálnom `CLAUDE.md`).
@@ -295,6 +315,21 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    jediné, čo NVDA prečíta sama. `Speech::loaded()` je preto iná otázka než
    `available()`: nebežiaca NVDA je normálny stav, chýbajúca DLL je pokazená
    inštalácia.
+
+   **Za zavretým dialógom sa nehovorí — tam sa nedá.** Zánik dialógu je zmena
+   fokusu, NVDA ju ohlasuje a pritom reč **ruší**, a k tomu sa dostane až vo
+   svojom vlastnom cykle, o desiatky milisekúnd po tom, čo naša `Announce`
+   dohovorila. Veta teda zanikne. Zaradiť ju namiesto prerušenia nepomôže:
+   `cancelSpeech` vyprázdni celú frontu. A odložiť ju časovačom za to ohlásenie
+   znamená odložiť ju za titulok okna a cestu projektu — čiže za text, ktorý
+   je dosť dlhý na to, aby ho čitateľ umlčal Ctrlom, a s ním umlčí aj ju.
+
+   Invariant 6 tým porušený nie je, len ho napĺňa niekto iný: fokus pristane
+   v poli a NVDA prečíta riadok, na ktorom stojí — teda ten, do ktorého sa
+   práve vložilo. Vlastnú vetu má zmysel povedať len tam, kde sa fokus nehýbe.
+   Preto `ShowCommands` po vložení príkazu mlčí, hoci pôvodne hovoril; hláška
+   „vložené /x, argumenty: …" sa nestratila v kóde, stratila sa v uchu, a našlo
+   sa to používaním (7. 9. 2026).
 7. **Reč, ktorá prišla sama, sa neprerušuje.** `interrupt=true` v `Speech::Say`
    patrí výlučne odozve na klávesu (`ui::SessionPane::Announce`); čokoľvek, čo
    prišlo zo streamu, ide do fronty a čaká. Dôvod nie je zdvorilosť:
@@ -743,6 +778,47 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     súvislý vsuv na starom konci. Cena, odmeraná na najväčšom súbore korpusu
     (4,18 MB, 1351 záznamov): 80 ms čítanie a parsovanie, 38 ms prehratie,
     93 575 znakov prepisu.
+
+19. **Klávesa, ktorú F1 nevymenúva, neexistuje.** Kláves pribúda a nie sú
+    v žiadnej tabuľke — sedia v dvoch procedúrach okna (`PromptProc`,
+    `TranscriptProc`), časť ako `WM_KEYDOWN`, časť ako `WM_CHAR`, a nedajú sa
+    z kódu vymenovať ani generovaním, ani testom. Zoznam v `kKeys`
+    (`ui/keys_dialog.cpp`) preto drží pravdivý jediná vec, a je to pravidlo,
+    nie stroj: **kláves nie je hotový, kým nie je v tom zozname.**
+
+    Zlyháva to ticho a horšie než chýbajúci zoznam: podľa zoznamu, ktorý
+    klame, sa prestane hľadať. Nový kláves, ktorý v ňom nie je, teda pre
+    čitateľa nevznikol, a kláves, ktorý z appky zmizol, v ňom zostane sľubovať.
+
+    Popisok promptu unesie práve jednu klávesu („Ctrl+Enter odošle") a viac
+    nie — NVDA ho číta pri **každom** vstupe do poľa, takže druhá by sa počula
+    pri každom návrate k písaniu kvôli veci, ktorá je potrebná raz. Preto
+    dialóg, a preto F1: okno nemá menu a pridať ho kvôli tomuto by znamenalo
+    tretí prvok v poradí, ktoré má dva zámerne. Nápoveda (`--help`) o F1 hovorí
+    tiež, lebo je to jediné miesto, kde sa dá zoznam nájsť skôr, než okno
+    vznikne.
+
+    Klávesa sa v tom zozname píše ako **skratka, nie ako znak**: „T" a
+    „Shift+T", nikdy „t" a „T". Čítačka povie obe veľkosti písmena rovnako,
+    takže dvojica malé/veľké je nahlas jedno slovo dvakrát a riadok prestane
+    niečo znamenať — zmizne práve to rozlíšenie, kvôli ktorému ten riadok
+    existuje. `Navigate` pritom číta veľkosť **znaku**, nie stav Shiftu (to je
+    to, čo mu dáva fungovať na ľubovoľnom rozložení), takže pri zapnutom Caps
+    Locku sa tie dve prehodia; napísané je meno, ktoré má kláves po zvyšok
+    času.
+
+    Zoznam je jedno read-only viacriadkové pole, nie listbox: v listboxe by
+    každý nadpis bol vyberateľná položka a nedalo by sa z neho nič označiť ani
+    skopírovať. Text sa píše s `\n` ako všetko ostatné a do widgetu ho podáva
+    `win::Dialog::SetTextLines` (invariant 4) — osamotené `\n` by obyčajné
+    `EDIT` nakreslilo ako obdĺžnik a NVDA by prečítala celý zoznam ako jeden
+    prázdny riadok.
+
+    Písanie toho zoznamu je zároveň jediná kontrola, ktorá tu existuje, a hneď
+    prvýkrát niečo našla: **Ctrl+Enter odosiela len z promptu** — v prepise je
+    `VK_RETURN` zbalenie bloku bez ohľadu na Ctrl. Všetky ostatné klávesy sú
+    v oboch poliach tie isté zámerne, takže je to odchýlka; je zapísaná
+    (claude-gui-lkk.34) a v zozname priznaná.
 
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa

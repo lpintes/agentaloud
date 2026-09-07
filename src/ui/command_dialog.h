@@ -26,10 +26,14 @@
 
 namespace ui {
 
-// True when one was chosen; `chosen` then holds the whole entry, so that the
-// caller can say the argument hint out loud as well as insert the name.
-// False means the dialog was dismissed, which is not an error and nothing is
-// to be inserted.
+// True when one was chosen; `chosen` then holds the whole entry, because what
+// goes into the prompt depends on more than the name -- a command with an
+// argument hint gets a space after it and one without does not.  False means
+// the dialog was dismissed, which is not an error and nothing is to be
+// inserted.
+//
+// The hint itself goes no further than this dialog.  Saying it out loud after
+// the dialog closes does not work: see the note at the end of ShowCommands.
 bool PickCommand(HWND owner, const std::vector<proto::SlashCommand>& commands,
                  proto::SlashCommand* chosen);
 

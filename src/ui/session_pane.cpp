@@ -12,6 +12,7 @@
 #include "proto/sessions.h"
 #include "ui/ask_dialog.h"
 #include "ui/command_dialog.h"
+#include "ui/keys_dialog.h"
 #include "ui/permission_dialog.h"
 #include "ui/resource.h"
 #include "win/clipboard.h"
@@ -1080,6 +1081,12 @@ void SessionPane::RefreshFacts() {
   if (!account.empty()) details_.account = account;
 }
 
+void SessionPane::ShowKeys() {
+  // Nothing announced here, for the same reason as ShowDetails: the dialog
+  // announces itself, and a sentence of ours would arrive on top of it.
+  ui::ShowKeys(host_);
+}
+
 void SessionPane::ShowDetails() {
   RefreshFacts();
   // Nothing is announced here, and that is not an oversight.  A dialog is the
@@ -1123,15 +1130,25 @@ void SessionPane::ShowCommands() {
   SendMessageW(prompt_, EM_REPLACESEL, TRUE,
                reinterpret_cast<LPARAM>(text.c_str()));
 
-  // Said out loud, because the caret moving in the prompt box is exactly the
-  // kind of move NVDA does not announce -- invariant 6.  The hint goes with
-  // it: it is the answer to "and what do I type now", and reading it off the
-  // dialog is not possible any more, the dialog has closed.
-  std::wstring said = L"vložené " + text;
-  if (!chosen.argumentHint.empty()) {
-    said += L", argumenty: " + model::Utf16FromUtf8(chosen.argumentHint);
-  }
-  Announce(said);
+  // And nothing is said.  It used to say "vložené /x, argumenty: ..." here,
+  // on the grounds that a caret moving in the prompt box is exactly the move
+  // NVDA does not announce -- but reported from use, nobody ever heard it:
+  // closing a dialog is a focus change, NVDA announces those and cancels
+  // speech while doing it, and its own event loop gets there tens of
+  // milliseconds after this line has already spoken.  Queueing instead of
+  // interrupting does not save it either, because cancelSpeech empties the
+  // whole queue.
+  //
+  // A timer would land the sentence behind that announcement, and behind is
+  // where it dies: what NVDA says when a dialog closes is the window title
+  // and the project path, which is long enough that the reader silences it
+  // with Ctrl -- taking anything queued after it along.
+  //
+  // Invariant 6 is satisfied anyway, by NVDA rather than by us: the focus
+  // lands in the prompt and the line it reads out is the one with the
+  // command just inserted in it.  The argument hint is the part that is lost,
+  // and it was on screen in the dialog a second ago, in the list line and in
+  // the description box both.
 }
 
 LRESULT CALLBACK SessionPane::PromptProc(HWND window, UINT message,
@@ -1155,10 +1172,14 @@ LRESULT CALLBACK SessionPane::PromptProc(HWND window, UINT message,
       pane->Navigate(static_cast<wchar_t>(wParam - 'A' + L'a'));
       return 0;
     }
-    // Both of these are the same key in both boxes, like Esc and the chords:
+    // All three are the same key in both boxes, like Esc and the chords:
     // which box has the focus is not something to have to remember first.  A
     // function key needs no second discard either -- it produces no WM_CHAR at
     // all, which is one whole class of trap it cannot fall into.
+    if (wParam == VK_F1) {
+      pane->ShowKeys();
+      return 0;
+    }
     if (wParam == VK_F2) {
       pane->ShowDetails();
       return 0;
@@ -1223,6 +1244,10 @@ LRESULT CALLBACK SessionPane::TranscriptProc(HWND window, UINT message,
   // something a reader should have to remember before pressing a key.
   if (message == WM_KEYDOWN && IsJumpChord(wParam)) {
     pane->Navigate(static_cast<wchar_t>(wParam - 'A' + L'a'));
+    return 0;
+  }
+  if (message == WM_KEYDOWN && wParam == VK_F1) {
+    pane->ShowKeys();
     return 0;
   }
   if (message == WM_KEYDOWN && wParam == VK_F2) {

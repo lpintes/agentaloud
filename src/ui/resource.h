@@ -13,6 +13,7 @@
 #define IDD_ASK_QUESTION    101
 #define IDD_PERMISSION      102
 #define IDD_COMMANDS        103
+#define IDD_KEYS            104
 
 #define IDC_DETAILS_ID          1000
 #define IDC_DETAILS_MODEL       1001
@@ -72,5 +73,11 @@
 #define IDC_CMD_FILTER_LABEL    1080
 #define IDC_CMD_LIST_LABEL      1081
 #define IDC_CMD_DETAIL_LABEL    1082
+
+// The key list.  One read-only multiline box and nothing else to fill in: the
+// text is a constant in ui/keys_dialog.cpp, so there is no second control here
+// and no state to keep.  See ui/keys_dialog.h.
+#define IDC_KEYS_TEXT           1090
+#define IDC_KEYS_TEXT_LABEL     1091
 
 #endif
