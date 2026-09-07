@@ -13,6 +13,12 @@
 //      NESMIEM: rucne napisana fixtura by testovala moju predstavu o formate.
 //      Vyroba: python tools/make_fixtures.py
 //
+//      Jedna z nich, disk.jsonl, nie je stream: je to SUBOR SESSION, ktory
+//      CLI vedie v ~/.claude/projects, teda ten format, z ktoreho sa obnovuje
+//      historia po --resume.  Su to dva rozne formaty (viz kKnownDiskOnlyTypes
+//      nizsie) a bez nej by tu cestu testoval len soak -- teda nikto, kto ho
+//      nepusta.
+//
 //   3. SOAK (sukromny korpus, mimo repozitara).  Netvrdi ocakavane hodnoty,
 //      len invarianty, a hlasi neznama typy zaznamov.  Zapina sa premennou
 //      CLAUDELENS_CORPUS a bezi rucne.
@@ -1571,6 +1577,91 @@ void TestFixtureDenied(const std::string& dir) {
   }
 }
 
+void TestFixtureDisk(const std::string& dir) {
+  TEST("fixtura disk: historia zo skutocneho suboru session");
+  namespace fs = std::filesystem;
+  const fs::path file = fs::path(dir) / "disk.jsonl";
+
+  // Najprv surovo, aby bolo dokazane, ze je to naozaj DISKOVY subor a nie
+  // odlozena kopia streamu: format disku ma vlastne typy zaznamov a prave
+  // tie ma proto/ odfiltrovat.  Bez tejto kontroly by test presiel aj nad
+  // suborom, v ktorom niet co filtrovat, a nedokazoval by nic.
+  bool ok = false;
+  const auto raw = ReadJsonl(file.string(), &ok);
+  if (!ok || raw.empty()) {
+    Fail(__FILE__, __LINE__,
+         "chyba " + dir + "/disk.jsonl -- spusti tools/make_fixtures.py");
+    return;
+  }
+  size_t diskOnly = 0;
+  for (const proto::Json& record : raw) {
+    const std::string type = record.value("type", std::string());
+    if (type != "user" && type != "assistant") ++diskOnly;
+  }
+  CHECK(diskOnly > 0);
+
+  std::vector<proto::Json> records;
+  CHECK(proto::ReadSessionRecords(file.wstring(), &records));
+  CHECK(records.size() < raw.size());
+  CHECK(!records.empty());
+
+  model::Transcript transcript;
+  const model::HistoryCounts counts =
+      model::RestoreHistory(records, &transcript);
+  CHECK_EQ(counts.records, records.size());
+  // Prave tolko, kolko je promptov v TURNS (tools/make_fixtures.py).  Disk
+  // pise do `user` zaznamov aj vysledky nastrojov a vlastne hlasky CLI, takze
+  // toto cislo je kontrola, ze HumanPromptText ich odlisil na skutocnom
+  // subore, nie len na vymyslenom v TestHistoryRestore.
+  CHECK_EQ(counts.prompts, size_t{4});
+  CHECK(counts.blocks > 0);
+
+  std::string problem;
+  CHECK(transcript.CheckInvariants(&problem));
+  // Ziadny neznamy typ: co disk ma navyse, ostalo v proto/.  Keby to prislo
+  // az sem, zvonil by alarm soaku pre uplne bezny pripad.
+  CHECK_EQ(transcript.unknownCount(), size_t{0});
+
+  const auto kinds = CountKinds(transcript);
+  CHECK(kinds.count(model::BlockKind::UserPrompt) > 0);
+  CHECK(kinds.count(model::BlockKind::AssistantText) > 0);
+  CHECK(kinds.count(model::BlockKind::ToolUse) > 0);
+  CHECK(kinds.count(model::BlockKind::ToolResult) > 0);
+
+  // Vysledok za svojim volanim aj po prehrati z disku -- na disku su tie dva
+  // zaznamy susedne len nahodou a vazbu drzi id, nie poradie.
+  std::set<std::string> used;
+  std::set<std::string> resulted;
+  for (const model::Block& block : transcript.blocks()) {
+    if (block.kind == model::BlockKind::ToolUse) used.insert(block.toolUseId);
+    if (block.kind == model::BlockKind::ToolResult) {
+      resulted.insert(block.toolUseId);
+    }
+  }
+  CHECK(!used.empty());
+  CHECK_EQ(used, resulted);
+
+  // Prvy prompt je prvy z TURNS a je to text, ktory napisal clovek -- nie
+  // strojopis, ktory CLI zapisuje do tych istych zaznamov.
+  for (const model::Block& block : transcript.blocks()) {
+    if (block.kind == model::BlockKind::UserPrompt) {
+      CHECK_EQ(block.body,
+               std::wstring(L"Odpovedz jednou vetou: na co je subor "
+                            L"README.md?"));
+      break;
+    }
+  }
+
+  // A este raz cez zhrnutie, ktorym sa vyberá najnovsia session: cas sa vo
+  // fixture nahradzuje stabilnym, ale PLATNYM ISO 8601 prave preto, aby sa
+  // tato cesta dala testovat nad realnym suborom (invariant 15).
+  proto::SessionSummary summary;
+  CHECK(proto::ReadSessionSummary(file.wstring(), &summary));
+  CHECK(!summary.lastStamp.empty());
+  CHECK_EQ(summary.firstPrompt,
+           std::string("Odpovedz jednou vetou: na co je subor README.md?"));
+}
+
 // ----------------------------------------------------------------- 3. soak
 
 // Zaznam session na disku NIE JE ten isty format ako stream: ma navyse
@@ -1736,6 +1827,7 @@ int main(int argc, char** argv) {
   TestProjectKeyAndTime();
   TestFixtureBasic(fixtures);
   TestFixtureDenied(fixtures);
+  TestFixtureDisk(fixtures);
 
   if (const char* corpus = std::getenv("CLAUDELENS_CORPUS")) {
     SoakOverCorpus(corpus);

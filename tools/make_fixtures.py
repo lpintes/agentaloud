@@ -1,4 +1,4 @@
-"""Vyrobi zafixovane fixtury pre testy urovne 1 (claude-gui-lkk.3).
+"""Vyrobi zafixovane fixtury pre testy urovne 2 (claude-gui-lkk.3).
 
 Fixtura je surovy stream z jednej realnej session, zbaveny volatilnych poli.
 Nie je to nahrada za realne data -- JE to realne data, len take, ktore sa
@@ -11,9 +11,17 @@ CLI, a diff vyslednej fixtury je prave ta informacia, ktoru chces vidiet.
 Preco sa fixtury nepisu rucne: rucne napisana fixtura testuje moju predstavu
 o formate, nie format.  To je presne ten sposob zlyhania, ktory ma stat v ceste.
 
+Okrem streamu sa zachytava aj SUBOR SESSION NA DISKU (disk.jsonl).  Nie je to
+ten isty format: disk ma vyse desat vlastnych typov zaznamov, nema system/init
+ani result, a spolocne su len user a assistant.  Prave z neho sa obnovuje
+historia po --resume, takze bez zafixovanej fixtury by tu cestu testoval len
+soak nad sukromnym korpusom -- teda nikto, kto soak nepusta.
+
 Beh:  python tools/make_fixtures.py [--out tests/fixtures]
 """
 import argparse
+import datetime
+import glob
 import json
 import os
 import shutil
@@ -62,21 +70,43 @@ BASE_ARGS = [
 # denied: bez neho.  Z pravidla "ask" sa stane "deny" a na stream pride
 #         system/permission_denied -- blok, ktory transcript zobrazuje vzdy
 #         rozbaleny a ktory by inak zostal netestovany.
+#
+# Diskovy subor sa berie len z basic.  Je to ten isty rozhovor, len prepisany
+# CLI do vlastneho formatu, takze druhy by nepridal ziadny tvar navyse -- a
+# stal by dalsi beh.
 PROFILES = {
-    "basic": {"args": ["--permission-prompt-tool", "stdio"], "turns": TURNS},
-    "denied": {"args": [], "turns": TURNS[-1:]},
+    "basic": {"args": ["--permission-prompt-tool", "stdio"], "turns": TURNS,
+              "disk": True},
+    "denied": {"args": [], "turns": TURNS[-1:], "disk": False},
 }
 
 # Polia, ktorych hodnota sa meni od behu k behu a o formate nehovoria nic.
 VOLATILE_SCALARS = {
-    "timestamp", "duration_api_ms", "duration_ms", "total_cost_usd",
+    "duration_api_ms", "duration_ms", "total_cost_usd",
     "signature", "pid", "cwd", "resetsAt", "overageResetsAt",
 }
+
+# Timestamp sa NEnahradzuje retazcom "<scrubbed>", hoci volatilny je.  Diskovy
+# format je jediny, kde na case zalezi: podla neho sa vybera najnovsia session
+# a hlada sa odzadu prvy zaznam, ktory cas nesie (invariant 15).  Fixtura s
+# necitatelnym casom by tu vlastnost otestovat nedala.  Kazdy odlisny cas teda
+# dostane stabilnu nahradu v poradi, v akom sa prvy raz objavil -- co je
+# poradie zapisu, takze rastie rovnako ako originaly.
+STAMP_EPOCH = datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)
 # Polia s identifikatorom.  Nevyhadzuju sa, ale prepisuju sa dosledne, aby
 # vazba tool_use -> tool_result prezila; prave tu vazbu testy kontroluju.
+#
+# Druha polovica zoznamu je diskova a v streame nie je ani jedno z tych poli:
+# subor session je retaz zaznamov previazana cez parentUuid a nesie vlastne
+# id promptu, poziadavky a zaznamu, z ktoreho vysledok nastroja pochadza.
+# Mena su camelCase, nie snake_case ako v streame -- su to dva formaty, nie
+# jeden (viz kKnownDiskOnlyTypes v tests/test_main.cpp).  Zistene pozretim
+# skutocneho suboru, nie z dokumentacie.
 ID_FIELDS = {
     "session_id", "uuid", "request_id", "id", "tool_use_id",
     "parent_tool_use_id", "hook_id",
+    "sessionId", "parentUuid", "promptId", "requestId",
+    "sourceToolAssistantUUID", "leafUuid",
 }
 
 
@@ -95,9 +125,25 @@ def make_repo():
     return path
 
 
+def disk_session_path(session_id):
+    """Subor, do ktoreho CLI zapisalo tuto session, alebo None.
+
+    Hlada sa podla ID cez glob, nie skladanim mena adresara z cesty
+    hrackarskeho repozitara: to je docasny adresar, ktoreho meno si Windows
+    moze podat aj v kratkom 8.3 tvare, a kluc by potom nesedel.  ID je UUID,
+    takze glob cez vsetky projekty nemoze trafit cudziu session.
+    """
+    home = os.environ.get("CLAUDE_CONFIG_DIR") or \
+        os.path.join(os.path.expanduser("~"), ".claude")
+    found = glob.glob(os.path.join(home, "projects", "*",
+                                   session_id + ".jsonl"))
+    return found[0] if found else None
+
+
 class Capture:
     def __init__(self, cwd, extra_args):
         self.lines = []
+        self.session_id = None
         self.turn_done = threading.Event()
         self.proc = subprocess.Popen(
             ["claude"] + BASE_ARGS + extra_args, cwd=cwd,
@@ -127,6 +173,11 @@ class Capture:
                 msg = json.loads(line)
             except json.JSONDecodeError:
                 continue
+            # Surove, este pred Scrubberom -- pod tymto menom lezi subor na
+            # disku.  Appka si ho od verzie s --session-id urcuje sama, tu ho
+            # urcuje CLI, takze sa da zistit jedine zo streamu.
+            if self.session_id is None and msg.get("session_id"):
+                self.session_id = msg["session_id"]
             if msg.get("type") == "control_request":
                 self._answer(msg)
             elif msg.get("type") == "result":
@@ -176,6 +227,16 @@ class Scrubber:
 
     def __init__(self):
         self.mapping = {}
+        self.stamps = {}
+
+    def stamp_for(self, value):
+        if value not in self.stamps:
+            when = STAMP_EPOCH + datetime.timedelta(seconds=len(self.stamps))
+            # Tak, ako to pise CLI: ISO 8601 v UTC so 'Z' a milisekundami.
+            # Tvar je to, na com zalezi -- LatestSession ho triedi ako text
+            # a nikdy neparsuje.
+            self.stamps[value] = when.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        return self.stamps[value]
 
     def id_for(self, value):
         if value in self.mapping:
@@ -193,6 +254,8 @@ class Scrubber:
             return [self.walk(v, key) for v in node]
         if key in ID_FIELDS and isinstance(node, str) and node:
             return self.id_for(node)
+        if key == "timestamp" and isinstance(node, str) and node:
+            return self.stamp_for(node)
         if key in VOLATILE_SCALARS:
             if isinstance(node, str):
                 return "<scrubbed>"
@@ -204,6 +267,7 @@ class Scrubber:
 
 
 def capture_profile(name):
+    """Vrati (riadky streamu, riadky diskoveho suboru)."""
     profile = PROFILES[name]
     repo = make_repo()
     print("[%s] hrackarsky repozitar: %s" % (name, repo))
@@ -215,7 +279,22 @@ def capture_profile(name):
     finally:
         capture.close()
         shutil.rmtree(repo, ignore_errors=True)
-    return capture.lines
+
+    disk = []
+    if profile["disk"]:
+        # Az po close(): dovtedy proces bezi a subor nemusi byt dopisany.
+        path = capture.session_id and disk_session_path(capture.session_id)
+        if not path:
+            print("  POZOR: subor session sa nenasiel, disk.jsonl sa nepise")
+        else:
+            print("  subor session:", path)
+            # Zostava tam, kde je.  Je to skutocna session v adresari
+            # pouzivatela a mazanie cudzich suborov nie je uloha tohto
+            # skriptu -- adresar projektu po hrackarskom repozitari sa da
+            # zmazat rukou, ked prekaza.
+            with open(path, encoding="utf-8") as handle:
+                disk = [line.strip() for line in handle if line.strip()]
+    return capture.lines, disk
 
 
 def write_fixture(lines, out_dir, name):
@@ -234,6 +313,15 @@ def write_fixture(lines, out_dir, name):
             if record.get("type") == "system" and \
                record.get("subtype", "").startswith("hook_"):
                 continue
+            # To iste, ale naliehavejsie, plati pre attachment na disku: nesie
+            # kontext, ktory CLI poskladalo z tohto stroja -- globalny
+            # CLAUDE.md pouzivatela, jeho e-mail, cely prompt_snapshot.  Bolo
+            # to 186 z 209 kB fixtury a do verejneho repozitara to nepatri.
+            # O formate nehovori nic, co by testy videli: ReadSessionRecords
+            # prepusta len user a assistant, a to, ze typ attachment existuje,
+            # je zapisane v kKnownDiskOnlyTypes.
+            if record.get("type") == "attachment":
+                continue
             handle.write(json.dumps(scrubber.walk(record), ensure_ascii=False,
                                     sort_keys=True) + "\n")
             written += 1
@@ -249,7 +337,17 @@ def main():
     args = parser.parse_args()
 
     for name in args.profile or list(PROFILES):
-        write_fixture(capture_profile(name), args.out, name)
+        stream, disk = capture_profile(name)
+        # Kazdy subor ma vlastny Scrubber, hoci zdielany by dal rovnake id
+        # v oboch a diff by sa cital lepsie.  Zdielanie by ich zviazalo:
+        # fixtura je artefakt, ktory sa da zahodit a nahradit starsim, a to sa
+        # uz raz stalo -- pri pregenerovani basic.jsonl v nom model nepremyslal
+        # a fixtura prisla o bloky Thinking, takze sa vratila povodna a nova
+        # zostala len na disku.  So spolocnym cislovanim by tym prestala platit
+        # aj ta druha.
+        write_fixture(stream, args.out, name)
+        if disk:
+            write_fixture(disk, args.out, "disk")
     return 0
 
 

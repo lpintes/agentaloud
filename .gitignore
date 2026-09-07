@@ -21,3 +21,6 @@ compile_commands.json
 
 # Docasna poznamka pre dalsiu session, nie zdroj pravdy -- ta je v beads.
 next-task.md
+
+# Vznikne, ked sa tools/ importuje ako modul (rucne skusanie Scrubbera).
+tools/__pycache__/

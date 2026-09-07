@@ -127,7 +127,28 @@ súborov namiesto chyby.
 
 Fixtúry sa negenerujú v testoch. `python tools/make_fixtures.py` sa púšťa
 ručne, keď sa zmení formát CLI; diff fixtúry je práve tá informácia, ktorú
-chceš vidieť.
+chceš vidieť. Fixtúry sú tri a `disk.jsonl` nie je stream, ale **súbor session
+z `~/.claude/projects`** — ten formát, z ktorého sa obnovuje história po
+`--resume`. Bez nej by tú cestu testoval iba soak, teda nikto, kto ho nepúšťa.
+
+**Fixtúra je artefakt, nie výstup, ktorý sa dá zopakovať.** Pregenerovanie je
+lotéria: pri tomto behu haiku nepremýšľal a `basic.jsonl` prišla o všetky bloky
+`Thinking`, čiže o pokrytie, ktoré dovtedy mala. Preto sa vrátila pôvodná a
+nová zostala len na disku (claude-gui-lkk.35). Z toho plynie aj to, že každý súbor
+má vlastný `Scrubber`: spoločné číslovanie identifikátorov by dve fixtúry
+zviazalo tak, že zahodenie jednej by zneplatnilo druhú.
+
+**Do fixtúry nesmie vojsť to, čo CLI poskladalo z tohto stroja.** Diskový
+formát má typ `attachment` a v ňom sedí globálny `CLAUDE.md` používateľa, jeho
+e-mail a celý `prompt_snapshot` — 186 z 209 kB prvej verzie fixtúry, ktorá
+mala ísť do verejného repozitára. Zahadzuje ich `write_fixture` tým istým
+pravidlom ako hooky: je to vlastnosť stroja, nie formátu, a `ReadSessionRecords`
+ich aj tak neprepúšťa. Zlyhalo by to ticho — fixtúra vyzerá ako fixtúra a
+nikto ju nečíta celú.
+
+Čas sa naopak **neškrtá, len sa nahrádza stabilným a platným** ISO 8601.
+Diskový formát je jediný, kde na čase záleží (invariant 15), a `<scrubbed>`
+namiesto času by tú vlastnosť otestovať nedal.
 
 Overenie protokolovej vrstvy naostro (potrebuje jednorazový git repozitár,
 míňa kredit, `allow` naozaj vykoná commit):
