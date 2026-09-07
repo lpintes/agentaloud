@@ -125,6 +125,18 @@ CLAUDELENS_CORPUS=/tmp/corpus.txt ./bin/tests.exe
 `.exe` im nerozumie a otvorenie **zlyhá ticho** — soak potom nahlási nula
 súborov namiesto chyby.
 
+**Korpus je posuvné okno, nie archív.** CLI zametá prepisy staršie než
+`cleanupPeriodDays`, čo je **30 dní** a v `~/.claude/settings.json` to nemusí
+byť napísané — je to východisková hodnota (overené v binárke: „Number of days
+to retain chat transcripts before automatic cleanup (default: 30)"). Deväť
+mesiacov používania teda znamená dvadsaťosem dní na disku. Poznať to podľa
+toho, že korpus má **každý** deň bez medzery až po ostrý spodok; to nie je
+vzorec používania. Súbory, nad ktorými soak niečo raz našiel, o mesiac
+neexistujú, takže nález, ktorý sa nezapíše sem alebo do fixtúry, sa nedá
+zopakovať. Kto chce dlhší korpus, nastaví si `cleanupPeriodDays` vyššie —
+a fixtúra `thinking.jsonl` je práve ten prípad: záznamy, z ktorých vznikla, sa
+zmažú koncom septembra a ona bude jediná kópia.
+
 Fixtúry sa negenerujú v testoch. `python tools/make_fixtures.py` sa púšťa
 ručne, keď sa zmení formát CLI; diff fixtúry je práve tá informácia, ktorú
 chceš vidieť. Fixtúry sú tri a `disk.jsonl` nie je stream, ale **súbor session
