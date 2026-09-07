@@ -419,6 +419,18 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    Preto `ShowCommands` po vložení príkazu mlčí, hoci pôvodne hovoril; hláška
    „vložené /x, argumenty: …" sa nestratila v kóde, stratila sa v uchu, a našlo
    sa to používaním (7. 9. 2026).
+
+   **Načasovať sa to proti čítačke nedá.** Odložiť vetu za cudzie ohlásenie
+   a potom ju pretlačiť `cancelSpeech`om **technicky funguje** — odskúšané
+   7. 9. 2026 na poznámke pri štarte (claude-gui-edx): pri správnom oneskorení
+   sa titulok okna useknul uprostred a poznámka zaznela celá. Zamietnuté aj
+   tak, a nie kvôli tomu, ako to znie. To oneskorenie je konštanta, ktorú nemá
+   kde vziať: závisí od rýchlosti reči, nastavenia NVDA a záťaže stroja, takže
+   číslo namerané tu je inde buď prikrátke — veta zanikne — alebo pridlhé,
+   a vtedy preruší niečo, čo ešte nedopovedalo. Obe zlyhania sú tiché a obe
+   nastanú tam, kde ich autor tejto aplikácie neuvidí. Kde treba prehovoriť po
+   zmene fokusu, musí to teda urobiť niekto iný než časovač — dialóg, alebo
+   fokus položený rovno na text, ktorý má zaznieť.
 7. **Reč, ktorá prišla sama, sa neprerušuje.** `interrupt=true` v `Speech::Say`
    patrí výlučne odozve na klávesu (`ui::SessionPane::Announce`); čokoľvek, čo
    prišlo zo streamu, ide do fronty a čaká. Dôvod nie je zdvorilosť:
