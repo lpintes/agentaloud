@@ -57,33 +57,39 @@ std::vector<std::string_view> SplitLines(const std::string& text) {
   return lines;
 }
 
-// The text a human actually typed, or empty.
+// Whatever text a `user` record carries, in whichever of the two shapes the
+// content came in -- a bare string (1278 of the records measured here) or an
+// array with a `text` part in it.  Empty for a record that holds only tool
+// results, which is most of them.
 //
-// A `user` record carries tool results and the output of slash commands as
-// well, and neither is a prompt: both would name the session after something
-// nobody said.  The machine-written ones open with a tag ("<command-name>",
-// "<local-command-stdout>"), which is the same test tools/sessions.py makes.
-std::string HumanPrompt(const Json& record) {
-  if (record.value("isMeta", false)) return {};
+// The type is checked here and not left to the caller: an `assistant` record
+// has text in exactly the same place, and read as a prompt it would put the
+// answer into the transcript twice -- once in Claude's name and once in the
+// reader's.  Which is what it did, until this line.
+std::string UserText(const Json& record) {
+  if (record.value("type", std::string()) != "user") return {};
   const auto message = record.find("message");
   if (message == record.end() || !message->is_object()) return {};
   const auto content = message->find("content");
   if (content == message->end()) return {};
-  std::string text;
-  if (content->is_string()) {
-    text = content->get<std::string>();
-  } else if (content->is_array()) {
-    for (const Json& part : *content) {
-      if (part.is_object() && part.value("type", std::string()) == "text") {
-        text = part.value("text", std::string());
-        break;
-      }
+  if (content->is_string()) return content->get<std::string>();
+  if (!content->is_array()) return {};
+  for (const Json& part : *content) {
+    if (part.is_object() && part.value("type", std::string()) == "text") {
+      return part.value("text", std::string());
     }
   }
-  size_t first = text.find_first_not_of(" \t\r\n");
-  if (first == std::string::npos || text[first] == '<') return {};
-  // Collapsed to one line: this ends up in a sentence read out in one breath,
-  // and a prompt of twenty lines there would bury everything after it.
+  return {};
+}
+
+// Where the text starts, past the whitespace, or npos when there is none.
+size_t FirstWord(const std::string& text) {
+  return text.find_first_not_of(" \t\r\n");
+}
+
+// One line, whitespace collapsed.  What goes into a sentence read out in one
+// breath -- a prompt of twenty lines there would bury everything after it.
+std::string OneLine(const std::string& text) {
   std::string flat;
   bool space = false;
   for (const char c : text) {
@@ -97,6 +103,13 @@ std::string HumanPrompt(const Json& record) {
   }
   return flat;
 }
+
+// The CLI's own nudge when a turn produced nothing visible.  Machinery, and
+// named in model/transcript.h as such; it is here because this is the layer
+// that knows what the CLI writes in the user's name.
+constexpr std::string_view kNoOutputNudge =
+    "[Your previous response had no visible output";
+constexpr std::string_view kInterruptMark = "[Request interrupted by user";
 
 std::wstring Widen(const std::string& ascii) {
   return std::wstring(ascii.begin(), ascii.end());
@@ -138,6 +151,54 @@ std::wstring ProjectSessionDir(const std::wstring& projectPath) {
   return home + L"\\projects\\" + ProjectKey(projectPath);
 }
 
+std::wstring SessionFilePath(const std::wstring& projectPath,
+                             const std::wstring& id) {
+  const std::wstring directory = ProjectSessionDir(projectPath);
+  if (directory.empty() || id.empty()) return {};
+  return directory + L"\\" + id + L".jsonl";
+}
+
+bool IsInterruptMark(const Json& record) {
+  const std::string text = UserText(record);
+  const size_t first = FirstWord(text);
+  if (first == std::string::npos) return false;
+  return text.compare(first, kInterruptMark.size(), kInterruptMark) == 0;
+}
+
+std::string HumanPromptText(const Json& record) {
+  if (record.value("isMeta", false)) return {};
+  const std::string text = UserText(record);
+  const size_t first = FirstWord(text);
+  if (first == std::string::npos) return {};
+  if (text[first] == '<') return {};
+  if (text.compare(first, kInterruptMark.size(), kInterruptMark) == 0) {
+    return {};
+  }
+  if (text.compare(first, kNoOutputNudge.size(), kNoOutputNudge) == 0) {
+    return {};
+  }
+  return text;
+}
+
+bool ReadSessionRecords(const std::wstring& path, std::vector<Json>* out) {
+  std::string text;
+  if (!ReadWholeFile(path, &text)) return false;
+  out->clear();
+  Json record;
+  std::string error;
+  for (const std::string_view line : SplitLines(text)) {
+    // A line that does not parse is skipped rather than fatal: the file is
+    // being appended to by another process while we read it, so the last line
+    // of it can legitimately be half written.
+    if (!ParseLine(line, &record, &error)) continue;
+    const std::string kind = record.value("type", std::string());
+    if (kind != "user" && kind != "assistant") continue;
+    if (record.value("isSidechain", false)) continue;
+    out->push_back(std::move(record));
+  }
+  return !out->empty();
+}
+
 bool ReadSessionSummary(const std::wstring& path, SessionSummary* out) {
   std::string text;
   if (!ReadWholeFile(path, &text)) return false;
@@ -170,7 +231,7 @@ bool ReadSessionSummary(const std::wstring& path, SessionSummary* out) {
     if (kind != "user" && kind != "assistant") continue;
     spoken = true;
     if (kind == "user") {
-      summary.firstPrompt = HumanPrompt(record);
+      summary.firstPrompt = OneLine(HumanPromptText(record));
       if (!summary.firstPrompt.empty()) break;
     }
   }

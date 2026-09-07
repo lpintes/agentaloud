@@ -72,6 +72,20 @@ bool ResumesConversation(const std::vector<std::wstring>& extraArgs) {
   return false;
 }
 
+std::wstring ResumedConversation(const std::vector<std::wstring>& extraArgs) {
+  // The last one wins, for the same reason the CLI's own parser takes it: two
+  // --resume on one command line is somebody correcting themselves.
+  std::wstring named;
+  for (size_t i = 0; i + 1 < extraArgs.size(); ++i) {
+    if (extraArgs[i] == L"--resume" || extraArgs[i] == L"-r") {
+      named = extraArgs[i + 1];
+    }
+  }
+  // A bare --resume at the end of the line has nothing after it, and neither
+  // has --continue; both leave this empty, which is the honest answer.
+  return named;
+}
+
 namespace {
 
 // Does the caller already say something about which conversation this is?

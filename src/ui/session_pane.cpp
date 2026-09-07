@@ -6,8 +6,10 @@
 
 #include <ctime>
 
+#include "model/history.h"
 #include "model/utf.h"
 #include "proto/ask.h"
+#include "proto/sessions.h"
 #include "ui/ask_dialog.h"
 #include "ui/command_dialog.h"
 #include "ui/permission_dialog.h"
@@ -357,23 +359,55 @@ bool SessionPane::Start(const proto::Session::Options& options,
   details_.model = options.model;
   if (statusBar_) statusBar_->Set(StatusBar::kProject, L"projekt " + project_);
   SetWindowTextW(host_, (L"ClaudeLens — " + path).c_str());
-  // A resumed session opens on an empty transcript, because the stream does
-  // not replay what was said before -- reading it back off disk is
-  // claude-gui-lkk.7 and is not done yet.  An empty window is indis-
-  // tinguishable from a session that failed to resume at all, which is the
-  // very symptom --resume was asked for to cure, so the window says which one
-  // it is.  When the history does get restored this note is what it replaces.
-  //
+  // A resumed session gets nothing of its history from the stream, so it is
+  // read back off the file the CLI keeps.  Read BEFORE the note is written,
+  // because the note has to say which of the two happened -- a resume whose
+  // file cannot be found (--resume takes a session title, and a title is not a
+  // file name) still opens on an empty transcript, and an empty transcript is
+  // indistinguishable from a resume that failed altogether.  That is the very
+  // symptom --resume was asked for to cure.
+  std::vector<proto::Json> history;
+  const bool resuming = proto::ResumesConversation(options.extraArgs);
+  const bool restored =
+      resuming &&
+      proto::ReadSessionRecords(
+          proto::SessionFilePath(
+              options.workingDir,
+              proto::ResumedConversation(options.extraArgs)),
+          &history);
+
   // Both sentences land in ONE note, not two: they are one thought -- which
-  // conversation this is and what of it is missing -- and two notes would be
-  // two blocks to walk through to read it.
+  // conversation this is and what of it is here -- and two notes would be two
+  // blocks to walk through to read it.
   std::wstring note = openingNote;
-  if (proto::ResumesConversation(options.extraArgs)) {
+  if (resuming) {
     if (note.empty()) note = L"Obnovená session.";
-    note +=
-        L" Predchádzajúce ťahy tu nie sú — appka ich zatiaľ z disku nečíta.";
+    note += restored ? L" Predchádzajúce ťahy nasledujú."
+                     : L" Predchádzajúce ťahy tu nie sú — na disku sa "
+                       L"nenašli.";
   }
   if (!note.empty()) Apply(model_.AppendNote(note));
+  // The note first and the history after it, so that the caret -- which starts
+  // at offset zero -- meets the sentence saying which conversation this is
+  // before it meets the conversation.  Invariant 15: the choice has to be said
+  // out loud, and a note under a thousand blocks is not said to anybody.
+  if (restored) {
+    // One edit for the lot.  The replay only ever adds after what is already
+    // in the buffer -- a tool result is filed behind its own call, and every
+    // call it could be filed behind arrived in the same replay -- so the whole
+    // of it is one contiguous insertion at the old end.  Applying a few
+    // thousand edits one at a time would be a slow way to the same text, and
+    // each of them would go through EM_REPLACESEL and the range check.
+    const size_t before = model_.Text().size();
+    const model::HistoryCounts counts =
+        model::RestoreHistory(history, &model_);
+    if (model_.Text().size() > before && counts.blocks > 0) {
+      model::Edit edit;
+      edit.start = before;
+      edit.inserted = model_.Text().substr(before);
+      Apply(edit);
+    }
+  }
   return session_.Start(
       options,
       [this](const proto::Event& event) {

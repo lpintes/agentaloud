@@ -29,6 +29,7 @@
 #include <vector>
 
 #include "model/bookmarks.h"
+#include "model/history.h"
 #include "model/transcript.h"
 #include "model/utf.h"
 #include "proto/ask.h"
@@ -1363,6 +1364,107 @@ void TestSessionSummaryFindsTheHumanPrompt() {
   std::filesystem::remove(file, code);
 }
 
+void TestHistoryRestore() {
+  TEST("history: zo suboru na disku vzniknu tie iste bloky ako zo streamu");
+  namespace fs = std::filesystem;
+  const fs::path file =
+      fs::temp_directory_path() / "claudelens-history-test.jsonl";
+  // Uroven 1: vstup je vymysleny, ale netestuje sa format -- ktore tvary na
+  // disku su, je odmerane nad korpusom (191 suborov, 35 229 zaznamov) a stoji
+  // v claude-gui-lkk.7.4.  Tu sa testuje delenie: co je prompt, co je
+  // strojopis, co je prerusenie a co sa vyhodi este v proto/.
+  WriteFile(
+      file,
+      // Typy, ktore ma disk navyse a stream ich nepozna.  Ked prejdu do
+      // transkriptu, zaratuju sa ako neznamy zaznam -- a prave to je alarm,
+      // ktory sleduje soak.  Musia sa odfiltrovat uz v proto/.
+      "{\"type\":\"queue-operation\"}\n"
+      "{\"type\":\"mode\",\"mode\":\"default\"}\n"
+      // Periodicka sprava CLI o kontexte: isMeta, teda nie prompt.
+      "{\"type\":\"user\",\"isMeta\":true,"
+      "\"message\":{\"content\":\"## Context Usage\"}}\n"
+      // Vypis slash prikazu: otvara sa znackou, teda tiez nie prompt.
+      "{\"type\":\"user\",\"message\":{\"content\":[{\"type\":\"text\","
+      "\"text\":\"<command-name>/bd</command-name>\"}]}}\n"
+      "{\"type\":\"user\",\"message\":{\"content\":\"co robi tento subor\"}}\n"
+      "{\"type\":\"assistant\",\"message\":{\"content\":[{"
+      "\"type\":\"thinking\",\"thinking\":\"treba sa pozriet\"}]}}\n"
+      "{\"type\":\"assistant\",\"message\":{\"content\":[{"
+      "\"type\":\"text\",\"text\":\"Pozriem sa.\"}]}}\n"
+      "{\"type\":\"assistant\",\"message\":{\"content\":[{"
+      "\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"Bash\","
+      "\"input\":{\"command\":\"ls\"}}]}}\n"
+      "{\"type\":\"user\",\"message\":{\"content\":[{"
+      "\"type\":\"tool_result\",\"tool_use_id\":\"toolu_1\","
+      "\"content\":\"a.txt\"}]}}\n"
+      // Znacka CLI, nie veta pouzivatela: ma z nej byt blok Interrupted, ten
+      // isty, aky pise ziva cesta pri Esc.
+      "{\"type\":\"user\",\"message\":{\"content\":"
+      "\"[Request interrupted by user for tool use]\"}}\n"
+      // Rozhovor subagenta.  Vlozeny medzi tieto by sa cital, akoby si Claude
+      // odpovedal sam.
+      "{\"type\":\"assistant\",\"isSidechain\":true,"
+      "\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"subagent\"}]}}\n"
+      "{\"type\":\"last-prompt\"}\n");
+
+  std::vector<proto::Json> records;
+  CHECK(proto::ReadSessionRecords(file.wstring(), &records));
+  CHECK_EQ(records.size(), size_t{8});
+
+  model::Transcript transcript;
+  // Poznamka ide do prepisu prva, tak ako v SessionPane::Start -- kurzor
+  // zacina na nule a vetu o tom, ktory rozhovor to je, ma stretnut skor nez
+  // samotny rozhovor.  Pocty nizsie su teda o tom, co pridala historia.
+  transcript.AppendNote(L"Obnovená session.");
+  const model::HistoryCounts counts =
+      model::RestoreHistory(records, &transcript);
+  CHECK_EQ(counts.records, size_t{8});
+  CHECK_EQ(counts.prompts, size_t{1});
+  CHECK_EQ(counts.blocks, size_t{6});
+
+  std::string problem;
+  CHECK(transcript.CheckInvariants(&problem));
+  // Ziadny neznamy zaznam: disk ich ma vyse desat druhov a ani jeden sa
+  // k transkriptu nedostal.
+  CHECK_EQ(transcript.unknownCount(), size_t{0});
+
+  const std::vector<model::Block>& blocks = transcript.blocks();
+  CHECK_EQ(blocks.size(), size_t{7});
+  CHECK(blocks[0].kind == model::BlockKind::Note);
+  CHECK(blocks[1].kind == model::BlockKind::UserPrompt);
+  CHECK(blocks[2].kind == model::BlockKind::Thinking);
+  CHECK(blocks[3].kind == model::BlockKind::AssistantText);
+  CHECK(blocks[4].kind == model::BlockKind::ToolUse);
+  // Za svojim volanim, nie na konci -- ta iste pravidlo ako naziva.
+  CHECK(blocks[5].kind == model::BlockKind::ToolResult);
+  CHECK_EQ(blocks[5].toolUseId, std::string("toolu_1"));
+  CHECK(blocks[6].kind == model::BlockKind::Interrupted);
+  CHECK_EQ(blocks[1].body, std::wstring(L"co robi tento subor"));
+
+  // Subor bez jedineho zaznamu, z ktoreho by bol blok, nie je historia:
+  // volajuci sa to musi dozvediet skor, nez napise poznamku o tom, co obnovil.
+  WriteFile(file, "{\"type\":\"summary\",\"summary\":\"nic\"}\n");
+  CHECK(!proto::ReadSessionRecords(file.wstring(), &records));
+  CHECK(!proto::ReadSessionRecords(L"C:\\demo\\niet-taketo.jsonl", &records));
+
+  std::error_code code;
+  fs::remove(file, code);
+}
+
+void TestSessionFilePath() {
+  TEST("sessions: cesta k suboru rozhovoru");
+  namespace fs = std::filesystem;
+  const fs::path root = fs::temp_directory_path() / "claudelens-path-test";
+  _wputenv_s(L"CLAUDE_CONFIG_DIR", root.wstring().c_str());
+  CHECK_EQ(proto::SessionFilePath(L"C:\\b\\mluv", L"abc-123"),
+           (root / "projects" / "C--b-mluv" / "abc-123.jsonl").wstring());
+  // --resume berie aj titul session, nie len id.  Cesta z titulu je cesta,
+  // ktora neexistuje, a to je odpoved volajuceho, nie chyba; prazdne id vsak
+  // cestu nema vobec, inak by z neho vznikol adresar s ".jsonl" na konci.
+  CHECK(proto::SessionFilePath(L"C:\\b\\mluv", L"").empty());
+  _wputenv_s(L"CLAUDE_CONFIG_DIR", L"");
+}
+
 void TestProjectKeyAndTime() {
   TEST("sessions: meno adresara projektu a cas do vety");
   // Overene na skutocnom adresari: C:\vcs\github.com\lpintes\claude-gui ->
@@ -1505,6 +1607,9 @@ void SoakOverCorpus(const std::string& root) {
   std::set<std::string> unknown;
   size_t files = 0;
   size_t blocks = 0;
+  size_t restoredFiles = 0;
+  size_t restoredBlocks = 0;
+  size_t restoredPrompts = 0;
   std::string path;
   while (std::getline(list, path)) {
     if (!path.empty() && path.back() == '\r') path.pop_back();
@@ -1541,10 +1646,53 @@ void SoakOverCorpus(const std::string& root) {
       }
       if (!known) unknown.insert(type);
     }
+
+    // Druhy priechod, a je to ina otazka nez ten prvy.  Vyssie sa subor cita
+    // tak, akoby prisiel po drote -- tym sa najdu nezname typy zaznamov.  Tu
+    // sa cita tak, ako ho cita obnovenie session: cez proto::
+    // ReadSessionRecords a model::RestoreHistory, cize aj s promptami, ktore
+    // ziva cesta do transkriptu nedava.  Tvrdi sa to iste, co pri kazdej
+    // davke zo streamu -- ze mapa rozsahov sedi a ze v bufferi nie je riadiaci
+    // znak -- lebo prave to je jedine, co sa nad cudzimi datami tvrdit da.
+    std::vector<proto::Json> shared;
+    if (!proto::ReadSessionRecords(model::Utf16FromUtf8(path), &shared)) {
+      continue;
+    }
+    model::Transcript restored;
+    const model::HistoryCounts counts =
+        model::RestoreHistory(shared, &restored);
+    ++restoredFiles;
+    restoredBlocks += counts.blocks;
+    restoredPrompts += counts.prompts;
+    if (!restored.CheckInvariants(&problem)) {
+      Fail(__FILE__, __LINE__, path + " (obnovenie): " + problem);
+      continue;
+    }
+    // Ziadny neznamy zaznam: proto/ ma zo suboru prepustit prave tie typy,
+    // z ktorych transkript vie robit bloky, a nic ine.
+    if (restored.unknownCount() != 0) {
+      Fail(__FILE__, __LINE__, path + " (obnovenie): neznamy zaznam presiel");
+    }
+    for (wchar_t character : restored.Text()) {
+      if (character == L'\n' || character == L'\t') continue;
+      if (character >= 0x20 && character != 0x7F) continue;
+      char detail[80] = {};
+      std::snprintf(detail, sizeof(detail),
+                    " (obnovenie): riadiaci znak 0x%02X v prepise",
+                    static_cast<unsigned>(character));
+      Fail(__FILE__, __LINE__, path + detail);
+      break;
+    }
   }
 
   std::printf("  %zu suborov, %zu blokov\n", files, blocks);
+  std::printf("  obnovenie: %zu suborov, %zu blokov, %zu promptov\n",
+              restoredFiles, restoredBlocks, restoredPrompts);
   CHECK(files > 0);
+  CHECK(restoredFiles > 0);
+  // Prompty su prave to, co obnovenie vie a ziva cesta zo streamu nie -- keby
+  // ich nebolo ani jeden, filter na strojopis by bral vsetko.
+  CHECK(restoredPrompts > 0);
   if (!unknown.empty()) {
     std::string types;
     for (const std::string& type : unknown) types += " " + type;
@@ -1583,6 +1731,8 @@ int main(int argc, char** argv) {
   TestQuestionsReadAsText();
   TestSessionPickIgnoresMtime();
   TestSessionSummaryFindsTheHumanPrompt();
+  TestHistoryRestore();
+  TestSessionFilePath();
   TestProjectKeyAndTime();
   TestFixtureBasic(fixtures);
   TestFixtureDenied(fixtures);

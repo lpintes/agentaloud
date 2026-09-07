@@ -17,6 +17,9 @@
 // have no such gap: a headless session writes one exactly like any other.
 
 #include <string>
+#include <vector>
+
+#include "proto/jsonl.h"
 
 namespace proto {
 
@@ -54,6 +57,56 @@ std::wstring ProjectSessionDir(const std::wstring& projectPath);
 // end in every file measured, so a two-megabyte session costs a read and about
 // five parses.  A whole project of 27 sessions, 24 MB of them, was 35 ms.
 bool ReadSessionSummary(const std::wstring& path, SessionSummary* out);
+
+// Where one conversation of this project lives, whether or not the file is
+// there.  --resume also takes a session TITLE, and a title is not a file name,
+// so a path built from one simply will not exist -- which is an answer for the
+// caller, not an error to report.
+std::wstring SessionFilePath(const std::wstring& projectPath,
+                             const std::wstring& id);
+
+// The records of one session file that a transcript can be built from, in the
+// order they were written.
+//
+// Filtered here and not by the caller, because which types the disk format and
+// the stream have in common is this layer's knowledge: they share `user` and
+// `assistant` and nothing else that makes a block.  The disk carries a dozen
+// more types of its own (attachment, queue-operation, mode, permission-mode,
+// file-history-snapshot ...) and lacks system/init, result and
+// rate_limit_event entirely.  Handed to model/ unfiltered they would all count
+// as records of an unknown type, which is a thing the soak tests watch for --
+// the alarm would then be ringing for the ordinary case.
+//
+// Records of a subagent's conversation (isSidechain) are left out: they are a
+// different conversation that happens to be filed here, and interleaved into
+// this one they would read as if Claude had answered itself.  Measured over
+// this machine's 191 session files, not one record has the flag set, so the
+// line below has never yet had anything to do.
+//
+// False when the file cannot be read or holds no conversation at all, which is
+// what the caller needs to know BEFORE it says out loud what it restored.
+bool ReadSessionRecords(const std::wstring& path, std::vector<Json>* out);
+
+// The text a human typed into this `user` record, or empty when nobody did --
+// including when the record is not a `user` one at all.  An `assistant` record
+// keeps its text in the very same place, and taken for a prompt it would put
+// the answer in the transcript twice, once in each speaker's name.
+//
+// A user record is also where the CLI files tool results, the echo of a slash
+// command, the caveat a hook printed and its own periodic context report.
+// None of those was typed by anybody, and a transcript that showed them as
+// prompts would be putting words in the reader's mouth.  The machine-written
+// ones are told apart by their opening: a tag ("<command-name>",
+// "<local-command-stdout>", "<local-command-caveat>") or the isMeta flag.
+std::string HumanPromptText(const Json& record);
+
+// Is this the CLI's own mark that a turn was cut short -- "[Request
+// interrupted by user]", with or without "for tool use" on the end?
+//
+// It arrives as user text like a prompt does, and it is not one; the
+// transcript has a block kind of its own for it, the same one the live path
+// writes when the reader presses Esc.
+bool IsInterruptMark(const Json& record);
 
 // The project's newest conversation, or false when it has none.
 //

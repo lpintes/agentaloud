@@ -171,6 +171,13 @@ std::wstring NewSessionId();
 // conversation without continuing one.
 bool ResumesConversation(const std::vector<std::wstring>& extraArgs);
 
+// WHICH conversation --resume names, or empty.  Empty is not the same as "not
+// resuming": --continue has no value to give, and --resume takes a session
+// TITLE as readily as an id, in which case what comes back is not a file name
+// and the lookup that uses it will find nothing.  Both are the caller's
+// business -- history that cannot be found is a sentence to say, not an error.
+std::wstring ResumedConversation(const std::vector<std::wstring>& extraArgs);
+
 }  // namespace proto
 
 #endif

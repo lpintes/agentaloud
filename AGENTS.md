@@ -626,14 +626,17 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     sa hláškou „--resume requires a valid session ID or session title when used
     with --print" a ťah skončí `result`om s `is_error` (odmerané 6. 9. 2026).
 
-    **Obnovená session otvára prázdny prepis a musí to povedať.** Stream
-    históriu neposiela — čítanie z disku je claude-gui-lkk.7 — a prázdne okno
-    sa nedá odlíšiť od session, ktorá sa neobnovila, čiže práve od symptómu,
-    kvôli ktorému sa `--resume` písalo. Preto `ui::SessionPane::Start` pri
-    `proto::ResumesConversation(extraArgs)` zapíše `model::Transcript::
-    AppendNote` — vlastný hlas appky v prepise, `BlockKind::Note`, nie
-    `AssistantText`: to by boli slová vložené Claudovi do úst. Keď sa história
-    z disku raz načíta, nahradí práve tú poznámku.
+    **Obnovená session musí povedať, čo v prepise je.** Stream históriu
+    neposiela, takže bez čítania z disku (invariant 18) je okno prázdne, a
+    prázdne okno sa nedá odlíšiť od session, ktorá sa neobnovila, čiže práve od
+    symptómu, kvôli ktorému sa `--resume` písalo. Preto `ui::SessionPane::
+    Start` pri `proto::ResumesConversation(extraArgs)` zapíše
+    `model::Transcript::AppendNote` — vlastný hlas appky v prepise,
+    `BlockKind::Note`, nie `AssistantText`: to by boli slová vložené Claudovi
+    do úst. Poznámka povie, ktorá z dvoch možností nastala: „Predchádzajúce
+    ťahy nasledujú", alebo „tu nie sú — na disku sa nenašli". Tá druhá je
+    bežný stav, nie chyba: `--resume` berie aj titul session a titul nie je
+    meno súboru.
 
     `ResumesConversation` je pritom **užšia otázka** než `SaysWhichConversation`,
     ktorou sa riadi vlastné id vyššie: `--session-id` rozhovor pomenúva, ale
@@ -760,6 +763,54 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     znaku by mal na tejto klávesnici nesprávne meno — je to tá istá pasca ako
     pri číslach v záložkách. Funkčný kláves je polohový, negeneruje `WM_CHAR`
     a stojí vedľa F2, ktorý otvára ten druhý dialóg.
+
+18. **História sa z disku prehráva tými istými volaniami ako živý ťah, a
+    `user` záznam nie je to, čo sa zdá.** Stream po `--resume` pošle len to,
+    čo príde odteraz, takže predchádzajúce ťahy sa čítajú zo súboru, ktorý CLI
+    vedie v `~/.claude/projects/<kľúč>/<id>.jsonl`. Švík vedie tade, kade
+    vedie vedomosť: `proto::ReadSessionRecords` vie, **čo je v tom súbore**
+    (prepustí `user` a `assistant`, teda práve tie typy, ktoré disk a stream
+    zdieľajú, a zahodí `isSidechain` — rozhovor subagenta vložený medzi tieto
+    by znel, akoby si Claude odpovedal sám); `model::RestoreHistory` vie,
+    **ako sa zo záznamu robí blok**, a robí to tými istými metódami
+    `Transcript`u ako živá cesta. Čokoľvek iné by bolo druhé vykreslenie tej
+    istej konverzácie a tie dve by sa rozišli bez svedka.
+
+    Filtrovať sa **musí v `proto/`**, nie až v modeli: nezdieľané typy by inak
+    prešli ako záznam neznámeho typu, a to je práve ten poplach, ktorý stráži
+    soak. Zvonil by pre úplne bežný prípad.
+
+    Jedna vec sa prehráva inak, a je to práve tá, kvôli ktorej to nie je cyklus
+    nad `Transcript::Append`: **prompt je na disku text v `user` zázname, a
+    `Append` z tých záznamov zámerne berie len výsledky nástrojov.** Živý
+    prompt tam dáva `AppendUserPrompt` vo chvíli odoslania — takže ho tam dáva
+    aj obnovenie, tými istými dverami, len zo záznamu namiesto z editačného
+    poľa.
+
+    A `user` záznam **nie je vždy prompt**. Odmerané 7. 9. 2026 nad 191 súbormi
+    (35 229 záznamov `user`+`assistant`): stroj tam píše `<command-name>`,
+    `<local-command-stdout>`, `<local-command-caveat>`, periodickú správu
+    `## Context Usage` s `isMeta`, a dve značky v hranatých zátvorkách —
+    `[Request interrupted by user…]` (65×) a `[Your previous response had no
+    visible output…]`. Rozhoduje `proto::HumanPromptText`; z prerušenia
+    vzniká `BlockKind::Interrupted`, teda ten istý blok, aký píše živá cesta
+    pri Esc, lebo odpoveď useknutá uprostred sa inak neskôr číta ako odpoveď,
+    ktorá skončila sama.
+
+    **Text sa musí prečítať tomu, komu patrí.** `assistant` záznam má text na
+    tom istom mieste ako `user`, takže si typ overuje `HumanPromptText` sám.
+    Kým to nerobil, každá odpoveď pristála v prepise dvakrát — raz ako
+    „claude:", raz ako „you:" — a vyzeralo to ako konverzácia, len nie ako tá,
+    ktorá sa stala. Chytil to test, nie čítanie.
+
+    Poznámka podľa invariantu 14 ide **pred** históriu a história za ňu:
+    kurzor začína na nule a vetu o tom, ktorý rozhovor to je, má stretnúť skôr
+    než rozhovor. Vkladá sa **jednou** úpravou, nie jednou na blok — prehratie
+    pridáva výhradne za to, čo v buffri je (výsledok nástroja sa zakladá za
+    svoje volanie a to volanie prišlo v tom istom prehratí), takže je to jeden
+    súvislý vsuv na starom konci. Cena, odmeraná na najväčšom súbore korpusu
+    (4,18 MB, 1351 záznamov): 80 ms čítanie a parsovanie, 38 ms prehratie,
+    93 575 znakov prepisu.
 
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa
