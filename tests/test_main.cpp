@@ -13,6 +13,10 @@
 //      NESMIEM: rucne napisana fixtura by testovala moju predstavu o formate.
 //      Vyroba: python tools/make_fixtures.py
 //
+//      Jedna z nich, thinking.jsonl, je ZAMRZNUTA -- make_fixtures.py ju
+//      nepise a pregenerovat sa uz neda, lebo CLI prestalo posielat text
+//      premyslania.  Viz TestFixtureThinking.
+//
 //      Jedna z nich, disk.jsonl, nie je stream: je to SUBOR SESSION, ktory
 //      CLI vedie v ~/.claude/projects, teda ten format, z ktoreho sa obnovuje
 //      historia po --resume.  Su to dva rozne formaty (viz kKnownDiskOnlyTypes
@@ -1511,9 +1515,13 @@ void TestFixtureBasic(const std::string& dir) {
 
   const auto counts = CountKinds(transcript);
   CHECK(counts.count(model::BlockKind::AssistantText) > 0);
-  CHECK(counts.count(model::BlockKind::Thinking) > 0);
   CHECK(counts.count(model::BlockKind::ToolUse) > 0);
   CHECK(counts.count(model::BlockKind::ToolResult) > 0);
+  // Thinking sa tu NEOCAKAVA, a nie je to zlava.  CLI od verzie 2.1.260
+  // posiela bloky `thinking` s prazdnym textom -- ostane z nich len podpis --
+  // takze Transcript z nich blok nespravi a spravit ani nema.  Fixtura, ktora
+  // premyslanie este nesie, je thinking.jsonl a je zamrznuta; testuje ju
+  // TestFixtureThinking.  Podrobnosti su v claude-gui-lkk.35.
 
   // Stream nema typ, o ktorom by sme nevedeli.  Toto je tá kontrola, ktora
   // ohlasi, ze Anthropic pridal zaznam -- ale az po pregenerovani fixtury,
@@ -1573,6 +1581,45 @@ void TestFixtureDenied(const std::string& dir) {
       // Obsah, nie mechanika: zamietnutie sa nikdy nezbaluje.
       CHECK(!block.collapsed);
       CHECK(!model::IsMechanism(block.kind));
+    }
+  }
+}
+
+void TestFixtureThinking(const std::string& dir) {
+  TEST("fixtura thinking: blok premyslania s obsahom, zamrznuty");
+  // ZAMRZNUTA FIXTURA, a jedina taka.  make_fixtures.py ju nikdy nezapisuje
+  // a nesmie sa pregenerovat, lebo pregenerovat sa uz neda: CLI prestalo
+  // posielat text premyslania.  Odmerane nad korpusom -- 197 suborov, cez
+  // 6000 casti `thinking`, z toho text ma 32 a vsetkych 32 je z CLI 2.1.258
+  // a modelu haiku (2. 9. 2026); na 2.1.260 a 2.1.263 uz ma haiku nulu, a
+  // opus a sonnet nemali text ani raz, na ziadnej verzii.
+  //
+  // Preco to teda v repozitari zostava: `MakeThinking` a vykreslenie bloku
+  // premyslania v appke stale su, a toto je jediny skutocny zaznam, na ktorom
+  // sa daju overit.  Je to dokaz o tvare, nie zaruka, ze sa ten tvar vrati.
+  bool ok = false;
+  const auto records = ReadJsonl(dir + "/thinking.jsonl", &ok);
+  if (!ok) {
+    Fail(__FILE__, __LINE__,
+         "chyba " + dir + "/thinking.jsonl -- NEGENERUJE sa, je zamrznuta; "
+         "vrat ju z gitu");
+    return;
+  }
+
+  model::Transcript transcript;
+  std::string problem;
+  if (!Replay(records, &transcript, &problem)) {
+    Fail(__FILE__, __LINE__, "invariant: " + problem);
+    return;
+  }
+
+  const auto counts = CountKinds(transcript);
+  CHECK(counts.count(model::BlockKind::Thinking) > 0);
+  // A s obsahom.  Prave prazdny text je to, co sa zmenilo, takze fixtura,
+  // z ktorej by ostali same prazdne bloky, by uz nedokazovala nic.
+  for (const model::Block& block : transcript.blocks()) {
+    if (block.kind == model::BlockKind::Thinking) {
+      CHECK(!block.body.empty());
     }
   }
 }
@@ -1827,6 +1874,7 @@ int main(int argc, char** argv) {
   TestProjectKeyAndTime();
   TestFixtureBasic(fixtures);
   TestFixtureDenied(fixtures);
+  TestFixtureThinking(fixtures);
   TestFixtureDisk(fixtures);
 
   if (const char* corpus = std::getenv("CLAUDELENS_CORPUS")) {

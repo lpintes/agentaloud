@@ -131,12 +131,19 @@ chceš vidieť. Fixtúry sú tri a `disk.jsonl` nie je stream, ale **súbor sess
 z `~/.claude/projects`** — ten formát, z ktorého sa obnovuje história po
 `--resume`. Bez nej by tú cestu testoval iba soak, teda nikto, kto ho nepúšťa.
 
-**Fixtúra je artefakt, nie výstup, ktorý sa dá zopakovať.** Pregenerovanie je
-lotéria: pri tomto behu haiku nepremýšľal a `basic.jsonl` prišla o všetky bloky
-`Thinking`, čiže o pokrytie, ktoré dovtedy mala. Preto sa vrátila pôvodná a
-nová zostala len na disku (claude-gui-lkk.35). Z toho plynie aj to, že každý súbor
-má vlastný `Scrubber`: spoločné číslovanie identifikátorov by dve fixtúry
-zviazalo tak, že zahodenie jednej by zneplatnilo druhú.
+**Fixtúra je artefakt a nie každá sa dá zopakovať.** `basic.jsonl`,
+`denied.jsonl` a `disk.jsonl` sa pregenerovať smú; `thinking.jsonl` **nie** —
+a nie preto, že by sa nechcelo, ale preto, že sa to už nedá. CLI prestalo
+posielať text premýšľania: bloky `thinking` chodia s prázdnym textom a samotným
+podpisom, takže `Transcript` z nich blok nespraví — a je to správne,
+„premýšľanie (0 riadkov)" je šum. Odmerané nad korpusom: z vyše 6000 častí
+`thinking` v 197 súboroch má text **32**, a všetkých 32 je z CLI 2.1.258
+a modelu haiku (2. 9. 2026); od 2.1.260 má haiku nulu a opus so sonnetom
+nemali text ani raz, na žiadnej verzii. `thinking.jsonl` je teda jediný
+skutočný záznam premýšľania s obsahom, ktorý existuje, a preto stojí bokom od
+`basic.jsonl` (claude-gui-lkk.35). Každý súbor má zároveň vlastný `Scrubber`:
+spoločné číslovanie identifikátorov by fixtúry zviazalo tak, že zahodenie
+jednej by zneplatnilo druhú.
 
 **Do fixtúry nesmie vojsť to, čo CLI poskladalo z tohto stroja.** Diskový
 formát má typ `attachment` a v ňom sedí globálny `CLAUDE.md` používateľa, jeho

@@ -11,6 +11,16 @@ CLI, a diff vyslednej fixtury je prave ta informacia, ktoru chces vidiet.
 Preco sa fixtury nepisu rucne: rucne napisana fixtura testuje moju predstavu
 o formate, nie format.  To je presne ten sposob zlyhania, ktory ma stat v ceste.
 
+JEDNU FIXTURU TENTO SKRIPT NEPISE a nesmie: tests/fixtures/thinking.jsonl.
+Je zamrznuta, lebo pregenerovat sa uz neda -- CLI prestalo posielat text
+premyslania a posiela bloky `thinking` s prazdnym textom a samotnym podpisom.
+Odmerane nad korpusom: z vyse 6000 casti `thinking` v 197 suboroch ma text 32
+a vsetkych 32 je z CLI 2.1.258 a modelu haiku (2. 9. 2026); od 2.1.260 uz ma
+haiku nulu a opus so sonnetom nemali text nikdy.  thinking.jsonl je teda
+jediny skutocny zaznam premyslania s obsahom, ktory existuje, a preto sa
+zachovava oddelene od basic.jsonl, ktora sa pregenerovat smie
+(claude-gui-lkk.35).
+
 Okrem streamu sa zachytava aj SUBOR SESSION NA DISKU (disk.jsonl).  Nie je to
 ten isty format: disk ma vyse desat vlastnych typov zaznamov, nema system/init
 ani result, a spolocne su len user a assistant.  Prave z neho sa obnovuje
