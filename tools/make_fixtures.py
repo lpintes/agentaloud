@@ -27,13 +27,24 @@ ani result, a spolocne su len user a assistant.  Prave z neho sa obnovuje
 historia po --resume, takze bez zafixovanej fixtury by tu cestu testoval len
 soak nad sukromnym korpusom -- teda nikto, kto soak nepusta.
 
+Do fixtury nesmie vojst to, co CLI poskladalo z tohto stroja: meno uctu
+v cestach, zoznam nainstalovanych pluginov, skillov, MCP serverov a agentov.
+Prepisuje ich Scrubber (viz path_rewrites, MACHINE_INVENTORY_LISTS
+a MCP_TOOL_PREFIX) a cele je to vysvetlene v CLAUDE.md pri odseku o fixturach.
+
 Beh:  python tools/make_fixtures.py [--out tests/fixtures]
+
+Prezenie uz existujucu fixturu scrubberom znova, bez CLI a bez kreditu -- teda
+aj jedina cesta, ktorou sa smie siahnut na thinking.jsonl:
+
+      python tools/make_fixtures.py --rescrub tests/fixtures/thinking.jsonl
 """
 import argparse
 import datetime
 import glob
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -91,10 +102,64 @@ PROFILES = {
 }
 
 # Polia, ktorych hodnota sa meni od behu k behu a o formate nehovoria nic.
+# messaging_socket_path je v tom zozname aj preto, ze je to meno pipe s hasom
+# tohto stroja -- volatilne a zaroven identifikujuce.
 VOLATILE_SCALARS = {
     "duration_api_ms", "duration_ms", "total_cost_usd",
     "signature", "pid", "cwd", "resetsAt", "overageResetsAt",
+    "messaging_socket_path",
 }
+
+# Polia system/init, ktorych OBSAH je inventar tohto stroja, nie tvar protokolu:
+# ktore pluginy, skilly, MCP servery a agentov ma autor nainstalovanych.  Kluc
+# zostava a hodnota sa vyprazdni, takze fixtura dalej hovori, ze system/init
+# tieto polia nesie a ze su to polia -- co je jedine, co o nich vie.
+#
+# Overene grepom nad src/ a tests/: ani jedno z nich necita appka ani test.
+# Appka zo system/init berie model, permissionMode a session_id, nic viac
+# (ui::SessionPane::ShowSessionFacts).  Pocet slash prikazov, ktory bol na
+# tomto zazname zaujimavy, je zapisany v invariante 17, nie vo fixture.
+#
+# Sem NEpatri 'tools': mena nastrojov sa v tom istom subore objavuju v blokoch
+# tool_use (Bash, Read, Edit), takze prazdny zoznam by fixtura sama sebe
+# odporovala.  Rezne sa v nom inde -- viz MCP_TOOL_PREFIX nizsie.
+MACHINE_INVENTORY_LISTS = {
+    "plugins", "mcp_servers", "skills", "slash_commands", "agents",
+    "terminal_slash_commands",
+}
+
+# Zoznam 'tools' je dvoch druhov naraz: vstavane nastroje CLI (Bash, Read,
+# Edit) su tvar protokolu a v fixture sa aj pouzivaju, kdezto mena s prefixom
+# mcp__ su MCP servery TOHTO stroja -- v basic.jsonl ich bolo 104 a vsetkych
+# 104 len tu, v system/init, ani jedno v bloku tool_use.  Vyhadzuju sa teda
+# ony a zoznam zostava.
+MCP_TOOL_PREFIX = "mcp__"
+
+
+def path_rewrites():
+    """(regex, nahrada) pre kazdy tvar, v ktorom sa v zaznamoch objavi meno
+    uctu alebo nahodne meno hrackarskeho repozitara.
+
+    Cesty sa NEvyhadzuju, len sa prepisu.  Argument Read a filePath vo
+    vysledku nastroja su obsah zaznamu -- prazdna cesta by z fixtury spravila
+    nieco, co CLI nikdy neposlalo.  Placeholder je platna windowsova cesta
+    z toho isteho dovodu, z ktoreho je cas platny ISO 8601.
+
+    Tvary su tri, lebo CLI ich pise tromi sposobmi: s obratenymi lomkami,
+    s lomkami dopredu, a s pomlckami namiesto oboch (kluc adresara projektu
+    v ~/.claude/projects -- ProjectKey v proto/sessions.h)."""
+    home = os.path.expanduser("~")
+    dashed = re.sub(r"[^A-Za-z0-9]", "-", home)
+    return [
+        (re.compile(re.escape(home), re.IGNORECASE), r"C:\\Users\\user"),
+        (re.compile(re.escape(home.replace("\\", "/")), re.IGNORECASE),
+         "C:/Users/user"),
+        (re.compile(re.escape(dashed), re.IGNORECASE), "C--Users-user"),
+        # Meno docasneho adresara je nahodne pri kazdom behu, takze bez tohto
+        # by sa fixtura lisila aj tam, kde sa nic nezmenilo.
+        (re.compile(r"claudelens-fixture-[A-Za-z0-9_]+"),
+         "claudelens-fixture-0000"),
+    ]
 
 # Timestamp sa NEnahradzuje retazcom "<scrubbed>", hoci volatilny je.  Diskovy
 # format je jediny, kde na case zalezi: podla neho sa vybera najnovsia session
@@ -238,6 +303,18 @@ class Scrubber:
     def __init__(self):
         self.mapping = {}
         self.stamps = {}
+        self.paths = path_rewrites()
+        self.rewritten = 0
+
+    def text_for(self, value):
+        """Meno uctu a nahodne meno hrackarskeho repozitara von z LUBOVOLNEHO
+        retazca, nie len z poli, ktore vyzeraju ako cesta.  Cesta sa objavuje
+        v argumente nastroja, vo vysledku nastroja, v memory_paths aj v ceste
+        pluginu, a vymenovat tie polia by znamenalo minut to, ktore pribudne."""
+        for pattern, replacement in self.paths:
+            value, count = pattern.subn(replacement, value)
+            self.rewritten += count
+        return value
 
     def stamp_for(self, value):
         if value not in self.stamps:
@@ -261,6 +338,12 @@ class Scrubber:
         if isinstance(node, dict):
             return {k: self.walk(v, k) for k, v in node.items()}
         if isinstance(node, list):
+            if key in MACHINE_INVENTORY_LISTS:
+                return []
+            if key == "tools":
+                node = [v for v in node
+                        if not (isinstance(v, str)
+                                and v.startswith(MCP_TOOL_PREFIX))]
             return [self.walk(v, key) for v in node]
         if key in ID_FIELDS and isinstance(node, str) and node:
             return self.id_for(node)
@@ -273,6 +356,8 @@ class Scrubber:
                 return node
             if isinstance(node, (int, float)):
                 return 0
+        if isinstance(node, str):
+            return self.text_for(node)
         return node
 
 
@@ -337,6 +422,26 @@ def write_fixture(lines, out_dir, name):
             written += 1
     print("zapisane %d zaznamov do %s" % (written, target))
     print("prepisanych identifikatorov:", len(scrubber.mapping))
+    print("prepisanych ciest:", scrubber.rewritten)
+
+
+def rescrub(path):
+    """Prezenie uz existujucu fixturu scrubberom este raz, bez CLI a bez
+    kreditu.
+
+    Je to jedina cesta k thinking.jsonl, ktora sa smie pouzit: pregenerovat sa
+    neda (text premyslania uz CLI neposiela), ale prepisat retazce v nej sa
+    da -- tvar zaznamu sa tym nemeni.  To iste plati pre basic.jsonl
+    a denied.jsonl, len tam ide o usetreny kredit, nie o nenahraditelnost.
+
+    Opakovanie je bezpecne: id aj casy dostavaju nahrady v poradi prveho
+    vyskytu, a to poradie je v uz zapisanej fixture rovnake ako pri jej vzniku,
+    takze druhy beh nad nezmenenym suborom nema co zmenit."""
+    with open(path, encoding="utf-8") as handle:
+        lines = [line.strip() for line in handle if line.strip()]
+    out_dir = os.path.dirname(path) or "."
+    name = os.path.splitext(os.path.basename(path))[0]
+    write_fixture(lines, out_dir, name)
 
 
 def main():
@@ -344,7 +449,16 @@ def main():
     parser.add_argument("--out", default=os.path.join("tests", "fixtures"))
     parser.add_argument("--profile", action="append", choices=list(PROFILES),
                         help="opakovatelne; bez neho sa vyrobia vsetky")
+    parser.add_argument("--rescrub", action="append", metavar="SUBOR",
+                        help="prezenie existujucu fixturu scrubberom znova "
+                             "a nespusti CLI; opakovatelne")
     args = parser.parse_args()
+
+    if args.rescrub:
+        # Vylucne s --profile: prve nesiaha na CLI a druhe na nom stoji.
+        for path in args.rescrub:
+            rescrub(path)
+        return 0
 
     for name in args.profile or list(PROFILES):
         stream, disk = capture_profile(name)

@@ -236,6 +236,35 @@ pravidlom ako hooky: je to vlastnosť stroja, nie formátu, a `ReadSessionRecord
 ich aj tak neprepúšťa. Zlyhalo by to ticho — fixtúra vyzerá ako fixtúra a
 nikto ju nečíta celú.
 
+To isté pravidlo má **tri ďalšie vrstvy a všetky sedia v `system/init`**, ktorý
+`attachment` nie je a zahodiť sa nedá:
+
+  • **Meno účtu v cestách.** `Scrubber.text_for` ho prepisuje v každom reťazci,
+    nie v poliach, ktoré vyzerajú ako cesta — cesta je aj v argumente nástroja,
+    aj vo výsledku, aj v `memory_paths`, aj v ceste pluginu, a vymenovať tie
+    polia znamená minúť to, ktoré pribudne. Tvary sú tri, lebo CLI ich píše
+    tromi spôsobmi: `C:\Users\…`, `C:/Users/…` a s pomlčkami (kľúč adresára
+    v `~/.claude/projects`). Cesta sa **neškrtá, len prepisuje** — z toho
+    istého dôvodu ako čas nižšie.
+  • **Inventár stroja.** `plugins`, `mcp_servers`, `skills`, `slash_commands`,
+    `agents` a `terminal_slash_commands` sú zoznam toho, čo má autor
+    nainštalované. Kľúč zostáva a hodnota sa vyprázdni, takže fixtúra ďalej
+    hovorí, že to pole existuje a že je to pole — čo je jediné, čo o ňom
+    appka vie. Overené grepom: zo `system/init` číta `ShowSessionFacts`
+    `model`, `permissionMode` a `session_id`, nič viac.
+  • **`tools` je dvoch druhov naraz.** `Bash`, `Read` a `Edit` sú tvar
+    protokolu a v tej istej fixtúre sa aj používajú, kdežto mená s prefixom
+    `mcp__` sú MCP servery tohto stroja — v `basic.jsonl` ich bolo 104
+    a všetkých 104 iba tu, ani jedno v bloku `tool_use`. Preto sa vyhadzujú
+    ony a zoznam zostáva.
+
+Pregenerovať sa kvôli tomu nemuselo nič: `python tools/make_fixtures.py
+--rescrub <súbor>` prežene existujúcu fixtúru scrubberom znova, bez CLI
+a bez kreditu. Je to jediná cesta k `thinking.jsonl`, ktorá sa smie použiť —
+prepísať reťazce v nej tvar záznamu nemení. Opakovanie je bezpečné: id aj časy
+dostávajú náhrady v poradí prvého výskytu a to poradie je v zapísanej fixtúre
+rovnaké ako pri jej vzniku.
+
 Čas sa naopak **neškrtá, len sa nahrádza stabilným a platným** ISO 8601.
 Diskový formát je jediný, kde na čase záleží (invariant 15), a `<scrubbed>`
 namiesto času by tú vlastnosť otestovať nedal.
