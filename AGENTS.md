@@ -716,22 +716,27 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     sa hláškou „--resume requires a valid session ID or session title when used
     with --print" a ťah skončí `result`om s `is_error` (odmerané 6. 9. 2026).
 
-    **Obnovená session musí povedať, čo v prepise je.** Stream históriu
-    neposiela, takže bez čítania z disku (invariant 18) je okno prázdne, a
-    prázdne okno sa nedá odlíšiť od session, ktorá sa neobnovila, čiže práve od
-    symptómu, kvôli ktorému sa `--resume` písalo. Preto `ui::SessionPane::
-    Start` pri `proto::ResumesConversation(extraArgs)` zapíše
-    `model::Transcript::AppendNote` — vlastný hlas appky v prepise,
-    `BlockKind::Note`, nie `AssistantText`: to by boli slová vložené Claudovi
-    do úst. Poznámka povie, ktorá z dvoch možností nastala: „Predchádzajúce
-    ťahy nasledujú", alebo „tu nie sú — na disku sa nenašli". Tá druhá je
-    bežný stav, nie chyba: `--resume` berie aj titul session a titul nie je
-    meno súboru.
+    **Obnovená session o sebe nepovie nič, a je to zámer.** Stream históriu
+    neposiela, takže sa číta z disku (invariant 18) — a čo sa prečítalo, stojí
+    v prepise, kde sa to dá prečítať. Poznámka pred históriou tam bola
+    a vypadla (8. 9. 2026): „Predchádzajúce ťahy nasledujú" hovorí to isté, čo
+    o riadok nižšie hovorí sám prepis, a obnovenie session je vedomý úkon, čiže
+    odpoveď na nepoloženú otázku. Kto chce vedieť, ktorý rozhovor to je, prejde
+    Ctrl+Home na prvý prompt; ten to povie lepšie než veta o ňom.
+
+    Prázdny prepis po `--resume` je preto bežný stav bez hlášky: `--resume`
+    berie aj titul session, titul nie je meno súboru, a súbor sa teda nemusí
+    nájsť. S poznámkou aj bez nej je odpoveď tá istá — v prepise nič nie je.
+
+    S poznámkou zmizol `Transcript::AppendNote` aj `BlockKind::Note`, teda
+    vlastný hlas appky v prepise. Keby sa niekedy vracal, patrí sem s ním aj
+    dôvod, prečo `AssistantText` nestačí: boli by to slová vložené Claudovi
+    do úst.
 
     `ResumesConversation` je pritom **užšia otázka** než `SaysWhichConversation`,
     ktorou sa riadi vlastné id vyššie: `--session-id` rozhovor pomenúva, ale
-    v žiadnom nepokračuje, takže prepis po ňom je prázdny oprávnene a poznámka
-    by po ňom klamala.
+    v žiadnom nepokračuje, takže po ňom nie je čo čítať z disku a prepis je
+    prázdny oprávnene.
 
 15. **`-c` sa CLI neposiela; najnovšiu session si appka vyberie sama.** CLI
     odpovedá na otázku „ktorý rozhovor bol v tomto adresári posledný" z
@@ -753,17 +758,27 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     spoločné. Čas sa preto hľadá odzadu, prvý záznam, ktorý ho má. ISO 8601
     so `Z` sa dá triediť ako text, takže sa nikdy neparsuje.
 
-    A **ktorú session otvorilo, musí appka povedať** — čas a prvý prompt, nie
-    id: id nikomu nepovie, v čom pokračuje, a prepis je prázdny rovnako pri
-    správnej aj pri nesprávnej voľbe. Ide to do tej istej poznámky ako
-    invariant 14, jednou vetou, nie dvoma blokmi. Prvý prompt je ten, ktorý
-    napísal **človek**: `user` záznam nesie aj výsledky nástrojov a výpisy
-    slash príkazov (tie sa poznajú podľa značky na začiatku) a session
-    pomenovaná niečím, čo nikto nepovedal, je horšia než nepomenovaná.
+    A **ktorú session otvorilo, appka nehovorí.** Pôvodne to bola veta o čase
+    a prvých slovách rozhovoru; vypadla s poznámkou (invariant 14), lebo prvý
+    prompt toho rozhovoru je prvý blok prepisu a Ctrl+Home k nemu vedie —
+    povedať to isté ešte raz vetou navyše je len blok, cez ktorý sa treba
+    prejsť.
+
+    Preto sa **projekt bez jediného rozhovoru správa presne ako prázdny
+    projekt**: `-c` v ňom nemá čo obnoviť, začne sa nová session a nepovie sa
+    nič. Hláška „tu zatiaľ žiadny rozhovor nie je" by rozlišovala dva stavy,
+    ktoré sú pre čitateľa jeden a ten istý — prázdne okno, do ktorého sa píše
+    prvý prompt.
 
     Explicitné `--resume <id>` vyhráva nad `-c` — kto napísal id, vie, čo chce.
-    A projekt bez jediného rozhovoru nie je chyba: začne sa nový a poznámka to
-    povie.
+
+    `SessionSummary::firstPrompt` a `proto::LocalTimeText` tým prišli o jediného
+    volajúceho v produkčnom kóde a zostali len pod testami. Nezmazali sa: sú to
+    práve tie dve veci, ktorými sa bude session v zozname pomenúvať
+    (claude-gui-lkk.7), a prvý prompt je pritom ten, ktorý napísal **človek** —
+    `user` záznam nesie aj výsledky nástrojov a výpisy slash príkazov (tie sa
+    poznajú podľa značky na začiatku), takže session pomenovaná niečím, čo
+    nikto nepovedal, by bola horšia než nepomenovaná.
 
 16. **Appka nemá kam písať, a keď má niečo povedať pred oknom, musí si to
     miesto vypýtať.** `-mwindows` znamená žiadnu konzolu, teda ani stdout, ani
@@ -893,9 +908,20 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     „claude:", raz ako „you:" — a vyzeralo to ako konverzácia, len nie ako tá,
     ktorá sa stala. Chytil to test, nie čítanie.
 
-    Poznámka podľa invariantu 14 ide **pred** históriu a história za ňu:
-    kurzor začína na nule a vetu o tom, ktorý rozhovor to je, má stretnúť skôr
-    než rozhovor. Vkladá sa **jednou** úpravou, nie jednou na blok — prehratie
+    Kurzor po prehratí stojí **na konci, nie na nule.** Rozhovor sa obnovuje
+    preto, aby sa v ňom pokračovalo, takže kurzor patrí tam, odkiaľ sa
+    pokračuje — inak je prvá vec, ktorú čitateľ musí urobiť, prejsť cez
+    všetko, čo už raz prečítal. Za ním nič nezostáva schované: Ctrl+Home vedie
+    na prvý prompt, a to je odpoveď na „ktorý rozhovor to je" (invariant 14).
+    Invariant 3 tým porušený nie je — ten je o texte, ktorý *prichádza*, nie
+    o mieste, kde okno začína.
+
+    S kurzorom sa musí presunúť aj `anchor_`. „Kurzor je na konci" neprežije
+    ani jedno pripísanie (invariant 11), takže bez neho by prvý ťah obnovenej
+    session zamlčal celý svoj priebeh — a znelo by to ako pokazená reč, hoci
+    by to bola pokazená odpoveď na „číta ešte?".
+
+    Vkladá sa **jednou** úpravou, nie jednou na blok — prehratie
     pridáva výhradne za to, čo v buffri je (výsledok nástroja sa zakladá za
     svoje volanie a to volanie prišlo v tom istom prehratí), takže je to jeden
     súvislý vsuv na starom konci. Cena, odmeraná na najväčšom súbore korpusu

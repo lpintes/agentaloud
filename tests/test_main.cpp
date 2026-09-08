@@ -410,28 +410,6 @@ void TestInterruptLeavesAMark() {
   CHECK_EQ(transcript.FirstLine(2), std::wstring(L"Prerušené používateľom."));
 }
 
-void TestNoteIsTheApplicationsOwnVoice() {
-  TEST("transcript: poznamka appky je obsah, nie mechanizmus, a nema hovoriaceho");
-  model::Transcript transcript;
-  std::string problem;
-  transcript.AppendNote(L"Obnovená session.");
-  CHECK(transcript.CheckInvariants(&problem));
-  CHECK_EQ(transcript.blocks().size(), size_t{1});
-
-  const model::Block& note = transcript.blocks()[0];
-  CHECK(note.kind == model::BlockKind::Note);
-  // Obsah, nie mechanizmus: nezbali sa sama a nie je za nou co rozbalovat.
-  CHECK(!model::IsMechanism(note.kind));
-  CHECK(!note.collapsed);
-  CHECK(!note.collapsible);
-  // Nehovori ju ani Claude, ani pouzivatel -- ziadna predpona hovoriaceho.
-  CHECK_EQ(std::wstring(model::SpeakerPrefix(note.kind)), std::wstring(L""));
-  CHECK_EQ(transcript.FirstLine(0), std::wstring(L"Obnovená session."));
-
-  // A nie je to chyba: klavesa E hlada miesta, kde praca neprebehla.
-  CHECK(!note.isError);
-}
-
 void TestToolResultsSitBehindTheirCall() {
   TEST("transcript: vysledok stoji za svojim volanim, nie na konci");
   model::Transcript transcript;
@@ -1422,10 +1400,6 @@ void TestHistoryRestore() {
   CHECK_EQ(records.size(), size_t{8});
 
   model::Transcript transcript;
-  // Poznamka ide do prepisu prva, tak ako v SessionPane::Start -- kurzor
-  // zacina na nule a vetu o tom, ktory rozhovor to je, ma stretnut skor nez
-  // samotny rozhovor.  Pocty nizsie su teda o tom, co pridala historia.
-  transcript.AppendNote(L"Obnovená session.");
   const model::HistoryCounts counts =
       model::RestoreHistory(records, &transcript);
   CHECK_EQ(counts.records, size_t{8});
@@ -1439,20 +1413,19 @@ void TestHistoryRestore() {
   CHECK_EQ(transcript.unknownCount(), size_t{0});
 
   const std::vector<model::Block>& blocks = transcript.blocks();
-  CHECK_EQ(blocks.size(), size_t{7});
-  CHECK(blocks[0].kind == model::BlockKind::Note);
-  CHECK(blocks[1].kind == model::BlockKind::UserPrompt);
-  CHECK(blocks[2].kind == model::BlockKind::Thinking);
-  CHECK(blocks[3].kind == model::BlockKind::AssistantText);
-  CHECK(blocks[4].kind == model::BlockKind::ToolUse);
+  CHECK_EQ(blocks.size(), size_t{6});
+  CHECK(blocks[0].kind == model::BlockKind::UserPrompt);
+  CHECK(blocks[1].kind == model::BlockKind::Thinking);
+  CHECK(blocks[2].kind == model::BlockKind::AssistantText);
+  CHECK(blocks[3].kind == model::BlockKind::ToolUse);
   // Za svojim volanim, nie na konci -- ta iste pravidlo ako naziva.
-  CHECK(blocks[5].kind == model::BlockKind::ToolResult);
-  CHECK_EQ(blocks[5].toolUseId, std::string("toolu_1"));
-  CHECK(blocks[6].kind == model::BlockKind::Interrupted);
-  CHECK_EQ(blocks[1].body, std::wstring(L"co robi tento subor"));
+  CHECK(blocks[4].kind == model::BlockKind::ToolResult);
+  CHECK_EQ(blocks[4].toolUseId, std::string("toolu_1"));
+  CHECK(blocks[5].kind == model::BlockKind::Interrupted);
+  CHECK_EQ(blocks[0].body, std::wstring(L"co robi tento subor"));
 
   // Subor bez jedineho zaznamu, z ktoreho by bol blok, nie je historia:
-  // volajuci sa to musi dozvediet skor, nez napise poznamku o tom, co obnovil.
+  // prazdny prepis potom nie je obnovena session, len prazdna.
   WriteFile(file, "{\"type\":\"summary\",\"summary\":\"nic\"}\n");
   CHECK(!proto::ReadSessionRecords(file.wstring(), &records));
   CHECK(!proto::ReadSessionRecords(L"C:\\demo\\niet-taketo.jsonl", &records));
@@ -1849,7 +1822,6 @@ int main(int argc, char** argv) {
   TestControlCharactersNeverReachTheBuffer();
   TestErrorNavigationAndFirstLine();
   TestInterruptLeavesAMark();
-  TestNoteIsTheApplicationsOwnVoice();
   TestToolResultsSitBehindTheirCall();
   TestBookmarksSurviveCollapsing();
   TestRateLimitParsing();

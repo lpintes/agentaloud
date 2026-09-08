@@ -11,7 +11,6 @@
 #include <string>
 #include <vector>
 
-#include "model/utf.h"
 #include "proto/sessions.h"
 #include "ui/main_window.h"
 #include "win/console.h"
@@ -41,12 +40,6 @@ struct Arguments {
   std::wstring permissionMode;
   std::wstring model;
   std::vector<std::wstring> extraArgs;
-  // What the window is to say about how this session came to be open.  Empty
-  // for the ordinary case, where there is nothing to say: a fresh session
-  // asked for on the command line is exactly what the empty transcript looks
-  // like.  It is filled in by -c, which decided something on the reader's
-  // behalf and therefore owes them the decision.
-  std::wstring openingNote;
   // --help was asked for, so nothing else on the line matters and no window is
   // to be opened.  A separate flag rather than an empty project, because an
   // empty project means "ask which folder" and that is a dialog -- the one
@@ -92,14 +85,16 @@ std::wstring HelpText() {
       L"\n"
       L"  --resume <id|titul>, -r <id|titul>\n"
       L"      Pokračuje v pomenovanom rozhovore.  Predchádzajúce ťahy sa\n"
-      L"      prečítajú z disku; keď sa tam súbor nenájde — pod titulom sa\n"
-      L"      nenájde nikdy — okno začne prázdne a povie to.\n"
+      L"      prečítajú z disku a kurzor stojí za nimi, na mieste, kde sa\n"
+      L"      pokračuje; keď sa súbor nenájde — pod titulom sa nenájde\n"
+      L"      nikdy — okno začne prázdne.\n"
       L"\n"
       L"  --continue, -c\n"
       L"      Pokračuje v poslednom rozhovore tohto priečinka.  Ktorý to je,\n"
       L"      vyberá ClaudeLens sám zo súborov v ~/.claude/projects — nie\n"
-      L"      CLI, ktoré o headless session nevie — a v prepise povie čas aj\n"
-      L"      prvé slová toho rozhovoru.  Spolu s --resume vyhráva --resume.\n"
+      L"      CLI, ktoré o headless session nevie.  Priečinok bez jediného\n"
+      L"      rozhovoru začne novú session.  Spolu s --resume vyhráva\n"
+      L"      --resume.\n"
       L"\n"
       L"  --help, -h\n"
       L"      Tento text.\n"
@@ -133,16 +128,6 @@ std::wstring Expand(const std::wstring& path) {
   return full;
 }
 
-// A prompt is a whole turn's worth of text and this one goes into a single
-// sentence.  Cut on a space where there is one, so the sentence ends on a word
-// rather than mid-syllable -- it is read aloud.
-std::wstring Shorten(const std::wstring& text, size_t limit = 70) {
-  if (text.size() <= limit) return text;
-  size_t cut = text.rfind(L' ', limit);
-  if (cut == std::wstring::npos || cut < limit / 2) cut = limit;
-  return text.substr(0, cut) + L"…";
-}
-
 // `-c` means "carry on the last conversation in this folder".  Which one that
 // is gets decided here and turned into a plain --resume, rather than passed to
 // the CLI as --continue: the CLI answers that question out of
@@ -150,9 +135,10 @@ std::wstring Shorten(const std::wstring& text, size_t limit = 70) {
 // so for a folder used from both a terminal and ClaudeLens it would carry on
 // the terminal's conversation and call it ours.  See proto/sessions.h.
 //
-// Which one it picked has to be said out loud.  Otherwise the reader carries
-// on in something other than what they had in mind and has no way to find out
-// -- the transcript is empty either way.
+// It says nothing about which one it picked.  The restored transcript is the
+// answer: the first prompt of that conversation is its first block, and
+// Ctrl+Home leads to it.  A sentence in front of it would be the application
+// answering a question nobody asked -- resuming is a deliberate act.
 void ContinueLatest(Arguments* arguments) {
   // `-c --resume <id>` is not a contradiction to argue about: the one that
   // names a conversation wins, because it was typed by someone who knew which
@@ -160,24 +146,13 @@ void ContinueLatest(Arguments* arguments) {
   // problem to report, and it reports it on a stderr this process has not got.
   if (proto::ResumesConversation(arguments->extraArgs)) return;
   proto::SessionSummary latest;
-  if (!proto::LatestSession(arguments->project, &latest)) {
-    // Not an error and not a reason to refuse: a folder nobody has worked in
-    // yet has nothing to carry on, and a new session is what was wanted.
-    arguments->openingNote =
-        L"V tomto projekte zatiaľ žiadny rozhovor nie je, začínam nový.";
-    return;
-  }
+  // Nothing to carry on is not an error and not a reason to refuse: a folder
+  // nobody has worked in yet gets a new session, which is what was wanted, and
+  // it is left looking exactly like one -- an empty project behaving like an
+  // empty project.
+  if (!proto::LatestSession(arguments->project, &latest)) return;
   arguments->extraArgs.push_back(L"--resume");
   arguments->extraArgs.push_back(latest.id);
-  std::wstring note = L"Pokračujem v poslednom rozhovore projektu z ";
-  note += proto::LocalTimeText(latest.lastStamp);
-  if (!latest.firstPrompt.empty()) {
-    note += L", začínal sa slovami „";
-    note += Shorten(model::Utf16FromUtf8(latest.firstPrompt));
-    note += L"“";
-  }
-  note += L".";
-  arguments->openingNote = note;
 }
 
 Arguments ReadArguments() {
@@ -348,7 +323,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   options.extraArgs = arguments.extraArgs;
 
   ui::MainWindow window;
-  if (!window.Open(instance, options, arguments.openingNote)) {
+  if (!window.Open(instance, options)) {
     MessageBoxW(nullptr, L"Nepodarilo sa spustiť session.", L"ClaudeLens",
                 MB_OK | MB_ICONERROR);
     return 1;

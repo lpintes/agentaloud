@@ -335,8 +335,7 @@ void SessionPane::Apply(const model::Edit& edit) {
   }
 }
 
-bool SessionPane::Start(const proto::Session::Options& options,
-                        const std::wstring& openingNote) {
+bool SessionPane::Start(const proto::Session::Options& options) {
   // The folder name in the bar, the whole path in the title.  The bar is read
   // out in one breath along with three other fields, and a path of eight
   // components there buries everything after it; the title is announced when
@@ -361,37 +360,20 @@ bool SessionPane::Start(const proto::Session::Options& options,
   if (statusBar_) statusBar_->Set(StatusBar::kProject, L"projekt " + project_);
   SetWindowTextW(host_, (L"ClaudeLens — " + path).c_str());
   // A resumed session gets nothing of its history from the stream, so it is
-  // read back off the file the CLI keeps.  Read BEFORE the note is written,
-  // because the note has to say which of the two happened -- a resume whose
-  // file cannot be found (--resume takes a session title, and a title is not a
-  // file name) still opens on an empty transcript, and an empty transcript is
-  // indistinguishable from a resume that failed altogether.  That is the very
-  // symptom --resume was asked for to cure.
+  // read back off the file the CLI keeps.  A resume whose file cannot be found
+  // -- --resume takes a session title, and a title is not a file name -- opens
+  // on an empty transcript, and the application says nothing about it: what
+  // was restored is in the transcript, and resuming is a deliberate act, not a
+  // question waiting for an answer.
   std::vector<proto::Json> history;
-  const bool resuming = proto::ResumesConversation(options.extraArgs);
   const bool restored =
-      resuming &&
+      proto::ResumesConversation(options.extraArgs) &&
       proto::ReadSessionRecords(
           proto::SessionFilePath(
               options.workingDir,
               proto::ResumedConversation(options.extraArgs)),
           &history);
 
-  // Both sentences land in ONE note, not two: they are one thought -- which
-  // conversation this is and what of it is here -- and two notes would be two
-  // blocks to walk through to read it.
-  std::wstring note = openingNote;
-  if (resuming) {
-    if (note.empty()) note = L"Obnovená session.";
-    note += restored ? L" Predchádzajúce ťahy nasledujú."
-                     : L" Predchádzajúce ťahy tu nie sú — na disku sa "
-                       L"nenašli.";
-  }
-  if (!note.empty()) Apply(model_.AppendNote(note));
-  // The note first and the history after it, so that the caret -- which starts
-  // at offset zero -- meets the sentence saying which conversation this is
-  // before it meets the conversation.  Invariant 15: the choice has to be said
-  // out loud, and a note under a thousand blocks is not said to anybody.
   if (restored) {
     // One edit for the lot.  The replay only ever adds after what is already
     // in the buffer -- a tool result is filed behind its own call, and every
@@ -408,6 +390,18 @@ bool SessionPane::Start(const proto::Session::Options& options,
       edit.inserted = model_.Text().substr(before);
       Apply(edit);
     }
+    // At the end, not at offset zero.  A conversation is resumed in order to
+    // carry it on, so the caret belongs where it will be carried on from --
+    // otherwise the first thing the reader has to do is walk past everything
+    // they have already read to reach what comes next.  What is behind them is
+    // not lost: Ctrl+Home leads to the first prompt, which is the answer to
+    // "which conversation is this".
+    //
+    // The anchor goes with it, because "at the end" survives no append on its
+    // own (see Apply) and the first turn's running commentary depends on it --
+    // invariant 11.
+    PutCaretAtEnd(transcript_);
+    anchor_ = model_.Text().size();
   }
   return session_.Start(
       options,

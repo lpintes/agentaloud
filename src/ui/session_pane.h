@@ -45,13 +45,7 @@ class SessionPane {
   // here works without it, it just has nowhere to put the four facts.
   void SetStatusBar(StatusBar* bar) { statusBar_ = bar; }
   void Layout(int width, int height);
-  // `openingNote` is what the caller knows about how this session came to be
-  // open and the pane does not -- which conversation -c picked, for instance.
-  // It goes into the transcript ahead of the first turn, together with
-  // whatever the pane has to add about a resumed session.  Empty when there is
-  // nothing to say, which is the ordinary case.
-  bool Start(const proto::Session::Options& options,
-             const std::wstring& openingNote = {});
+  bool Start(const proto::Session::Options& options);
 
   // Called by the host for kMsgDrain and kMsgPermission.
   void OnDrain();

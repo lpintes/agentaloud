@@ -16,10 +16,7 @@ namespace ui {
 
 class MainWindow : public win::Window {
  public:
-  // The note is what the window is to say about how this session came to be
-  // open -- see SessionPane::Start.  Empty when there is nothing to say.
-  bool Open(HINSTANCE instance, const proto::Session::Options& options,
-            const std::wstring& openingNote = {});
+  bool Open(HINSTANCE instance, const proto::Session::Options& options);
 
  protected:
   LRESULT HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) override;

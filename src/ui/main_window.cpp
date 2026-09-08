@@ -3,8 +3,7 @@
 namespace ui {
 
 bool MainWindow::Open(HINSTANCE instance,
-                      const proto::Session::Options& options,
-                      const std::wstring& openingNote) {
+                      const proto::Session::Options& options) {
   if (!Create(L"ClaudeLensMain", L"ClaudeLens",
               WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, 900, 700, nullptr)) {
     return false;
@@ -18,7 +17,7 @@ bool MainWindow::Open(HINSTANCE instance,
   GetClientRect(hwnd_, &client);
   Arrange(client.right, client.bottom);
 
-  if (!pane_->Start(options, openingNote)) return false;
+  if (!pane_->Start(options)) return false;
   Show(SW_SHOW);
   pane_->FocusPrompt();
   WarnIfMute();
