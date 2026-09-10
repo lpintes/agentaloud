@@ -94,6 +94,40 @@ Json MakeInitialize(const std::string& requestId) {
                                {"hooks", Json::object()}}}};
 }
 
+Json MakeSetPermissionMode(const std::string& requestId,
+                           const std::string& mode) {
+  return Json{{"type", "control_request"},
+              {"request_id", requestId},
+              {"request", Json{{"subtype", "set_permission_mode"},
+                               {"mode", mode}}}};
+}
+
+bool ParseSetPermissionModeResponse(const Json& record, std::string* requestId,
+                                    std::string* mode) {
+  if (StringField(record, "type") != "control_response") return false;
+  auto outer = record.find("response");
+  if (outer == record.end() || !outer->is_object()) return false;
+  if (StringField(*outer, "subtype") != "success") return false;
+  *requestId = StringField(*outer, "request_id");
+  // The body echoes the mode for a headless host and is {} for others; both
+  // are success.  Nested under `response` like the initialize answer.
+  mode->clear();
+  auto inner = outer->find("response");
+  if (inner != outer->end() && inner->is_object()) {
+    *mode = StringField(*inner, "mode");
+  }
+  return true;
+}
+
+std::string NextPermissionMode(const std::string& current) {
+  if (current == "default") return "acceptEdits";
+  if (current == "acceptEdits") return "plan";
+  if (current == "plan") return "auto";
+  if (current == "auto") return "default";
+  // Off-cycle -- bypassPermissions, dontAsk, unknown, or not yet known.
+  return "acceptEdits";
+}
+
 Json MakeInterrupt(const std::string& requestId) {
   return Json{{"type", "control_request"},
               {"request_id", requestId},

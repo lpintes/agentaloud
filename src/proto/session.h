@@ -82,6 +82,15 @@ class Session {
   // arrives, exactly as if it had ended on its own.
   bool Interrupt();
 
+  // Shift+Tab: switch the permission mode without restarting.  False when the
+  // request could not be written.  Fire and forget otherwise -- the CLI's
+  // control_response confirms the mode, and OnLine folds it into
+  // permissionMode() when it arrives.  The mode is also set optimistically here
+  // so that a fast second press cycles from the new value, not the old one; a
+  // rejected mode (only bypassPermissions, which the cycle never sends) would
+  // be corrected back by the confirmation.
+  bool SetPermissionMode(const std::string& mode);
+
   // Blocks until the turn in flight ends.  Returns false on timeout, which
   // leaves the session usable -- the caller may want to wait again.
   bool WaitForTurn(unsigned milliseconds);
@@ -113,6 +122,13 @@ class Session {
   // gets an empty string rather than a wrong one.
   InitializeInfo handshake() const;
 
+  // The permission mode the session is running under right now: the one the
+  // initialize handshake reported, moved by every SetPermissionMode the CLI
+  // has since confirmed.  Empty until the handshake is answered.  Kept apart
+  // from handshake() because that one is a snapshot of one record and this one
+  // changes.
+  std::string permissionMode() const;
+
  private:
   void OnBytes(std::string_view bytes);
   void OnLine(std::string_view line);
@@ -138,6 +154,16 @@ class Session {
   // Under mutex_: written by the reader thread, read by whoever asks.
   std::string sessionId_;
   InitializeInfo handshake_;
+  // Seeded from handshake_.permissionMode, then moved by SetPermissionMode
+  // (optimistically) and by the CLI's confirmation of it.
+  std::string permissionMode_;
+  // The id of the set_permission_mode request still waiting for its answer, so
+  // that a stray control_response is not taken for the confirmation.  Empty
+  // when nothing is pending.
+  std::string pendingModeRequestId_;
+  // The mode to restore if that request comes back refused -- SetPermissionMode
+  // moves permissionMode_ optimistically and this is how it is undone.
+  std::string pendingModePrev_;
 
   // Writes come from the caller's thread and from the reader thread answering
   // a permission request, so the handle needs its own lock.

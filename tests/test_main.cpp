@@ -701,6 +701,75 @@ void TestInitializeResponseParsing() {
       &ignored));
 }
 
+void TestPermissionModeSwitch() {
+  TEST("control: Shift+Tab meni rezim za behu");
+
+  // Poradie cyklu je terminalove -- taky zoznam ozve aj TUI hint v binarke:
+  // default -> acceptEdits -> plan -> auto -> default. bypassPermissions
+  // (stdio host ho nezapne), dontAsk, neznamy a prazdny zacnu cyklus nanovo na
+  // acceptEdits, aby klavesa vzdy pohla.
+  CHECK_EQ(proto::NextPermissionMode("default"), std::string("acceptEdits"));
+  CHECK_EQ(proto::NextPermissionMode("acceptEdits"), std::string("plan"));
+  CHECK_EQ(proto::NextPermissionMode("plan"), std::string("auto"));
+  CHECK_EQ(proto::NextPermissionMode("auto"), std::string("default"));
+  CHECK_EQ(proto::NextPermissionMode("bypassPermissions"),
+           std::string("acceptEdits"));
+  CHECK_EQ(proto::NextPermissionMode("dontAsk"), std::string("acceptEdits"));
+  CHECK_EQ(proto::NextPermissionMode(""), std::string("acceptEdits"));
+  CHECK_EQ(proto::NextPermissionMode("nieco"), std::string("acceptEdits"));
+
+  // Poziadavka: subtype set_permission_mode a holy mod.
+  const proto::Json request = proto::MakeSetPermissionMode("mode-3", "plan");
+  CHECK_EQ(request.value("type", std::string()), std::string("control_request"));
+  CHECK_EQ(request.value("request_id", std::string()), std::string("mode-3"));
+  CHECK_EQ(request["request"].value("subtype", std::string()),
+           std::string("set_permission_mode"));
+  CHECK_EQ(request["request"].value("mode", std::string()), std::string("plan"));
+
+  // Odpoved: headless CLI ozve mod spat pod dvojitym `response` (rovnake
+  // hniezdenie ako odpoved na initialize). Odmerane 2026-09-05, lkk.6.1.
+  std::string requestId;
+  std::string mode;
+  CHECK(proto::ParseSetPermissionModeResponse(
+      proto::Json::parse(R"({
+        "type": "control_response",
+        "response": {
+          "subtype": "success",
+          "request_id": "mode-3",
+          "response": {"mode": "plan"}
+        }
+      })"),
+      &requestId, &mode));
+  CHECK_EQ(requestId, std::string("mode-3"));
+  CHECK_EQ(mode, std::string("plan"));
+
+  // Hostitel, ktory nie je headless, smie potvrdit prazdnym objektom -- stale
+  // je to uspech, len sa mod neozval a volajuci si necha ten, o ktory ziadal.
+  std::string ackId;
+  std::string ackMode;
+  CHECK(proto::ParseSetPermissionModeResponse(
+      proto::Json::parse(R"({
+        "type": "control_response",
+        "response": {"subtype": "success", "request_id": "mode-4"}
+      })"),
+      &ackId, &ackMode));
+  CHECK_EQ(ackId, std::string("mode-4"));
+  CHECK_EQ(ackMode, std::string());
+
+  // Chybova odpoved a odpoved na nieco ine nie su potvrdenie.
+  std::string dummy;
+  std::string dummyMode;
+  CHECK(!proto::ParseSetPermissionModeResponse(
+      proto::Json::parse(R"({
+        "type": "control_response",
+        "response": {"subtype": "error", "request_id": "mode-3",
+                     "error": "unrecognized mode"}
+      })"),
+      &dummy, &dummyMode));
+  CHECK(!proto::ParseSetPermissionModeResponse(
+      proto::Json::parse(R"({"type": "control_request"})"), &dummy, &dummyMode));
+}
+
 void TestUsageParsing() {
   TEST("events: cena a tokeny sa citaju z modelUsage, nie z usage");
   // Tvar je odpozorovany z tests/fixtures/basic.jsonl, nie vymysleny. Podstatne
@@ -1826,6 +1895,7 @@ int main(int argc, char** argv) {
   TestBookmarksSurviveCollapsing();
   TestRateLimitParsing();
   TestInitializeResponseParsing();
+  TestPermissionModeSwitch();
   TestUsageParsing();
   TestContextTokensParsing();
   TestNewlinesAreOneCharacter();

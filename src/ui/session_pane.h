@@ -74,6 +74,12 @@ class SessionPane {
   // silence cannot be told from a key that never arrived.
   void Interrupt();
 
+  // Shift+Tab: step the permission mode through default -> acceptEdits -> plan
+  // -> default, the way the terminal does.  Says the new mode out loud -- it is
+  // a key whose only other trace is the status bar, which NVDA does not read on
+  // its own (invariant 6) -- and rewrites the model field of the bar.
+  void CyclePermissionMode();
+
   // One of t/r/p/a/k/e (capital letter meaning backwards).  Returns false when
   // the character is none of them, so the caller can pass the key on.  Public
   // because both the transcript and the prompt reach it -- see the note on
@@ -141,6 +147,10 @@ class SessionPane {
   void SetStatus(std::wstring text);
   // Model, permission mode and the like, out of system/init.
   void ShowSessionFacts(const proto::Event& event);
+  // Rewrites the bar's model field from details_.model and
+  // details_.permissionMode.  Shared by ShowSessionFacts and
+  // CyclePermissionMode so the two never format it differently.
+  void RefreshModelField();
   void ShowRateLimit(const proto::Event& event);
   // Puts the caret at the start of a block and says which line that is.
   void GoToBlock(size_t index);

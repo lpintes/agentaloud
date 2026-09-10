@@ -998,6 +998,48 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     v oboch poliach tie isté zámerne, takže je to odchýlka; je zapísaná
     (claude-gui-lkk.34) a v zozname priznaná.
 
+20. **Režim povolení je stav procesu, mení ho Shift+Tab a nikto si ho
+    nepamätá.** Ekvivalent Shift+Tab z terminálu: `control_request` so
+    `subtype: "set_permission_mode"` a holým `mode`. Odpoveď je
+    `control_response` `success`, telo vnorené ako pri `initialize`
+    (`response.response.mode`) a headless CLI v ňom mód ozve späť; iný hostiteľ
+    smie potvrdiť prázdnym objektom. Odmerané `tools/probe_mode.py`
+    (10. 9. 2026): po `plan` vrátil druhý `initialize`
+    `current_permission_mode: "plan"`, takže sa zmena **usadí**, nie len
+    potvrdí. Cyklus má **štyri** módy a je terminálový —
+    `default → acceptEdits → plan → auto → default`; presne taký zoznam ozve aj
+    hint Shift+Tabu v binárke CLI („default — ask before every edit / accept
+    edits — edit freely, ask for commands / plan — research and propose, never
+    touch files / auto — Claude decides what is safe"). `auto` cez stdio
+    **funguje** (odmerané `tools/probe_mode.py`: `success`, druhý `initialize`
+    vrátil `current_permission_mode: "auto"`). Piaty mód `bypassPermissions` sa
+    za behu zapnúť **nedá** — `set_permission_mode` naň vráti `subtype: "error"`
+    s prázdnym telom, jediná cesta je `--dangerously-skip-permissions` pri
+    štarte. `dontAsk` sa prepnúť dá, ale v rotácii terminálu nie je.
+    Mimocyklový alebo neznámy mód začína nanovo na `acceptEdits`, nech klávesa
+    vždy pohne (`proto::NextPermissionMode`).
+
+    **`proto::Session::permissionMode()` je jediný zdroj pravdy o živom
+    móde.** Naseje ho odpoveď na `initialize`, posúva ho výhradne potvrdený
+    `set_permission_mode`. Pole `permissionMode` v `system/init` sa
+    mimo štartu **neverí** — chodí na začiatku každého ťahu a či sleduje zmenu
+    za behu, odmerané nie je; `ShowSessionFacts` preto po ňom prepíše mód tým,
+    čo hovorí `Session`. `SetPermissionMode` nastaví mód aj **optimisticky**
+    hneď pri odoslaní (a odloží predchádzajúci do `pendingModePrev_`), aby
+    druhé rýchle Shift+Tab cyklovalo z novej hodnoty. Odpoveď to opraví:
+    `success` na ozvaný mód, `error` **späť** na `pendingModePrev_` — `auto`
+    môže na účte bez auto-módu zlyhať a bez toho vrátenia by cyklus zamrzol.
+    Rozlišuje `ControlResponseOutcome` (id + `success`/`error`), párované cez
+    `pendingModeRequestId_`.
+
+    Preto sa mód **ohlasuje synchrónne na klávese** (`CyclePermissionMode`),
+    nie až na potvrdení: podľa invariantu 7 smie prerušiť reč len odozva na
+    klávesu, a potvrdenie príde z čítacieho vlákna, keď už do fronty NVDA
+    nemá ako vstúpiť. Stavový riadok aj reč hovoria **slovenský názov**
+    (`PermissionModeLabel`); dialóg F2 drží surové slovo CLI zámerne
+    (`session_details.cpp`). Prežitie módu medzi spusteniami je samostatná
+    práca (claude-gui-lkk.6.1 notes) — CLI ho headless behu neuchová.
+
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa
 rozídu, titulok okna sa zmení na **„ClaudeLens — NESÚLAD MAPY ROZSAHOV"**. Ak

@@ -122,6 +122,45 @@ bool ParseInitializeResponse(const Json& record, InitializeInfo* out);
 // request id.  The end of the turn arrives the usual way, as a Result.
 Json MakeInterrupt(const std::string& requestId);
 
+// Shift+Tab without restarting the session: change the permission mode of the
+// turn in flight and every turn after it.  The mode a terminal is switched
+// into this way is runtime state of that one process -- settings, hooks and
+// CLAUDE.md carry into a headless session, this does not -- so it is the only
+// way to reach acceptEdits or plan once the CLI is running.
+//
+// Verified 2026-09-05 with no credit spent (claude-gui-lkk.6.1): the CLI
+// answers with a control_response success whose body is {"mode": "<mode>"},
+// and a second `initialize` afterwards returned current_permission_mode moved
+// to the new value -- so the change settles, it is not just acknowledged.
+//
+// `mode` is one the wire accepts: default, acceptEdits, plan, auto or dontAsk.
+// The schema lists bypassPermissions too, but a stdio host is not allowed to
+// switch into it at runtime -- measured 2026-09-10 (tools/probe_mode.py), the
+// request comes back `subtype: "error"` with an empty body, so the only way to
+// that mode is --dangerously-skip-permissions at launch.  auto and dontAsk both
+// succeed; an unrecognised mode is answered with an error.
+Json MakeSetPermissionMode(const std::string& requestId,
+                           const std::string& mode);
+
+// The mode a successful set_permission_mode response settled on.  False when
+// the record is not a successful control_response.  `requestId` is filled so a
+// caller can tell its own request's answer from another's; `mode` may come
+// back empty even on success -- the schema says a non-headless host may ack
+// with {} -- and the caller then keeps the mode it asked for.
+bool ParseSetPermissionModeResponse(const Json& record, std::string* requestId,
+                                    std::string* mode);
+
+// The next mode in the Shift+Tab cycle, in the terminal's order:
+//   default -> acceptEdits -> plan -> auto -> default
+// This is the rotation the TUI's own Shift+Tab hint lists (read out of the CLI
+// binary 2026-09-10: "default - ask before every edit / accept edits - edit
+// freely, ask for commands / plan - research and propose, never touch files /
+// auto - Claude decides what is safe").  bypassPermissions is a mode too but
+// the control channel refuses it from a stdio host (see MakeSetPermissionMode);
+// dontAsk is switchable but not in the rotation.  An unknown or off-cycle
+// current mode restarts at acceptEdits, so the key always moves.
+std::string NextPermissionMode(const std::string& current);
+
 // updatedInput may be null, in which case the tool's own input is used
 // unchanged.  Passing something else is how a dialog can let the user edit a
 // commit message before it runs.

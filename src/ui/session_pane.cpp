@@ -34,6 +34,40 @@ constexpr int kMargin = 8;
 constexpr int kLabelHeight = 18;
 constexpr int kPromptLines = 5;
 
+// The wire mode name in a word of Slovak, for the status bar and for the
+// spoken confirmation.  Both are read aloud -- the bar on NVDA+End, the
+// confirmation on the key -- and a Slovak screen reader makes "acceptEdits"
+// into noise.  The session details dialog keeps the raw word on purpose (see
+// session_details.cpp); this is the human-facing side of the same fact.  An
+// unrecognised mode names itself rather than disappearing.
+// The short name for the status bar, where the mode stands next to three other
+// fields and NVDA reads the lot in one breath.  The session details dialog
+// keeps the raw wire word on purpose (session_details.cpp); this is the
+// human-facing side of the same fact.  An unrecognised mode names itself.
+std::wstring PermissionModeLabel(const std::wstring& wire) {
+  if (wire == L"default") return L"normálny";
+  if (wire == L"acceptEdits") return L"automatické úpravy";
+  if (wire == L"plan") return L"plánovanie";
+  if (wire == L"auto") return L"auto";
+  if (wire == L"bypassPermissions") return L"bez povolení";
+  if (wire == L"dontAsk") return L"bez pýtania";
+  return wire;
+}
+
+// What the mode actually does, the way the CLI's own Shift+Tab hint glosses it.
+// Said after the label when the key switches the mode -- "did that work" wants
+// the name, "what did I just turn on" wants this.  Empty for a mode with no
+// short gloss worth reading.
+std::wstring PermissionModeGloss(const std::wstring& wire) {
+  if (wire == L"default") return L"pýta sa na každú úpravu aj na príkazy";
+  if (wire == L"acceptEdits") return L"súbory mení sám, na príkazy sa pýta";
+  if (wire == L"plan") return L"len skúma a navrhuje, súborov sa nedotkne";
+  if (wire == L"auto") return L"Claude sám rozhodne, čo je bezpečné";
+  if (wire == L"bypassPermissions") return L"nepýta sa na nič";
+  if (wire == L"dontAsk") return L"riskantné rovno zamietne";
+  return {};
+}
+
 // What the reader thread hands across for a permission decision.  Lives on
 // that thread's stack for the duration of the SendMessage, which is safe
 // precisely because SendMessage does not return until we are done with it.
@@ -903,7 +937,17 @@ void SessionPane::ShowSessionFacts(const proto::Event& event) {
   if (!text("permissionMode").empty()) {
     details_.permissionMode = text("permissionMode");
   }
+  // A Shift+Tab the CLI has confirmed wins over the record's field: system/init
+  // arrives at the start of every turn, and whether its permissionMode tracks
+  // a mid-session switch is not something measured here.  Session::permissionMode
+  // is -- it is moved only by a confirmed set_permission_mode -- so it is the
+  // one to trust when it has an answer.
+  const std::string live = session_.permissionMode();
+  if (!live.empty()) details_.permissionMode = model::Utf16FromUtf8(live);
+  RefreshModelField();
+}
 
+void SessionPane::RefreshModelField() {
   if (!statusBar_) return;
   // Model and permission mode in one field.  The design said "model and
   // effort", but system/init carries no effort -- and the permission mode is
@@ -911,9 +955,13 @@ void SessionPane::ShowSessionFacts(const proto::Event& event) {
   // to you at all.
   // Every field says what it is.  Read out one after another they are four
   // bare values otherwise, and "claude-opus-5, pokus, 5 h 83 %" is a riddle.
-  std::wstring facts = L"model " + text("model");
-  const std::wstring mode = text("permissionMode");
-  if (!mode.empty() && mode != L"default") facts += L", režim " + mode;
+  std::wstring facts = L"model " + details_.model;
+  const std::wstring& mode = details_.permissionMode;
+  // "default" is left off: it is the state a reader assumes, and naming it
+  // every time would crowd the field that has to be read in one breath.
+  if (!mode.empty() && mode != L"default") {
+    facts += L", režim " + PermissionModeLabel(mode);
+  }
   statusBar_->Set(StatusBar::kModel, facts);
 }
 
@@ -1022,6 +1070,30 @@ void SessionPane::Interrupt() {
   SetStatus(L"prerušujem");
   Apply(model_.AppendInterrupted());
   Announce(L"prerušujem");
+}
+
+void SessionPane::CyclePermissionMode() {
+  const std::string next =
+      proto::NextPermissionMode(session_.permissionMode());
+  if (!session_.SetPermissionMode(next)) {
+    // The pipe is gone.  Say so rather than leaving the key silent.
+    Announce(L"režim sa nepodarilo prepnúť");
+    return;
+  }
+  // Said now, on the key, and the bar rewritten now too.  The CLI's
+  // confirmation comes back on the reader thread, and invariant 7 keeps
+  // interrupting speech for key responses only -- a confirmation folded in
+  // later could not cut in to be heard.  default, acceptEdits and plan are
+  // never refused (only bypassPermissions is, and the cycle never sends it),
+  // so there is nothing to wait for before saying it.  Session::permissionMode
+  // is already moved; details_ and the bar follow it here.
+  details_.permissionMode = model::Utf16FromUtf8(next);
+  RefreshModelField();
+  // Name first so "did the key work" is answered at once, then what it does.
+  std::wstring said = L"režim " + PermissionModeLabel(details_.permissionMode);
+  const std::wstring gloss = PermissionModeGloss(details_.permissionMode);
+  if (!gloss.empty()) said += L" — " + gloss;
+  Announce(said);
 }
 
 void SessionPane::CopySessionId() {
@@ -1196,10 +1268,16 @@ LRESULT CALLBACK SessionPane::PromptProc(HWND window, UINT message,
       return 0;
     }
     if (wParam == VK_TAB) {
-      // Two controls, so Tab is a toggle.  Done here rather than through
+      // Shift+Tab is the terminal's key for the permission mode, and it is the
+      // same in both boxes like Esc and the chords.  Plain Tab is the toggle
+      // between the two controls -- done here rather than through
       // IsDialogMessage because win::RunMessageLoop is shared with another
       // project and this must not change how it behaves there.
-      SetFocus(pane->transcript_);
+      if (GetKeyState(VK_SHIFT) < 0) {
+        pane->CyclePermissionMode();
+      } else {
+        SetFocus(pane->transcript_);
+      }
       return 0;
     }
   }
@@ -1221,7 +1299,13 @@ LRESULT CALLBACK SessionPane::TranscriptProc(HWND window, UINT message,
   SessionPane* pane = reinterpret_cast<SessionPane*>(data);
   if (message == WM_SETFOCUS) pane->lastFocus_ = window;
   if (message == WM_KEYDOWN && wParam == VK_TAB) {
-    SetFocus(pane->prompt_);
+    // Shift+Tab cycles the permission mode from here too; plain Tab is the
+    // toggle back to the prompt.
+    if (GetKeyState(VK_SHIFT) < 0) {
+      pane->CyclePermissionMode();
+    } else {
+      SetFocus(pane->prompt_);
+    }
     return 0;
   }
   if (message == WM_KEYDOWN && wParam == VK_RETURN) {
