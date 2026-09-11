@@ -75,9 +75,10 @@ class SessionPane {
   void Interrupt();
 
   // Shift+Tab: step the permission mode through default -> acceptEdits -> plan
-  // -> default, the way the terminal does.  Says the new mode out loud -- it is
-  // a key whose only other trace is the status bar, which NVDA does not read on
-  // its own (invariant 6) -- and rewrites the model field of the bar.
+  // -> auto -> default, the way the terminal does.  Says the new mode out loud
+  // -- it is a key whose only other trace is the status bar, which NVDA does
+  // not read on its own (invariant 6) -- and rewrites the model field of the
+  // bar.  Refuses, and says why, while the mode is not known at all.
   void CyclePermissionMode();
 
   // One of t/r/p/a/k/e (capital letter meaning backwards).  Returns false when
@@ -145,11 +146,19 @@ class SessionPane {
 
   void Apply(const model::Edit& edit);
   void SetStatus(std::wstring text);
-  // Model, permission mode and the like, out of system/init.
+  // The model out of system/init, for as long as no assistant record has said
+  // better.  The permission mode in it is Session's to fold in.
   void ShowSessionFacts(const proto::Event& event);
+  // The model that wrote an assistant record, which is the one to show from
+  // then on -- see proto::ParseAnsweringModel for why system/init is not.
+  void ShowAnsweringModel(const proto::Event& event);
+  // Brings details_ and the bar up to the mode Session holds, and says a change
+  // this pane did not make itself: a refused Shift+Tab, ExitPlanMode approved,
+  // auto dropped by the CLI.  Called after every batch.
+  void FollowPermissionMode();
   // Rewrites the bar's model field from details_.model and
-  // details_.permissionMode.  Shared by ShowSessionFacts and
-  // CyclePermissionMode so the two never format it differently.
+  // details_.permissionMode.  Shared by everything that moves either, so they
+  // never format it differently.
   void RefreshModelField();
   void ShowRateLimit(const proto::Event& event);
   // Puts the caret at the start of a block and says which line that is.
@@ -178,9 +187,9 @@ class SessionPane {
   // where the box speaks for itself.  See the definition for why speech is not
   // an option here and why the sound is neither of the two already in use.
   void SignalWaiting() const;
-  // Takes the id and the permission mode off the Session at the moment they
-  // are needed.  See the note on the definition for why they are not kept up
-  // to date instead.
+  // Takes the id and the account off the Session at the moment they are
+  // needed.  See the note on the definition for why they are not kept up to
+  // date instead, and why the permission mode is no longer among them.
   void RefreshFacts();
   // Says what the turn is doing, in the order it does it: the text, the tool
   // calls and the tool results made since the given block id.
@@ -228,6 +237,11 @@ class SessionPane {
   // marked: a turn that spoke gets a word, a turn that stayed silent gets the
   // beep -- see SignalTurnEnd.
   bool spokeThisTurn_ = false;
+  // Whether an assistant record of this process has named its model.  From
+  // then on system/init no longer overwrites details_.model: at the start of
+  // every turn it would put back the main-loop model, which under opusplan in
+  // plan mode is not the one answering.
+  bool modelAnswered_ = false;
   std::wstring status_;
   // The folder name, kept because the bar is rewritten field by field and the
   // project one has to be put back after anything that clears it.

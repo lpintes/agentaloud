@@ -83,7 +83,8 @@ Json MakeInitialize(const std::string& requestId);
 // account whose settings.json says "model": "opus", the entry for "default"
 // resolves to claude-sonnet-5 -- so reading the model out of that list would
 // have shown the wrong model until the first turn quietly replaced it.  The
-// model waits for system/init; the mode does not have to.
+// model waits for the stream -- and not for system/init either, see
+// ParseAnsweringModel in events.h; the mode does not have to wait.
 // The account, on the other hand, IS in it -- under `account`, and measured
 // there (tools/probe_dialog.py, 2026-09-05) rather than assumed.  It matters
 // for one reason: on a subscription the billed cost of a session is zero, so
@@ -160,6 +161,69 @@ bool ParseSetPermissionModeResponse(const Json& record, std::string* requestId,
 // dontAsk is switchable but not in the rotation.  An unknown or off-cycle
 // current mode restarts at acceptEdits, so the key always moves.
 std::string NextPermissionMode(const std::string& current);
+
+// The mode a record says the CLI is in now, when it says one.  Two records do:
+//
+//   system/status  -- sent on EVERY change of mode, whoever made it.  Our own
+//                     set_permission_mode, but also the ones the CLI makes by
+//                     itself: approving ExitPlanMode leaves plan, and auto is
+//                     dropped when its gate closes.  Measured 2026-09-11: after
+//                     set_permission_mode auto and then plan, each confirmation
+//                     was followed by {"type":"system","subtype":"status",
+//                     "status":null,"permissionMode":"auto"} (then "plan").  In
+//                     the binary it is sessionState.onPermissionModeChanged.
+//   system/init    -- the mode at the start of every turn.
+//
+// Without the first one the application knows only the changes it asked for,
+// and a session that left plan through ExitPlanMode kept saying "plánovanie"
+// (claude-gui-lkk.41).  Other status records ("requesting", compaction) carry
+// no mode and give false.
+bool ParsePermissionModeReport(const Json& record, std::string* mode);
+
+// What our set_permission_mode request ids start with, so that their answers
+// can be told from the answers to everything else we ask.
+extern const char kModeRequestPrefix[];
+
+// The permission mode the session is in, folded out of everything that says
+// it.  Not thread-safe; Session holds it under its lock.  A class of its own,
+// out of Session, so that the rules below can be tested on records rather than
+// on a running CLI -- the first version of them had three silent bugs, and all
+// three were in the order things arrive.
+//
+//   Seed        the mode asked for on the command line.  The CLI starts in it,
+//               and knowing it now lets Shift+Tab cycle from it before the
+//               handshake is answered, which with a SessionStart hook is
+//               twenty seconds away.
+//   Requested   a Shift+Tab sent.  current() moves to it at once, so that a
+//               second press cycles from the new mode.
+//   Observe     a record off the stream.  The handshake, system/status,
+//               system/init and the echo of any set_permission_mode are
+//               reports of the mode; the answer to the newest request settles
+//               current() -- to the echo, or on refusal to the last mode the
+//               CLI stated.
+//
+// Reports that come while a request is unanswered move only the last-stated
+// mode and not current(): the CLI writes in order, so such a report may
+// predate the request, and taking it would put the old mode back under a
+// reader who has just heard the new one.  An older request answered after a
+// newer one does not settle current() either -- it would restore a mode the
+// reader has already pressed past.
+class PermissionModeTracker {
+ public:
+  void Seed(const std::string& mode);
+  void Requested(const std::string& requestId, const std::string& mode);
+  void Observe(const Json& record);
+  // Empty while nothing was asked for and the CLI has not said: the mode then
+  // comes from settings and is genuinely not known.
+  const std::string& current() const { return current_; }
+
+ private:
+  void Report(const std::string& mode);
+
+  std::string current_;
+  std::string reported_;
+  std::string pendingId_;
+};
 
 // updatedInput may be null, in which case the tool's own input is used
 // unchanged.  Passing something else is how a dialog can let the user edit a

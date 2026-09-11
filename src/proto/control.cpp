@@ -128,6 +128,70 @@ std::string NextPermissionMode(const std::string& current) {
   return "acceptEdits";
 }
 
+bool ParsePermissionModeReport(const Json& record, std::string* mode) {
+  if (StringField(record, "type") != "system") return false;
+  const std::string subtype = StringField(record, "subtype");
+  if (subtype != "status" && subtype != "init") return false;
+  const std::string said = StringField(record, "permissionMode");
+  if (said.empty()) return false;
+  *mode = said;
+  return true;
+}
+
+const char kModeRequestPrefix[] = "mode-";
+
+void PermissionModeTracker::Seed(const std::string& mode) {
+  current_ = mode;
+  reported_ = mode;
+}
+
+void PermissionModeTracker::Requested(const std::string& requestId,
+                                      const std::string& mode) {
+  pendingId_ = requestId;
+  current_ = mode;
+}
+
+void PermissionModeTracker::Report(const std::string& mode) {
+  if (mode.empty()) return;
+  reported_ = mode;
+  if (pendingId_.empty()) current_ = mode;
+}
+
+void PermissionModeTracker::Observe(const Json& record) {
+  std::string mode;
+  if (ParsePermissionModeReport(record, &mode)) {
+    Report(mode);
+    return;
+  }
+  if (StringField(record, "type") != "control_response") return;
+
+  InitializeInfo info;
+  if (ParseInitializeResponse(record, &info)) {
+    Report(info.permissionMode);
+    return;
+  }
+
+  auto outer = record.find("response");
+  if (outer == record.end() || !outer->is_object()) return;
+  const std::string id = StringField(*outer, "request_id");
+  if (id.rfind(kModeRequestPrefix, 0) != 0) return;
+  const std::string subtype = StringField(*outer, "subtype");
+  if (subtype != "success" && subtype != "error") return;
+
+  std::string echoed;
+  std::string ignore;
+  if (subtype == "success" &&
+      ParseSetPermissionModeResponse(record, &ignore, &echoed) &&
+      !echoed.empty()) {
+    reported_ = echoed;
+  }
+  if (id != pendingId_) return;
+  pendingId_.clear();
+  // A success acked with {} leaves the requested mode standing -- nothing
+  // better has been said.  Everything else takes the CLI's last word.
+  if (subtype == "error" || !echoed.empty()) current_ = reported_;
+}
+
 Json MakeInterrupt(const std::string& requestId) {
   return Json{{"type", "control_request"},
               {"request_id", requestId},

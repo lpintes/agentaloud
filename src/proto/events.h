@@ -113,6 +113,20 @@ bool ParseUsage(const Json& record, const std::string& model, Usage* out);
 // False when the record is not an assistant message with usage on it.
 bool ParseContextTokens(const Json& record, long long* out);
 
+// The model that actually wrote an `assistant` record of the conversation
+// itself -- the one to show as "the model", because system/init does not say
+// it.  system/init carries the session's main-loop model, and with a
+// mode-dependent alias that is not the one answering: under --model opusplan it
+// reads claude-sonnet-5 in plan mode while every assistant record of the same
+// turn is claude-opus-5 (measured 2026-09-11, claude-gui-lkk.40).
+//
+// False for a subagent's record (`parent_tool_use_id` set -- a subagent may run
+// another model, and it is not what the session is running as) and for the
+// CLI's own `<synthetic>` stand-ins, which no model wrote.  A record read off
+// disk has no `parent_tool_use_id` at all and counts as the conversation's:
+// ReadSessionRecords has already dropped the sidechains.
+bool ParseAnsweringModel(const Json& record, std::string* out);
+
 // For logs and for the "unknown record type" case, where the name is the whole
 // of what we can say about it.
 const char* KindName(EventKind kind);

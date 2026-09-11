@@ -37,13 +37,11 @@ constexpr int kPromptLines = 5;
 // The wire mode name in a word of Slovak, for the status bar and for the
 // spoken confirmation.  Both are read aloud -- the bar on NVDA+End, the
 // confirmation on the key -- and a Slovak screen reader makes "acceptEdits"
-// into noise.  The session details dialog keeps the raw word on purpose (see
-// session_details.cpp); this is the human-facing side of the same fact.  An
-// unrecognised mode names itself rather than disappearing.
-// The short name for the status bar, where the mode stands next to three other
+// into noise.  Short, because in the bar the mode stands next to three other
 // fields and NVDA reads the lot in one breath.  The session details dialog
-// keeps the raw wire word on purpose (session_details.cpp); this is the
-// human-facing side of the same fact.  An unrecognised mode names itself.
+// keeps the raw wire word on purpose (see session_details.cpp); this is the
+// human-facing side of the same fact.  An unrecognised mode names itself
+// rather than disappearing.
 std::wstring PermissionModeLabel(const std::wstring& wire) {
   if (wire == L"default") return L"normálny";
   if (wire == L"acceptEdits") return L"automatické úpravy";
@@ -66,6 +64,17 @@ std::wstring PermissionModeGloss(const std::wstring& wire) {
   if (wire == L"bypassPermissions") return L"nepýta sa na nič";
   if (wire == L"dontAsk") return L"riskantné rovno zamietne";
   return {};
+}
+
+// What is said when the mode changes, whoever changed it: the name first, so
+// "did the key work" is answered at once, then what the mode does.  One
+// sentence for the key and for a change the CLI made, so the two never sound
+// like different things.
+std::wstring PermissionModeSentence(const std::wstring& wire) {
+  std::wstring said = L"režim " + PermissionModeLabel(wire);
+  const std::wstring gloss = PermissionModeGloss(wire);
+  if (!gloss.empty()) said += L" — " + gloss;
+  return said;
 }
 
 // What the reader thread hands across for a permission decision.  Lives on
@@ -385,12 +394,13 @@ bool SessionPane::Start(const proto::Session::Options& options) {
   // read on request and not in one breath with three other fields.
   details_.project = path;
   details_.permissionMode = options.permissionMode;
-  // What was asked for, until system/init says what it actually got.  An alias
+  // What was asked for, until the stream says what it actually got.  An alias
   // ("sonnet") is not the id the usage records are keyed by, but it is only
   // ever read by a human here: ParseUsage is handed this field too, and it
-  // sees the real id, because system/init arrives before the result of the
-  // turn it opens.
+  // sees the real id, because both system/init and the assistant records
+  // arrive before the result of the turn they belong to.
   details_.model = options.model;
+  details_.requestedModel = options.model;
   if (statusBar_) statusBar_->Set(StatusBar::kProject, L"projekt " + project_);
   SetWindowTextW(host_, (L"ClaudeLens — " + path).c_str());
   // A resumed session gets nothing of its history from the stream, so it is
@@ -418,6 +428,15 @@ bool SessionPane::Start(const proto::Session::Options& options) {
     const size_t before = model_.Text().size();
     const model::HistoryCounts counts =
         model::RestoreHistory(history, &model_);
+    // The model that answered last before the session was closed is the best
+    // thing known until this process says otherwise.  Not modelAnswered_: the
+    // resume may have been launched with another --model, and the first
+    // system/init is then the fresher word.
+    std::string answered;
+    for (const proto::Json& record : history) {
+      proto::ParseAnsweringModel(record, &answered);
+    }
+    if (!answered.empty()) details_.model = model::Utf16FromUtf8(answered);
     if (model_.Text().size() > before && counts.blocks > 0) {
       model::Edit edit;
       edit.start = before;
@@ -437,6 +456,11 @@ bool SessionPane::Start(const proto::Session::Options& options) {
     PutCaretAtEnd(transcript_);
     anchor_ = model_.Text().size();
   }
+  // What is known already goes into the bar now: the first system/init comes
+  // only with the first turn, and a bar that says nothing about the mode until
+  // then cannot answer "am I in plan mode" when it is asked -- before the first
+  // prompt is exactly when it is.
+  RefreshModelField();
   return session_.Start(
       options,
       [this](const proto::Event& event) {
@@ -490,6 +514,7 @@ void SessionPane::OnDrain() {
       if (WantsProgressSpeech()) AnnounceProgress(idBefore);
     }
     if (event.kind == proto::EventKind::Assistant) {
+      ShowAnsweringModel(event);
       // How full the window is right now.  The newest message wins, and there
       // are several per turn -- each one was sent everything before it, so the
       // last is the only one that is still true.
@@ -556,6 +581,10 @@ void SessionPane::OnDrain() {
       ShowRateLimit(event);
     }
   }
+  // Once per batch and off Session rather than off the records in it: the mode
+  // arrives on four kinds of record, and Session has already folded in all of
+  // them -- including the ones still on their way to this queue.
+  FollowPermissionMode();
 
   if (model_.blocks().size() != blocksBefore) bookmarks_.Set(0, reading);
 }
@@ -933,18 +962,51 @@ void SessionPane::ShowSessionFacts(const proto::Event& event) {
 
   // Gathered before the bar is written and whether or not there is a bar: the
   // details dialog needs these too, and the bar is optional here.
-  if (!text("model").empty()) details_.model = text("model");
-  if (!text("permissionMode").empty()) {
-    details_.permissionMode = text("permissionMode");
-  }
-  // A Shift+Tab the CLI has confirmed wins over the record's field: system/init
-  // arrives at the start of every turn, and whether its permissionMode tracks
-  // a mid-session switch is not something measured here.  Session::permissionMode
-  // is -- it is moved only by a confirmed set_permission_mode -- so it is the
-  // one to trust when it has an answer.
-  const std::string live = session_.permissionMode();
-  if (!live.empty()) details_.permissionMode = model::Utf16FromUtf8(live);
+  //
+  // Only until an assistant record has named the model.  system/init carries
+  // the main-loop model, which for a mode-dependent alias is not the one that
+  // answers -- under opusplan in plan mode it says claude-sonnet-5 while Opus
+  // writes every message of the turn -- and it comes at the start of every
+  // turn, so it would put the wrong name back each time.
+  //
+  // The permissionMode in it is not read here: Session takes it along with
+  // every other report of the mode, and FollowPermissionMode brings it over.
+  if (!modelAnswered_ && !text("model").empty()) details_.model = text("model");
   RefreshModelField();
+}
+
+void SessionPane::ShowAnsweringModel(const proto::Event& event) {
+  std::string answered;
+  if (!proto::ParseAnsweringModel(event.raw, &answered)) return;
+  modelAnswered_ = true;
+  const std::wstring model = model::Utf16FromUtf8(answered);
+  if (model == details_.model) return;
+  details_.model = model;
+  RefreshModelField();
+}
+
+void SessionPane::FollowPermissionMode() {
+  const std::wstring live = model::Utf16FromUtf8(session_.permissionMode());
+  if (live.empty() || live == details_.permissionMode) return;
+  // A mode appearing where none was known is not a change: that is the
+  // handshake answering a session started without --permission-mode.
+  const bool changed = !details_.permissionMode.empty();
+  details_.permissionMode = live;
+  RefreshModelField();
+  if (!changed) return;
+  // Said, because otherwise the last word on the mode is a wrong one: after a
+  // refused Shift+Tab the key already announced the mode that did not happen,
+  // and after ExitPlanMode or auto being dropped the reader was last told a
+  // mode that is gone.  It came off the stream, so it queues -- invariant 7.
+  // In the foreground only, like everything that is not a key's answer
+  // (invariant 11); behind the window the bar keeps it.
+  //
+  // Not gated on the caret following, as the turn's commentary is: this is
+  // not commentary but a correction of a fact the reader holds, it is one
+  // sentence, and it is rare.
+  if (InForeground() && speech_.available()) {
+    speech_.Say(PermissionModeSentence(live), false);
+  }
 }
 
 void SessionPane::RefreshModelField() {
@@ -955,12 +1017,15 @@ void SessionPane::RefreshModelField() {
   // to you at all.
   // Every field says what it is.  Read out one after another they are four
   // bare values otherwise, and "claude-opus-5, pokus, 5 h 83 %" is a riddle.
-  std::wstring facts = L"model " + details_.model;
+  // A part that is not known yet is left out rather than said empty.
+  std::wstring facts;
+  if (!details_.model.empty()) facts = L"model " + details_.model;
   const std::wstring& mode = details_.permissionMode;
   // "default" is left off: it is the state a reader assumes, and naming it
   // every time would crowd the field that has to be read in one breath.
   if (!mode.empty() && mode != L"default") {
-    facts += L", režim " + PermissionModeLabel(mode);
+    if (!facts.empty()) facts += L", ";
+    facts += L"režim " + PermissionModeLabel(mode);
   }
   statusBar_->Set(StatusBar::kModel, facts);
 }
@@ -1073,8 +1138,16 @@ void SessionPane::Interrupt() {
 }
 
 void SessionPane::CyclePermissionMode() {
-  const std::string next =
-      proto::NextPermissionMode(session_.permissionMode());
+  const std::string current = session_.permissionMode();
+  if (current.empty()) {
+    // Started without --permission-mode, and the CLI has not answered the
+    // handshake yet: the mode comes from settings and nobody here knows it.
+    // Cycling from a guess would send a mode the reader did not step to --
+    // which is exactly how plan used to become acceptEdits on the first press.
+    Announce(L"režim zatiaľ nie je známy, CLI ešte štartuje");
+    return;
+  }
+  const std::string next = proto::NextPermissionMode(current);
   if (!session_.SetPermissionMode(next)) {
     // The pipe is gone.  Say so rather than leaving the key silent.
     Announce(L"režim sa nepodarilo prepnúť");
@@ -1083,17 +1156,15 @@ void SessionPane::CyclePermissionMode() {
   // Said now, on the key, and the bar rewritten now too.  The CLI's
   // confirmation comes back on the reader thread, and invariant 7 keeps
   // interrupting speech for key responses only -- a confirmation folded in
-  // later could not cut in to be heard.  default, acceptEdits and plan are
-  // never refused (only bypassPermissions is, and the cycle never sends it),
-  // so there is nothing to wait for before saying it.  Session::permissionMode
-  // is already moved; details_ and the bar follow it here.
+  // later could not cut in to be heard.  Nearly every switch goes through, so
+  // the wait is not worth a silent key; the one that may not (auto, on an
+  // account without it) is put right by FollowPermissionMode when the refusal
+  // arrives, and said then.  Session::permissionMode is already moved;
+  // details_ and the bar follow it here, which is also what keeps
+  // FollowPermissionMode from saying this same mode a second time.
   details_.permissionMode = model::Utf16FromUtf8(next);
   RefreshModelField();
-  // Name first so "did the key work" is answered at once, then what it does.
-  std::wstring said = L"režim " + PermissionModeLabel(details_.permissionMode);
-  const std::wstring gloss = PermissionModeGloss(details_.permissionMode);
-  if (!gloss.empty()) said += L" — " + gloss;
-  Announce(said);
+  Announce(PermissionModeSentence(details_.permissionMode));
 }
 
 void SessionPane::CopySessionId() {
@@ -1120,14 +1191,12 @@ void SessionPane::RefreshFacts() {
   // whichever kind that turns out to be, and copying it in system/init would
   // mean the id existed but stayed invisible until an init happened to come.
   details_.id = model::Utf16FromUtf8(session_.sessionId());
-  // The mode is known from the initialize handshake, which is answered before
-  // the first turn -- so this is the one fact here that does not have to say
-  // "not yet".  Not overwritten with nothing when the answer has not arrived:
-  // what was asked for on the command line is better than a blank.
+  // The mode is not taken here.  It used to be, from the handshake, and the
+  // handshake is a snapshot from the start: after a Shift+Tab F2 showed the
+  // mode the session had already left.  details_.permissionMode is kept up to
+  // date by FollowPermissionMode after every batch, and taking it here as well
+  // would absorb a change without it being said or put into the bar.
   const proto::InitializeInfo handshake = session_.handshake();
-  if (!handshake.permissionMode.empty()) {
-    details_.permissionMode = model::Utf16FromUtf8(handshake.permissionMode);
-  }
   // The address and what it is paying with, in one field: separately they
   // would be two rows to tab through for one fact.  Nothing is invented when a
   // piece is missing -- the field is only as complete as the answer was.

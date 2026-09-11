@@ -87,8 +87,8 @@ class Session {
   // control_response confirms the mode, and OnLine folds it into
   // permissionMode() when it arrives.  The mode is also set optimistically here
   // so that a fast second press cycles from the new value, not the old one; a
-  // rejected mode (only bypassPermissions, which the cycle never sends) would
-  // be corrected back by the confirmation.
+  // refused mode (auto on an account without it) is put back to the last mode
+  // the CLI stated when the refusal arrives.
   bool SetPermissionMode(const std::string& mode);
 
   // Blocks until the turn in flight ends.  Returns false on timeout, which
@@ -122,9 +122,15 @@ class Session {
   // gets an empty string rather than a wrong one.
   InitializeInfo handshake() const;
 
-  // The permission mode the session is running under right now: the one the
-  // initialize handshake reported, moved by every SetPermissionMode the CLI
-  // has since confirmed.  Empty until the handshake is answered.  Kept apart
+  // The permission mode the session is running under right now, and the one
+  // place that knows it -- the pane asks here rather than keeping a copy from
+  // the records.  In order of arrival: Options::permissionMode, then the
+  // initialize handshake, then every mode the CLI states afterwards
+  // (system/status on each change, including the ones it makes itself;
+  // system/init; the echo of a set_permission_mode), with SetPermissionMode
+  // moving it ahead optimistically in between.  Empty only when nothing was
+  // asked for on the command line and the handshake has not been answered --
+  // then the mode depends on settings and is genuinely not known.  Kept apart
   // from handshake() because that one is a snapshot of one record and this one
   // changes.
   std::string permissionMode() const;
@@ -154,16 +160,9 @@ class Session {
   // Under mutex_: written by the reader thread, read by whoever asks.
   std::string sessionId_;
   InitializeInfo handshake_;
-  // Seeded from handshake_.permissionMode, then moved by SetPermissionMode
-  // (optimistically) and by the CLI's confirmation of it.
-  std::string permissionMode_;
-  // The id of the set_permission_mode request still waiting for its answer, so
-  // that a stray control_response is not taken for the confirmation.  Empty
-  // when nothing is pending.
-  std::string pendingModeRequestId_;
-  // The mode to restore if that request comes back refused -- SetPermissionMode
-  // moves permissionMode_ optimistically and this is how it is undone.
-  std::string pendingModePrev_;
+  // What permissionMode() answers.  Seeded in Start, fed every record in
+  // OnLine and every Shift+Tab in SetPermissionMode.
+  PermissionModeTracker mode_;
 
   // Writes come from the caller's thread and from the reader thread answering
   // a permission request, so the handle needs its own lock.

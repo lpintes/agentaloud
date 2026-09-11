@@ -175,6 +175,20 @@ bool ParseContextTokens(const Json& record, long long* out) {
   return true;
 }
 
+bool ParseAnsweringModel(const Json& record, std::string* out) {
+  if (StringField(record, "type") != "assistant") return false;
+  auto parent = record.find("parent_tool_use_id");
+  if (parent != record.end() && !parent->is_null()) return false;
+  auto message = record.find("message");
+  if (message == record.end() || !message->is_object()) return false;
+  const std::string model = StringField(*message, "model");
+  // "<synthetic>" is how the CLI marks a message it made up itself -- an API
+  // error, an interrupted turn.  Any name in angle brackets is that, not a model.
+  if (model.empty() || model.front() == '<') return false;
+  *out = model;
+  return true;
+}
+
 const char* KindName(EventKind kind) {
   switch (kind) {
     case EventKind::SystemInit: return "system/init";

@@ -998,8 +998,8 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     v oboch poliach tie isté zámerne, takže je to odchýlka; je zapísaná
     (claude-gui-lkk.34) a v zozname priznaná.
 
-20. **Režim povolení je stav procesu, mení ho Shift+Tab a nikto si ho
-    nepamätá.** Ekvivalent Shift+Tab z terminálu: `control_request` so
+20. **Režim povolení je stav procesu, mení ho Shift+Tab aj CLI samo a nikto si
+    ho nepamätá.** Ekvivalent Shift+Tab z terminálu: `control_request` so
     `subtype: "set_permission_mode"` a holým `mode`. Odpoveď je
     `control_response` `success`, telo vnorené ako pri `initialize`
     (`response.response.mode`) a headless CLI v ňom mód ozve späť; iný hostiteľ
@@ -1016,29 +1016,92 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     za behu zapnúť **nedá** — `set_permission_mode` naň vráti `subtype: "error"`
     s prázdnym telom, jediná cesta je `--dangerously-skip-permissions` pri
     štarte. `dontAsk` sa prepnúť dá, ale v rotácii terminálu nie je.
-    Mimocyklový alebo neznámy mód začína nanovo na `acceptEdits`, nech klávesa
-    vždy pohne (`proto::NextPermissionMode`).
+    Mimocyklový mód začína nanovo na `acceptEdits`, nech klávesa vždy pohne
+    (`proto::NextPermissionMode`). **Neznámy** mód klávesa neprepne a povie to
+    („režim zatiaľ nie je známy") — to je jediný prípad, keď cyklus nemá z čoho
+    vyjsť a hádanie by poslalo mód, na ktorý čitateľ nestlačil.
 
-    **`proto::Session::permissionMode()` je jediný zdroj pravdy o živom
-    móde.** Naseje ho odpoveď na `initialize`, posúva ho výhradne potvrdený
-    `set_permission_mode`. Pole `permissionMode` v `system/init` sa
-    mimo štartu **neverí** — chodí na začiatku každého ťahu a či sleduje zmenu
-    za behu, odmerané nie je; `ShowSessionFacts` preto po ňom prepíše mód tým,
-    čo hovorí `Session`. `SetPermissionMode` nastaví mód aj **optimisticky**
-    hneď pri odoslaní (a odloží predchádzajúci do `pendingModePrev_`), aby
-    druhé rýchle Shift+Tab cyklovalo z novej hodnoty. Odpoveď to opraví:
-    `success` na ozvaný mód, `error` **späť** na `pendingModePrev_` — `auto`
-    môže na účte bez auto-módu zlyhať a bez toho vrátenia by cyklus zamrzol.
-    Rozlišuje `ControlResponseOutcome` (id + `success`/`error`), párované cez
-    `pendingModeRequestId_`.
+    **Mód nemení len Shift+Tab — mení ho aj CLI samo, a hlási to.** Po
+    schválení `ExitPlanMode` prejde session z `plan` do `default`, `auto` zhodí
+    brána, keď sa zavrie. O **každej** zmene, nech ju urobil ktokoľvek, pošle CLI
+    `{"type":"system","subtype":"status","status":null,"permissionMode":"…"}`
+    (v binárke `onPermissionModeChanged`; odmerané 11. 9. 2026 —
+    `tools/probe_plan_exit.py`: status `default` prišiel v tej istej sekunde ako
+    schválenie `ExitPlanMode`). Prvá verzia tento záznam nečítala a mód brala
+    len z vlastných potvrdení, takže po `ExitPlanMode` hovoril stavový riadok
+    „plánovanie" až do konca session a ďalší Shift+Tab išiel zo zlého miesta.
+    Zlyhávalo to ticho a horšie než predtým, lebo hodnota zo `Session`
+    prebíjala `system/init`, ktorý pravdu mal (claude-gui-lkk.41).
 
-    Preto sa mód **ohlasuje synchrónne na klávese** (`CyclePermissionMode`),
-    nie až na potvrdení: podľa invariantu 7 smie prerušiť reč len odozva na
-    klávesu, a potvrdenie príde z čítacieho vlákna, keď už do fronty NVDA
-    nemá ako vstúpiť. Stavový riadok aj reč hovoria **slovenský názov**
+    **`proto::Session::permissionMode()` je jediný zdroj pravdy o živom móde**
+    a pravidlá sú v `proto::PermissionModeTracker`, vytiahnuté von preto, aby sa
+    dali testovať na záznamoch, nie na bežiacom CLI — všetky tri chyby prvej
+    verzie boli v poradí, v akom veci prichádzajú:
+
+      • **Semienko je mód z príkazového riadku**, nie prázdno. Odpoveď na
+        `initialize` príde až po `SessionStart` hookoch (tu ~20 s) a dovtedy
+        prvý Shift+Tab cykloval od prázdna, čiže z `plan` do `acceptEdits`.
+      • **Hlásením je všetko, čo mód povie:** handshake, `system/status`,
+        `system/init` aj ozvaný mód v odpovedi na **ktorýkoľvek** náš
+        `set_permission_mode`.
+      • **Shift+Tab posunie mód optimisticky**, aby druhé rýchle stlačenie
+        cyklovalo z novej hodnoty. Kým na **najnovšiu** požiadavku nepríde
+        odpoveď, hlásenia menia len „posledné slovo CLI", nie `current()` — CLI
+        píše v poradí, takže hlásenie môže byť staršie než požiadavka.
+      • **Odmietnutie sa vracia na posledné slovo CLI**, nie na mód pred
+        stlačením. Pri dvoch stlačeniach mohlo byť odmietnuté aj prvé.
+        Odpoveď na staršiu požiadavku `current()` neurovná vôbec — vrátila by
+        mód, cez ktorý čitateľ už prestlačil.
+
+    Mód sa **ohlasuje synchrónne na klávese** (`CyclePermissionMode`), nie až na
+    potvrdení: podľa invariantu 7 smie prerušiť reč len odozva na klávesu.
+    Zmenu, ktorú panel neurobil sám — odmietnutý Shift+Tab, `ExitPlanMode`,
+    zhodené `auto` — preberá po každej dávke `SessionPane::FollowPermissionMode`:
+    prepíše stavový riadok a povie tú istú vetu ako klávesa, **do fronty**
+    a len v popredí (invariant 11). Nie je to priebežný komentár, ale oprava
+    faktu, ktorý čitateľ drží — posledné, čo počul, bol mód, ktorý už neplatí.
+    Mód z handshaku, ktorý sa objaví tam, kde žiadny známy nebol, zmena nie je
+    a nehovorí sa. Po schválení `ExitPlanMode` veta **zaznie za zavretým
+    dialógom**, teda tam, kde sa podľa invariantu 6 hovoriť nedá: v teste cez
+    NVDA MCP (11. 9. 2026) odišla 34 ms pred ohlásením titulku okna, ktoré ju
+    naživo zruší. Nechané tak zámerne — odchod z plánovania je čitateľov vlastný
+    úkon práve v tom dialógu, a mód drží stavový riadok. F2 si mód z handshaku **neberie** — bol to snímok zo
+    štartu a po Shift+Tabe ukazoval mód, z ktorého session už odišla.
+
+    Stavový riadok aj reč hovoria **slovenský názov**
     (`PermissionModeLabel`); dialóg F2 drží surové slovo CLI zámerne
     (`session_details.cpp`). Prežitie módu medzi spusteniami je samostatná
     práca (claude-gui-lkk.6.1 notes) — CLI ho headless behu neuchová.
+
+21. **Model v stavovom riadku je ten, ktorý odpovedá — nie ten zo
+    `system/init`.** `system/init.model` je „hlavný model" session, a pri
+    aliase, ktorý závisí od módu, to nie je model, ktorý píše. `opusplan` sa
+    preloží na Sonnet, a Opus dostane len požiadavka odoslaná v móde `plan`
+    (v binárke `Vl()` → `mainLoopModel` pre `system/init`, `runtimeModel` pre
+    API). Odmerané 11. 9. 2026 na jednom procese: `system/init`
+    `{model: claude-sonnet-5, permissionMode: plan}`, všetky záznamy
+    `assistant` toho ťahu `claude-opus-5`. Používateľ z toho usúdil, že režim
+    plánovania je ignorovaný — bar mu povedal Sonnet, kým písal Opus
+    (claude-gui-lkk.40).
+
+    A vyberá sa **na každú požiadavku, nie na ťah**: po schválení
+    `ExitPlanMode` ten istý ťah pokračoval na `claude-sonnet-5`
+    (`tools/probe_plan_exit.py`). Jediný svedok, ktorý to stíha, je
+    `message.model` záznamu `assistant`, a číta ho `proto::ParseAnsweringModel`.
+    Vynecháva záznam subagenta (`parent_tool_use_id` vyplnené — môže bežať na
+    inom modeli a session ním nie je) a náhradné správy CLI (`<synthetic>`).
+    Záznam z disku `parent_tool_use_id` nemá vôbec a počíta sa, lebo
+    sidechainy zahodil už `ReadSessionRecords`.
+
+    Poradie zdrojov je poradie čerstvosti: `--model` zo spustenia → pri
+    `--resume` posledný model z histórie → `system/init` → `assistant`. Keď raz
+    prehovoril `assistant`, `system/init` už model **neprepisuje**
+    (`SessionPane::modelAnswered_`): chodí na začiatku každého ťahu a pri
+    `opusplan` v `plan` by vrátil Sonnet na celé premýšľanie pred prvou
+    správou. `ParseUsage` dostáva ten istý model, takže `contextWindow` patrí
+    modelu, ktorý beží. F2 k modelu pripíše „zvolený opusplan", keď zvolené
+    meno v modeli nie je — je to jediné miesto, ktoré povie, že sa model mimo
+    `plan` zmení.
 
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa

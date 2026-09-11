@@ -103,20 +103,6 @@ bool SaysWhichConversation(const std::vector<std::wstring>& extraArgs) {
   return false;
 }
 
-// The request id and success flag of any control_response, success or error.
-// Enough to tell whether the Shift+Tab we sent landed; the echoed mode, on
-// success, is ParseSetPermissionModeResponse's job.
-bool ControlResponseOutcome(const Json& record, std::string* id, bool* ok) {
-  if (record.value("type", std::string()) != "control_response") return false;
-  auto response = record.find("response");
-  if (response == record.end() || !response->is_object()) return false;
-  const std::string subtype = response->value("subtype", std::string());
-  if (subtype != "success" && subtype != "error") return false;
-  *id = response->value("request_id", std::string());
-  *ok = subtype == "success";
-  return true;
-}
-
 }  // namespace
 
 Session::~Session() { Stop(5000); }
@@ -140,6 +126,12 @@ bool Session::Start(const Options& options, EventCallback onEvent,
   // conversation is someone else's to name -- a resumed one keeps its own id,
   // and that one does arrive on the stream.
   sessionId_.assign(effective.sessionId.begin(), effective.sessionId.end());
+  // The mode asked for on the command line is the mode the CLI starts in; see
+  // PermissionModeTracker for why it is worth knowing before the handshake.
+  // The handshake overwrites it with the CLI's own word, so a mode the CLI
+  // read differently is corrected, not kept.  Mode names are ASCII.
+  mode_.Seed(std::string(options.permissionMode.begin(),
+                         options.permissionMode.end()));
   if (!process_.Start(BuildCommandLine(effective), options.workingDir,
                       [this](std::string_view bytes) { OnBytes(bytes); })) {
     return false;
@@ -180,36 +172,14 @@ void Session::OnLine(std::string_view line) {
         info.requestId == initRequestId_) {
       std::lock_guard<std::mutex> lock(mutex_);
       handshake_ = info;
-      // The starting point for permissionMode(); SetPermissionMode moves it
-      // from here.  Not overwritten if a switch already landed first.
-      if (permissionMode_.empty()) permissionMode_ = info.permissionMode;
     }
-    // The answer to a Shift+Tab.  Only the one we are still waiting for: the
-    // request id has to match, or a response to something else would be read
-    // as a mode change.
-    std::string ctlId;
-    bool ctlOk = false;
-    if (ControlResponseOutcome(event.raw, &ctlId, &ctlOk)) {
-      std::lock_guard<std::mutex> lock(mutex_);
-      if (!pendingModeRequestId_.empty() && ctlId == pendingModeRequestId_) {
-        pendingModeRequestId_.clear();
-        if (ctlOk) {
-          // The echoed mode, or -- on a host that acks with {} -- what
-          // SetPermissionMode optimistically put there already.
-          std::string echoed;
-          std::string ignore;
-          if (ParseSetPermissionModeResponse(event.raw, &ignore, &echoed) &&
-              !echoed.empty()) {
-            permissionMode_ = echoed;
-          }
-        } else {
-          // Refused: bypassPermissions from a stdio host, or auto/dontAsk on
-          // an account without them.  Undo the optimistic set so the next
-          // Shift+Tab cycles from where the mode really is.
-          permissionMode_ = pendingModePrev_;
-        }
-      }
-    }
+  }
+
+  // Every record, not only the ones classified as control: the changes the CLI
+  // makes on its own arrive as system/status -- see ParsePermissionModeReport.
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    mode_.Observe(event.raw);
   }
 
   if (event.kind == EventKind::ControlRequest) {
@@ -264,7 +234,7 @@ InitializeInfo Session::handshake() const {
 
 std::string Session::permissionMode() const {
   std::lock_guard<std::mutex> lock(mutex_);
-  return permissionMode_;
+  return mode_.current();
 }
 
 bool Session::SendJson(const Json& value) {
@@ -300,15 +270,10 @@ bool Session::Interrupt() {
 
 bool Session::SetPermissionMode(const std::string& mode) {
   const std::string requestId =
-      "mode-" + std::to_string(nextRequestId_++);
+      kModeRequestPrefix + std::to_string(nextRequestId_++);
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    pendingModeRequestId_ = requestId;
-    // Optimistic: a second press before the confirmation should cycle from
-    // here.  OnLine corrects this when the CLI answers -- to the echoed mode on
-    // success, back to pendingModePrev_ if the mode was refused.
-    pendingModePrev_ = permissionMode_;
-    permissionMode_ = mode;
+    mode_.Requested(requestId, mode);
   }
   return SendJson(MakeSetPermissionMode(requestId, mode));
 }

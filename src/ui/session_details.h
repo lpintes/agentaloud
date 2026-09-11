@@ -30,7 +30,13 @@ namespace ui {
 
 struct SessionDetails {
   std::wstring id;              // empty until the first system/init
+  // The model that answered last; before any answer, what system/init named,
+  // and before that what was asked for.
   std::wstring model;
+  // What --model said, alias and all.  Kept beside `model` because an alias
+  // such as opusplan resolves to different models depending on the mode, and
+  // the resolved name alone does not say that it will change.
+  std::wstring requestedModel;
   std::wstring permissionMode;  // empty means the CLI's own default
   // Who is paying, out of the initialize handshake.  Here because the cost
   // field below reads as "this was free" on a subscription and nothing else

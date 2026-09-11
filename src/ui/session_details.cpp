@@ -95,7 +95,15 @@ SessionDetailsDialog::SessionDetailsDialog(const SessionDetails& details,
 
 bool SessionDetailsDialog::OnInit() {
   SetText(IDC_DETAILS_ID, OrUnknown(details_.id));
-  SetText(IDC_DETAILS_MODEL, OrUnknown(details_.model));
+  // The asked-for name only when it says something the model does not: "opus"
+  // beside claude-opus-5 would be the same fact twice, but "opusplan" is the
+  // only place that says the model will be a different one out of plan mode.
+  std::wstring model = OrUnknown(details_.model);
+  if (!details_.requestedModel.empty() && !details_.model.empty() &&
+      details_.model.find(details_.requestedModel) == std::wstring::npos) {
+    model += L", zvolený " + details_.requestedModel;
+  }
+  SetText(IDC_DETAILS_MODEL, model);
   // The CLI's own word for the mode, with nothing added.  It first said
   // "default (pýta sa na všetko)" while the mode was still unknown and plain
   // "default" once system/init had been, so the same session read two

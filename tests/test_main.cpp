@@ -770,6 +770,189 @@ void TestPermissionModeSwitch() {
       proto::Json::parse(R"({"type": "control_request"})"), &dummy, &dummyMode));
 }
 
+// Zaznamy v tvare, v akom ich CLI 2.1.267 naozaj poslalo sonde 2026-09-11
+// (--permission-mode plan --model opusplan, potom set_permission_mode auto
+// a plan). Pomocniky, aby test citat ako poradie udalosti, nie ako JSON.
+proto::Json ModeStatus(const char* mode) {
+  proto::Json record = proto::Json::parse(
+      R"({"type": "system", "subtype": "status", "status": null})");
+  record["permissionMode"] = mode;
+  return record;
+}
+
+proto::Json ModeAnswer(const char* id, const char* echoed) {
+  proto::Json record = proto::Json::parse(R"({
+    "type": "control_response",
+    "response": {"subtype": "success", "response": {}}
+  })");
+  record["response"]["request_id"] = id;
+  if (echoed != nullptr) record["response"]["response"]["mode"] = echoed;
+  return record;
+}
+
+proto::Json ModeRefusal(const char* id) {
+  proto::Json record = proto::Json::parse(
+      R"({"type": "control_response", "response": {"subtype": "error"}})");
+  record["response"]["request_id"] = id;
+  return record;
+}
+
+void TestPermissionModeReports() {
+  TEST("control: system/status hlasi kazdu zmenu rezimu, aj tu od CLI");
+
+  // Presne tento zaznam prisiel za potvrdenim set_permission_mode. Posiela ho
+  // CLI pri KAZDEJ zmene (onPermissionModeChanged), teda aj po schvaleni
+  // ExitPlanMode -- a appka ho do claude-gui-lkk.41 necitala.
+  std::string mode;
+  CHECK(proto::ParsePermissionModeReport(
+      proto::Json::parse(R"({"type": "system", "subtype": "status",
+                             "status": null, "permissionMode": "auto",
+                             "uuid": "u", "session_id": "s"})"),
+      &mode));
+  CHECK_EQ(mode, std::string("auto"));
+
+  // system/init nesie rezim na zaciatku kazdeho tahu.
+  std::string atInit;
+  CHECK(proto::ParsePermissionModeReport(
+      proto::Json::parse(R"({"type": "system", "subtype": "init",
+                             "model": "claude-sonnet-5",
+                             "permissionMode": "plan"})"),
+      &atInit));
+  CHECK_EQ(atInit, std::string("plan"));
+
+  // Status bez rezimu (poziadavka na API, kompaktovanie) nie je hlasenie.
+  std::string none;
+  CHECK(!proto::ParsePermissionModeReport(
+      proto::Json::parse(
+          R"({"type": "system", "subtype": "status", "status": "requesting"})"),
+      &none));
+  CHECK(!proto::ParsePermissionModeReport(
+      proto::Json::parse(R"({"type": "system", "subtype": "thinking_tokens",
+                             "permissionMode": "plan"})"),
+      &none));
+  CHECK(none.empty());
+}
+
+void TestPermissionModeTracker() {
+  TEST("control: rezim sleduje CLI, nie len nas Shift+Tab");
+
+  // Pred handshakom: rezim z prikazoveho riadku. Bez neho sa prvy Shift+Tab
+  // v projekte s bd prime hookom (handshake ~20 s) cykloval od prazdna, teda
+  // z plan do acceptEdits.
+  proto::PermissionModeTracker tracker;
+  tracker.Seed("plan");
+  CHECK_EQ(tracker.current(), std::string("plan"));
+  CHECK_EQ(proto::NextPermissionMode(tracker.current()), std::string("auto"));
+
+  // Bez --permission-mode a bez handshaku sa rezim nevie -- zavisi od settings.
+  proto::PermissionModeTracker unknown;
+  unknown.Seed("");
+  CHECK(unknown.current().empty());
+  unknown.Observe(proto::Json::parse(R"({
+    "type": "control_response",
+    "response": {"subtype": "success", "request_id": "init-1",
+                 "response": {"current_permission_mode": "auto"}}
+  })"));
+  CHECK_EQ(unknown.current(), std::string("auto"));
+
+  // Shift+Tab: hned novy rezim. Hlasenie, ktore pride kym odpoved nie je --
+  // system/init tahu, ktory CLI zacalo pred nasou poziadavkou -- ho nesmie
+  // vratit, inak by citatel pocul "auto" a bar by hovoril plan.
+  tracker.Requested("mode-2", "auto");
+  CHECK_EQ(tracker.current(), std::string("auto"));
+  tracker.Observe(proto::Json::parse(
+      R"({"type": "system", "subtype": "init", "permissionMode": "plan"})"));
+  CHECK_EQ(tracker.current(), std::string("auto"));
+  tracker.Observe(ModeAnswer("mode-2", "auto"));
+  tracker.Observe(ModeStatus("auto"));
+  CHECK_EQ(tracker.current(), std::string("auto"));
+
+  // Zmena, ktoru urobilo CLI samo: schvalene ExitPlanMode, auto zhodene
+  // branou. Pride len ako system/status.
+  tracker.Observe(ModeStatus("default"));
+  CHECK_EQ(tracker.current(), std::string("default"));
+  CHECK_EQ(proto::NextPermissionMode(tracker.current()),
+           std::string("acceptEdits"));
+
+  // Odmietnutie: spat na posledne slovo CLI.
+  tracker.Requested("mode-3", "acceptEdits");
+  tracker.Observe(ModeRefusal("mode-3"));
+  CHECK_EQ(tracker.current(), std::string("default"));
+
+  // Dve rychle stlacenia, obe odmietnute. Stara verzia sa po druhom vracala na
+  // optimisticku hodnotu prveho, ktore tiez neprislo.
+  tracker.Requested("mode-4", "acceptEdits");
+  tracker.Requested("mode-5", "plan");
+  tracker.Observe(ModeRefusal("mode-4"));
+  CHECK_EQ(tracker.current(), std::string("plan"));  // stale novsie stoji
+  tracker.Observe(ModeRefusal("mode-5"));
+  CHECK_EQ(tracker.current(), std::string("default"));
+
+  // Dve rychle stlacenia, prve prejde a druhe nie: vysledok je prve.
+  tracker.Requested("mode-6", "acceptEdits");
+  tracker.Requested("mode-7", "plan");
+  tracker.Observe(ModeAnswer("mode-6", "acceptEdits"));
+  tracker.Observe(ModeStatus("acceptEdits"));
+  CHECK_EQ(tracker.current(), std::string("plan"));
+  tracker.Observe(ModeRefusal("mode-7"));
+  CHECK_EQ(tracker.current(), std::string("acceptEdits"));
+
+  // Hostitel, ktory potvrdi prazdnym objektom: plati to, o co sa ziadalo.
+  tracker.Requested("mode-8", "plan");
+  tracker.Observe(ModeAnswer("mode-8", nullptr));
+  CHECK_EQ(tracker.current(), std::string("plan"));
+
+  // Odpoved na nieco ine nez zmenu rezimu -- napr. na prerusenie -- rezim
+  // nehybe, ani ked je uspesna.
+  tracker.Requested("mode-9", "auto");
+  tracker.Observe(ModeAnswer("stop-10", nullptr));
+  CHECK_EQ(tracker.current(), std::string("auto"));
+  tracker.Observe(ModeRefusal("stop-11"));
+  CHECK_EQ(tracker.current(), std::string("auto"));
+}
+
+void TestAnsweringModel() {
+  TEST("events: model je ten, ktory odpoveda, nie ten zo system/init");
+
+  // Pri --model opusplan v rezime plan hovori system/init claude-sonnet-5
+  // a vsetky assistant zaznamy toho isteho tahu claude-opus-5 (odmerane
+  // 2026-09-11, claude-gui-lkk.40). Stream posiela parent_tool_use_id: null.
+  std::string model;
+  CHECK(proto::ParseAnsweringModel(
+      proto::Json::parse(R"({"type": "assistant", "parent_tool_use_id": null,
+                             "message": {"model": "claude-opus-5",
+                                         "content": []}})"),
+      &model));
+  CHECK_EQ(model, std::string("claude-opus-5"));
+
+  // Zaznam z disku (--resume) pole nema vobec a je to stale hlavna
+  // konverzacia -- sidechainy zahodil uz ReadSessionRecords.
+  std::string fromDisk;
+  CHECK(proto::ParseAnsweringModel(
+      proto::Json::parse(R"({"type": "assistant", "isSidechain": false,
+                             "message": {"model": "claude-sonnet-5"}})"),
+      &fromDisk));
+  CHECK_EQ(fromDisk, std::string("claude-sonnet-5"));
+
+  // Subagent moze bezat na inom modeli a session tym modelom nie je.
+  std::string untouched = "claude-opus-5";
+  CHECK(!proto::ParseAnsweringModel(
+      proto::Json::parse(R"({"type": "assistant",
+                             "parent_tool_use_id": "toolu_01",
+                             "message": {"model": "claude-haiku-4-5"}})"),
+      &untouched));
+  // Nahradna sprava, ktoru CLI vyrobilo samo (chyba API, preruseny tah).
+  // V korpuse je ako model "<synthetic>".
+  CHECK(!proto::ParseAnsweringModel(
+      proto::Json::parse(R"({"type": "assistant", "parent_tool_use_id": null,
+                             "message": {"model": "<synthetic>"}})"),
+      &untouched));
+  CHECK(!proto::ParseAnsweringModel(
+      proto::Json::parse(R"({"type": "user", "message": {"model": "x"}})"),
+      &untouched));
+  CHECK_EQ(untouched, std::string("claude-opus-5"));
+}
+
 void TestUsageParsing() {
   TEST("events: cena a tokeny sa citaju z modelUsage, nie z usage");
   // Tvar je odpozorovany z tests/fixtures/basic.jsonl, nie vymysleny. Podstatne
@@ -1548,6 +1731,21 @@ void TestFixtureBasic(const std::string& dir) {
   }
   CHECK(records.size() > 20);
 
+  // Kazdy assistant zaznam skutocneho streamu menuje model, ktory ho napisal
+  // -- z toho zije model v stavovom riadku (claude-gui-lkk.40). Keby CLI
+  // prestalo posielat parent_tool_use_id: null alebo message.model, zistilo by
+  // sa to tu, nie tak, ze bar potichu zostane na system/init.
+  size_t assistants = 0;
+  size_t named = 0;
+  for (const proto::Json& record : records) {
+    if (record.value("type", std::string()) != "assistant") continue;
+    ++assistants;
+    std::string answered;
+    if (proto::ParseAnsweringModel(record, &answered)) ++named;
+  }
+  CHECK(assistants > 0);
+  CHECK_EQ(named, assistants);
+
   model::Transcript transcript;
   std::string problem;
   if (!Replay(records, &transcript, &problem)) {
@@ -1896,6 +2094,9 @@ int main(int argc, char** argv) {
   TestRateLimitParsing();
   TestInitializeResponseParsing();
   TestPermissionModeSwitch();
+  TestPermissionModeReports();
+  TestPermissionModeTracker();
+  TestAnsweringModel();
   TestUsageParsing();
   TestContextTokensParsing();
   TestNewlinesAreOneCharacter();
