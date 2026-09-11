@@ -1,17 +1,26 @@
 # Co CLI povie o rezime a o modeli, ked session opusti plan sama -- schvalenim
 # ExitPlanMode, nie nasim set_permission_mode (claude-gui-lkk.40 a .41).
 #
-# Dve otazky:
+# Tri otazky:
 #   1. Pride po schvaleni ExitPlanMode 'system/status' s novym permissionMode?
 #      Ak ano, appka sa o zmene dozvie bez hadania; ak nie, bar zostane na plane.
 #   2. Ktory model naozaj odpoveda pri --model opusplan pred a po?  system/init
 #      nesie 'hlavny model' (pri opusplan Sonnet), assistant zaznamy ten skutocny.
+#   3. DO AKEHO rezimu sa po ExitPlanMode vrati?  V binarke je to prePlanMode,
+#      teda rezim, z ktoreho sa do plan vstupilo -- a ten zavisi od cesty:
+#      priamo z auto, alebo cez Shift+Tab cyklus default -> acceptEdits -> plan.
 #
 # POSIELA PROMPTY, takze to stoji kredit -- dva kratke tahy, prvy na Opuse.
 # Prieskumny nastroj, nie sucast produktu (viz CLAUDE.md).
 #
 # Pouzitie:
-#   python tools/probe_plan_exit.py [sekundy]
+#   python tools/probe_plan_exit.py [sekundy] [startovaci-rezim] [rezim,rezim,...]
+#
+#   ... 300                                  start rovno v plan
+#   ... 300 auto plan                        z auto priamo do plan
+#   ... 300 auto default,acceptEdits,plan    z auto cestou Shift+Tabu
+#
+# Prepnutia sa poslu ako set_permission_mode po initialize, pred promptom.
 #
 # Na can_use_tool pre ExitPlanMode sa odpovie allow s nezmenenym vstupom; na
 # vsetko ostatne deny, nech druhy tah nic nezapise.  Vypisuje sa len to, co sa
@@ -29,7 +38,6 @@ ARGS = [
     "--input-format", "stream-json",
     "--output-format", "stream-json",
     "--permission-prompt-tool", "stdio",
-    "--permission-mode", "plan",
     "--model", "opusplan",
 ]
 
@@ -53,9 +61,11 @@ def prompt(text):
 
 def main():
     seconds = float(sys.argv[1]) if len(sys.argv) > 1 else 240.0
+    start_mode = sys.argv[2] if len(sys.argv) > 2 else "plan"
+    switches = [m for m in sys.argv[3].split(",") if m] if len(sys.argv) > 3 else []
     workdir = tempfile.mkdtemp(prefix="probe_plan_exit_")
     child = subprocess.Popen(
-        ARGS, cwd=workdir, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        ARGS + ["--permission-mode", start_mode], cwd=workdir, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         stderr=subprocess.PIPE, text=True, encoding="utf-8", shell=True)
     started = time.time()
     results = []
@@ -99,9 +109,13 @@ def main():
                                           "request_id": record.get("request_id"),
                                           "response": body}})
             elif kind == "control_response":
-                inner = (record.get("response") or {}).get("response") or {}
+                outer = record.get("response") or {}
+                inner = outer.get("response") or {}
                 if "current_permission_mode" in inner:
                     say("initialize", inner["current_permission_mode"])
+                elif str(outer.get("request_id", "")).startswith("mode-"):
+                    say("set_permission_mode", outer.get("request_id"),
+                        outer.get("subtype"), inner.get("mode"))
             elif kind == "result":
                 usage = record.get("modelUsage") or {}
                 say("result", record.get("subtype"),
@@ -112,6 +126,14 @@ def main():
     threading.Thread(target=read, daemon=True).start()
     send(child, {"type": "control_request", "request_id": "init-1",
                  "request": {"subtype": "initialize", "hooks": {}}})
+    for number, mode in enumerate(switches, 1):
+        # Rozostup ako pri ludskom Shift+Tabe; na odpoved sa necaka, CLI
+        # poziadavky spracuje v poradi.
+        time.sleep(1.0)
+        send(child, {"type": "control_request", "request_id": "mode-%d" % number,
+                     "request": {"subtype": "set_permission_mode", "mode": mode}})
+    if switches:
+        time.sleep(2.0)
     send(child, prompt(FIRST))
 
     deadline = started + seconds

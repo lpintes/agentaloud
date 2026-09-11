@@ -1022,12 +1022,23 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     vyjsť a hádanie by poslalo mód, na ktorý čitateľ nestlačil.
 
     **Mód nemení len Shift+Tab — mení ho aj CLI samo, a hlási to.** Po
-    schválení `ExitPlanMode` prejde session z `plan` do `default`, `auto` zhodí
-    brána, keď sa zavrie. O **každej** zmene, nech ju urobil ktokoľvek, pošle CLI
+    schválení `ExitPlanMode` sa session vráti do režimu, **z ktorého do
+    plánovania vošla** (`prePlanMode`), a na `default` padne len vtedy, keď
+    taký nie je (štart rovno v `plan`) alebo keď je to `auto` a jeho brána je
+    zavretá; `auto` zhodí brána aj za behu. Odmerané 11. 9. 2026
+    `tools/probe_plan_exit.py` na troch cestách: štart v `plan` → `default`;
+    `auto` → `plan` priamo → `auto`; `auto` → `default` → `acceptEdits` →
+    `plan`, teda cestou Shift+Tabu → **`acceptEdits`**. Cyklus appky ide
+    `default → acceptEdits → plan → auto`, takže kto štartuje v `auto` a do
+    plánovania sa preklikne, po schválení **nepristane v `auto`**. Terminál to
+    rieši voľbou priamo v dialógu `ExitPlanMode` („Yes, and use auto mode",
+    „Yes, auto-accept edits", „Yes, manually approve edits"), čo sú
+    `setMode` úpravy odoslané so schválením; náš dialóg ich nemá
+    (claude-gui-lkk.43). O **každej** zmene, nech ju urobil ktokoľvek, pošle
+    CLI
     `{"type":"system","subtype":"status","status":null,"permissionMode":"…"}`
-    (v binárke `onPermissionModeChanged`; odmerané 11. 9. 2026 —
-    `tools/probe_plan_exit.py`: status `default` prišiel v tej istej sekunde ako
-    schválenie `ExitPlanMode`). Prvá verzia tento záznam nečítala a mód brala
+    (v binárke `onPermissionModeChanged`; status prišiel na všetkých troch
+    cestách v tej istej sekunde ako schválenie `ExitPlanMode`). Prvá verzia tento záznam nečítala a mód brala
     len z vlastných potvrdení, takže po `ExitPlanMode` hovoril stavový riadok
     „plánovanie" až do konca session a ďalší Shift+Tab išiel zo zlého miesta.
     Zlyhávalo to ticho a horšie než predtým, lebo hodnota zo `Session`
@@ -1065,8 +1076,9 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     dialógom**, teda tam, kde sa podľa invariantu 6 hovoriť nedá: v teste cez
     NVDA MCP (11. 9. 2026) odišla 34 ms pred ohlásením titulku okna, ktoré ju
     naživo zruší. Nechané tak zámerne — odchod z plánovania je čitateľov vlastný
-    úkon práve v tom dialógu, a mód drží stavový riadok. F2 si mód z handshaku **neberie** — bol to snímok zo
-    štartu a po Shift+Tabe ukazoval mód, z ktorého session už odišla.
+    úkon práve v tom dialógu, a mód drží stavový riadok. F2 si mód z handshaku
+    **neberie** — bol to snímok zo štartu a po Shift+Tabe ukazoval mód, z ktorého
+    session už odišla.
 
     Stavový riadok aj reč hovoria **slovenský názov**
     (`PermissionModeLabel`); dialóg F2 drží surové slovo CLI zámerne
