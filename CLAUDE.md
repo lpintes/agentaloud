@@ -799,8 +799,11 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     `GetConsoleMode` na tom handle prejde — inak sa to nedá, oba sú `HANDLE`
     a do oboch sa dá písať.
 
-    Nápoveda samotná je v `main.cpp::HelpText`, o desať riadkov vyššie než
-    `ReadArguments`, ktorý ju napĺňa pravdou.
+    Nápoveda samotná je v `src/arguments.cpp::HelpText`, v tom istom súbore
+    ako `Parse`, ktorý ju napĺňa pravdou — a čo sa dá, berie z pravdy priamo:
+    zoznam backendov a režimy predvoleného backendu z jeho `Capabilities`.
+    Parser je mimo `main.cpp` preto, aby ho videli testy (`TestArguments`);
+    `main.cpp` z neho drží len čítanie argv, výber priečinka a `Expand`.
 
     Tou istou cestou chodí aj odmietnutie, a je to tá druhá polovica toho
     istého pravidla: **argument začínajúci pomlčkou, ktorý appka nepozná, sa
@@ -811,9 +814,44 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     konci riadku by inak zjedol priečinok o argument ďalej. Holá pomlčka spadá
     pod to isté pravidlo zámerne — na Windows to nie je cesta, ktorú by niekto
     myslel vážne, a pravidlo s jednou výnimkou si nikto nezapamätá. Cena je, že
-    priečinok s pomlčkou na začiatku mena sa zadať nedá; `--` ako oddeľovač by
-    bolo druhé pravidlo pre prípad, ktorý na Windows nenastáva. Nápoveda tú
-    cenu hovorí, lebo neuhádol by ju nikto.
+    priečinok s pomlčkou na začiatku mena sa zadať nedá. Nápoveda tú cenu
+    hovorí, lebo neuhádol by ju nikto.
+
+    **Voľba pre CLI ide za oddeľovač `--`, a nijako inak.** Všetko za
+    samostatným `--` ide do `StartOptions::extraArgs` bez čítania a bez
+    kontroly, a adaptér to pošle svojmu CLI; pred `--` platí všetko vyššie.
+    Appka tak nemusí vedieť, ktoré CLI má ktoré parametre — a nesmie hádať,
+    ktoré slová za neznámou voľbou sú jej hodnoty, lebo práve tak sa hodnota
+    stávala priečinkom. Kým to nebolo, `--chrome` sa do CLI nedalo dostať
+    vôbec a jediná cesta bol terminál (claude-gui-lkk.44.7, 3. 10. 2026).
+
+    Je to **zmena rozhodnutia**. `--` sa tu predtým zvažovalo a zamietlo ako
+    „druhé pravidlo pre prípad, ktorý na Windows nenastáva" — no vtedy
+    len ako spôsob, ako zadať priečinok s pomlčkou. Dôvod, ktorý ho teraz
+    zaviedol, je iný a skutočný. Cena zostáva: CLI, ktoré parameter odmietne,
+    to povie na stderr, ktorý appka zatiaľ neukáže (claude-gui-lkk.49).
+
+    **`--backend <meno>` je nepovinné** a predvolené je `claude` — povinné by
+    rozbilo každú skratku a nepovedalo by nič, čo appka nevie. Neznáme meno sa
+    odmietne s vymenovaním známych. Zoznam backendov a ich výroba sú
+    v `main.cpp` (`kBackends`, `MakeBackend`), jedinom mieste, ktoré adaptéry
+    pozná.
+
+    **`--permission-mode` sa overuje proti režimom zvoleného backendu**
+    (`app::CheckMode` nad `Capabilities::modes`) a pri preklepe sa vymenujú
+    platné. Predtým sa neoverovalo s tým, že CLI odmietne, čo nepozná — no CLI
+    odmieta na stderr, teda ticho, a s dvoma CLI sa slová režimov líšia.
+    Backend sa preto vyrobí ešte pred výberom priečinka: jeho výroba proces
+    nespúšťa, a odmietnutý režim nesmie dostať odpoveď „ktorý priečinok?".
+
+    Zoznam režimov je teda zoznam toho, čo CLI **naozaj berie**, nie toho, čo
+    sa cykluje — inak by appka odmietla slovo, ktoré CLI samo ponúka. Pre
+    Claude je v ňom aj `manual`: `--help` CLI vypisuje `manual` namiesto
+    `default`, CLI ho prijme a hlási späť ako `default` (odmerané na 2.1.288,
+    `tools/probe_cli_args.py`, 3. 10. 2026). Adaptér ho preto CLI pošle rovno
+    ako `default` a panel si počiatočný režim berie od backendu, nie
+    z príkazového riadka — inak by prvé hlásenie režimu znelo ako zmena, ktorú
+    nikto neurobil.
 
     `--help` pritom vyhráva nad odmietnutím, hoci stojí na riadku až za ním:
     kto napísal preklep aj `--help`, chce zoznam volieb, a ten je lepšou

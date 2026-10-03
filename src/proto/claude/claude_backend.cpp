@@ -48,7 +48,11 @@ bool ClaudeBackend::Start(const agent::StartOptions& options,
   Session::Options session;
   session.workingDir = options.projectDir;
   session.model = options.model;
-  session.permissionMode = Ascii(options.mode);
+  // "manual" is the CLI's other name for "default", and the CLI answers with
+  // "default" whichever was asked for.  Said as "default" from the start, so
+  // the handshake does not read as a change of mode that nobody made.
+  session.permissionMode =
+      Ascii(options.mode == "manual" ? std::string("default") : options.mode);
   session.extraArgs = options.extraArgs;
   if (options.resume == agent::StartOptions::Resume::ById) {
     // An empty id is a bare --resume, passed on bare: under --print the CLI

@@ -48,6 +48,7 @@
 #include "proto/jsonl.h"
 #include "proto/claude/sessions.h"
 #include "proto/claude/translate.h"
+#include "arguments.h"
 
 namespace {
 
@@ -720,9 +721,105 @@ void TestPortModeCycleMatchesClaude() {
   CHECK(ordinary != nullptr && ordinary->ordinary);
   const agent::Mode* plan = agent::FindMode(claude, "plan");
   CHECK(plan != nullptr && !plan->ordinary);
-  CHECK(agent::FindMode(claude, "manual") == nullptr);
+  // manual je ina meno pre default (CLI 2.1.288, tools/probe_cli_args.py):
+  // zname, bezne, ale mimo cyklu, aby na nom Shift+Tab nikdy nepristal.
+  const agent::Mode* manual = agent::FindMode(claude, "manual");
+  CHECK(manual != nullptr && manual->ordinary && !manual->inCycle);
+  CHECK(agent::FindMode(claude, "vymysleny") == nullptr);
   // Agent bez rezimov nema kam cyklovat.
   CHECK_EQ(agent::NextMode(agent::Capabilities(), "default"), std::string());
+}
+
+// Prikazovy riadok (invariant 16 a claude-gui-lkk.44.7).  Kazde z tychto
+// pravidiel zlyhava ticho: volba, ktora sa stane priecinkom, alebo session,
+// ktora sa spusti a mlci.
+void TestArguments() {
+  TEST("argumenty: oddelovac --, --backend a rezim proti backendu");
+  using W = std::vector<std::wstring>;
+
+  app::Arguments plain = app::Parse(W{L".", L"--model", L"haiku"});
+  CHECK_EQ(plain.project, std::wstring(L"."));
+  CHECK_EQ(plain.model, std::wstring(L"haiku"));
+  CHECK(plain.error.empty());
+  CHECK(plain.cliArgs.empty());
+
+  // Neznama volba sa neprepošle a nestane sa z nej priecinok.
+  app::Arguments unknown = app::Parse(W{L"--fork-session", L"."});
+  CHECK(unknown.error.find(L"--fork-session") != std::wstring::npos);
+  CHECK_EQ(unknown.project, std::wstring(L"."));
+
+  // Volba s hodnotou na konci riadku nezje priecinok o slovo dalej.
+  app::Arguments dangling = app::Parse(W{L"--model"});
+  CHECK(!dangling.error.empty());
+  CHECK(dangling.project.empty());
+
+  // Za -- ide vsetko do CLI, aj to, co vyzera ako priecinok alebo nase volby.
+  app::Arguments forwarded = app::Parse(
+      W{L"C:\\p", L"--", L"--chrome", L"--add-dir", L"D:\\x", L"--help"});
+  CHECK(forwarded.error.empty());
+  CHECK(!forwarded.help);
+  CHECK_EQ(forwarded.project, std::wstring(L"C:\\p"));
+  CHECK_EQ(forwarded.cliArgs.size(), size_t{4});
+  if (forwarded.cliArgs.size() == 4) {
+    CHECK_EQ(forwarded.cliArgs[0], std::wstring(L"--chrome"));
+    CHECK_EQ(forwarded.cliArgs[2], std::wstring(L"D:\\x"));
+  }
+  app::Arguments onlyCli = app::Parse(W{L"--", L"."});
+  CHECK(onlyCli.project.empty());
+  CHECK_EQ(onlyCli.cliArgs.size(), size_t{1});
+
+  // --help vyhra aj nad preklepom pred nim; main ho obsluzi prvy.
+  app::Arguments help = app::Parse(W{L"--bogus", L"--help"});
+  CHECK(help.help);
+
+  // Hole --resume: na konci aj pred oddelovacom.
+  app::Arguments bare = app::Parse(W{L".", L"--resume"});
+  CHECK(bare.resume);
+  CHECK(bare.resumeId.empty());
+  app::Arguments bareBeforeCli = app::Parse(W{L".", L"--resume", L"--", L"-x"});
+  CHECK(bareBeforeCli.resume);
+  CHECK(bareBeforeCli.resumeId.empty());
+  CHECK_EQ(bareBeforeCli.cliArgs.size(), size_t{1});
+  app::Arguments both = app::Parse(W{L"-c", L"--resume", L"abc", L"."});
+  CHECK(both.continueLatest);
+  CHECK_EQ(both.resumeId, std::wstring(L"abc"));
+
+  // Backend: bez volby predvoleny, neznamy sa odmietne a vymenuju sa zname.
+  const std::vector<std::string> known = {"claude"};
+  app::Arguments defaulted = app::Parse(W{L"."});
+  app::CheckBackend(&defaulted, known);
+  CHECK_EQ(defaulted.backend, std::string("claude"));
+  CHECK(defaulted.error.empty());
+  app::Arguments wrong = app::Parse(W{L"--backend", L"gemini", L"."});
+  app::CheckBackend(&wrong, known);
+  CHECK(wrong.error.find(L"gemini") != std::wstring::npos);
+  CHECK(wrong.error.find(L"claude") != std::wstring::npos);
+
+  // Rezim sa overuje proti rezimom zvoleneho backendu a pri preklepe sa
+  // vymenuju platne.
+  const agent::Capabilities claude = proto::ClaudeCapabilities();
+  app::Arguments plan = app::Parse(W{L"--permission-mode", L"plan", L"."});
+  app::CheckMode(&plan, claude);
+  CHECK(plan.error.empty());
+  // Slovo, ktore CLI samo ponuka vo svojom --help, sa odmietnut nesmie.
+  app::Arguments manual = app::Parse(W{L"--permission-mode", L"manual", L"."});
+  app::CheckMode(&manual, claude);
+  CHECK(manual.error.empty());
+  app::Arguments typo = app::Parse(W{L"--permission-mode", L"plna", L"."});
+  app::CheckMode(&typo, claude);
+  CHECK(typo.error.find(L"plna") != std::wstring::npos);
+  CHECK(typo.error.find(L"acceptEdits") != std::wstring::npos);
+  // Prva chyba sa nepreplaca druhou.
+  app::Arguments first = app::Parse(W{L"--bogus", L"--permission-mode", L"x"});
+  app::CheckMode(&first, claude);
+  CHECK(first.error.find(L"--bogus") != std::wstring::npos);
+
+  // Napoveda hovori pravdu: kazdy rezim aj kazdy backend v nej je.
+  const std::wstring text = app::HelpText(known, claude);
+  CHECK(text.find(L"--backend") != std::wstring::npos);
+  for (const agent::Mode& mode : claude.modes) {
+    CHECK(text.find(model::Utf16FromUtf8(mode.id)) != std::wstring::npos);
+  }
 }
 
 void TestPermissionModeSwitch() {
@@ -2242,6 +2339,7 @@ int main(int argc, char** argv) {
   TestInitializeResponseParsing();
   TestPermissionModeSwitch();
   TestPortModeCycleMatchesClaude();
+  TestArguments();
   TestPermissionModeReports();
   TestPermissionModeTracker();
   TestAnsweringModel();

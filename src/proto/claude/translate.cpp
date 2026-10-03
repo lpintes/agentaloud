@@ -395,6 +395,14 @@ agent::Capabilities ClaudeCapabilities() {
   capabilities.modes = {
       {"default", "normálny", "pýta sa na každú úpravu aj na príkazy", true,
        true},
+      // The same mode under the name the CLI's own --help gives it: the help
+      // lists "manual" and not "default", and the CLI maps the one to the other
+      // and reports "default" back.  Measured on 2.1.288 (tools/
+      // probe_cli_args.py, 2026-10-03).  Here so that the word the CLI
+      // advertises is not refused by ClaudeLens; off the cycle, so that
+      // Shift+Tab never lands on it.
+      {"manual", "normálny", "pýta sa na každú úpravu aj na príkazy", false,
+       true},
       {"acceptEdits", "automatické úpravy",
        "súbory mení sám, na príkazy sa pýta", true, false},
       {"plan", "plánovanie", "len skúma a navrhuje, súborov sa nedotkne", true,

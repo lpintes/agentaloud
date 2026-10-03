@@ -87,6 +87,9 @@ PROTO_PURE_SRCS := src/proto/jsonl.cpp src/proto/claude/events.cpp \
 PROTO_SRCS := $(PROTO_PURE_SRCS) src/proto/claude/session.cpp \
               src/proto/claude/claude_backend.cpp
 
+# Prikazovy riadok appky: ciste pravidla bez windows.h, aby ich testy videli.
+APP_PURE_SRCS := src/arguments.cpp
+
 # Transkript a jeho mapa rozsahov.  Nevie o windows.h, a prave preto sa da
 # testovat bez okna -- co je vacsina toho, preco maju tie testy cenu.
 MODEL_SRCS := src/model/utf.cpp src/model/transcript.cpp src/model/bookmarks.cpp \
@@ -97,7 +100,8 @@ UI_SRCS := src/ui/session_pane.cpp src/ui/main_window.cpp src/ui/speech.cpp \
            src/ui/ask_dialog.cpp src/ui/permission_dialog.cpp \
            src/ui/command_dialog.cpp src/ui/keys_dialog.cpp
 
-APP_SRCS := $(WIN_SRCS) $(AGENT_SRCS) $(PROTO_SRCS) $(MODEL_SRCS) $(UI_SRCS) src/main.cpp
+APP_SRCS := $(WIN_SRCS) $(AGENT_SRCS) $(PROTO_SRCS) $(MODEL_SRCS) $(UI_SRCS) \
+            $(APP_PURE_SRCS) src/main.cpp
 APP_OBJS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(APP_SRCS))
 
 # Dialogove sablony.  Len appka: spike ani testy okno nemaju.
@@ -106,7 +110,7 @@ APP_RES := $(BUILD)/ui/claudelens.res.o
 SPIKE_SRCS := $(WIN_SRCS) $(AGENT_SRCS) $(PROTO_SRCS) src/spike_console.cpp
 SPIKE_OBJS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(SPIKE_SRCS))
 
-TEST_SRCS := $(AGENT_SRCS) $(PROTO_PURE_SRCS) $(MODEL_SRCS)
+TEST_SRCS := $(AGENT_SRCS) $(PROTO_PURE_SRCS) $(MODEL_SRCS) $(APP_PURE_SRCS)
 TEST_OBJS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(TEST_SRCS)) \
              $(BUILD)/tests/test_main.o
 

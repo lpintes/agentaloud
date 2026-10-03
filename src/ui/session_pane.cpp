@@ -413,6 +413,13 @@ bool SessionPane::Start(std::unique_ptr<agent::Backend> backend,
   // prompt is exactly when it is.  After Start, because a history handed over
   // inside it may have named the model.
   const bool started = backend_->Start(options, std::move(callbacks));
+  // The mode as the backend holds it, which may be spelled differently from
+  // the command line ("manual" is Claude's other name for "default").  Taken
+  // over without a word -- nothing has changed -- so that the first report of
+  // the mode does not read as a change.
+  if (const std::string mode = backend_->mode(); !mode.empty()) {
+    details_.permissionMode = model::Utf16FromUtf8(mode);
+  }
   RefreshModelField();
   return started;
 }
