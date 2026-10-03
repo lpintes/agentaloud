@@ -4,6 +4,9 @@
 *.db
 .beads-credential-key
 .beads/proxieddb/
+# Zamky bd >= 1.3.0 ("cooperative gate") vedla .beads aj vnutri neho.  Su to
+# len mena pre flock, bd ich zamerne nemaze a pri dalsom prikaze vytvori znova.
+*.gate.lock*
 
 # Surovy zaznam spiku -- obsahuje session id a ceny, nie je to zdroj pravdy.
 tools/spike_control.log
