@@ -397,9 +397,10 @@ bool SessionPane::Start(const proto::Session::Options& options) {
   details_.permissionMode = options.permissionMode;
   // What was asked for, until the stream says what it actually got.  An alias
   // ("sonnet") is not the id the usage records are keyed by, but it is only
-  // ever read by a human here: ParseUsage is handed this field too, and it
-  // sees the real id, because both system/init and the assistant records
-  // arrive before the result of the turn they belong to.
+  // ever read by a human here: the translator is seeded with it too, and by
+  // the time a result asks it whose usage to read it holds the real id,
+  // because both system/init and the assistant records arrive before the
+  // result of the turn they belong to.
   details_.model = options.model;
   details_.requestedModel = options.model;
   if (statusBar_) statusBar_->Set(StatusBar::kProject, L"projekt " + project_);
@@ -427,17 +428,17 @@ bool SessionPane::Start(const proto::Session::Options& options) {
     // thousand edits one at a time would be a slow way to the same text, and
     // each of them would go through EM_REPLACESEL and the range check.
     const size_t before = model_.Text().size();
-    const model::HistoryCounts counts =
-        model::RestoreHistory(proto::TranslateHistory(history), &model_);
+    const std::vector<agent::Event> events = proto::TranslateHistory(history);
+    const model::HistoryCounts counts = model::RestoreHistory(events, &model_);
     // The model that answered last before the session was closed is the best
-    // thing known until this process says otherwise.  Not modelAnswered_: the
-    // resume may have been launched with another --model, and the first
-    // system/init is then the fresher word.
-    std::string answered;
-    for (const proto::Json& record : history) {
-      proto::ParseAnsweringModel(record, &answered);
+    // thing known until this process says otherwise.  Only a seed, not an
+    // answer: the resume may have been launched with another --model, and the
+    // first system/init is then the fresher word.
+    for (const agent::Event& event : events) {
+      if (const auto* changed = std::get_if<agent::ModelChanged>(&event)) {
+        details_.model = model::Utf16FromUtf8(changed->model);
+      }
     }
-    if (!answered.empty()) details_.model = model::Utf16FromUtf8(answered);
     if (model_.Text().size() > before && counts.blocks > 0) {
       model::Edit edit;
       edit.start = before;
@@ -462,14 +463,25 @@ bool SessionPane::Start(const proto::Session::Options& options) {
   // then cannot answer "am I in plan mode" when it is asked -- before the first
   // prompt is exactly when it is.
   RefreshModelField();
+  // What usage is read for until the stream names a model: the one asked
+  // for, or the one the history ended on.
+  translator_.SeedModel(model::Utf8FromUtf16(details_.model));
   return session_.Start(
       options,
       [this](const proto::Event& event) {
-        // Reader thread.  Queue and wake the window; never touch a control.
+        // Reader thread.  Translate, queue and wake the window; never touch a
+        // control.  Translated here and not on the window's thread because
+        // the translator has to see every record in order, and this is where
+        // they are in order.
+        //
+        // A record that makes no event is queued all the same, as an empty
+        // batch: a system/status carrying a new mode is one of those, and the
+        // drain it wakes is what brings the mode over (FollowPermissionMode).
+        std::vector<agent::Event> batch = translator_.Translate(event.raw);
         bool wake = false;
         {
           std::lock_guard<std::mutex> lock(queueMutex_);
-          queue_.push_back(event);
+          queue_.push_back(std::move(batch));
           // One post per burst: a busy turn produces hundreds of records and
           // a message each would be its own kind of stall.
           wake = !drainPosted_;
@@ -487,10 +499,10 @@ bool SessionPane::Start(const proto::Session::Options& options) {
 }
 
 void SessionPane::OnDrain() {
-  std::vector<proto::Event> events;
+  std::vector<std::vector<agent::Event>> batches;
   {
     std::lock_guard<std::mutex> lock(queueMutex_);
-    events.swap(queue_);
+    batches.swap(queue_);
     drainPosted_ = false;
   }
   // Where the reader is standing at the moment this batch arrives.  Taken
@@ -500,89 +512,45 @@ void SessionPane::OnDrain() {
   const model::Mark reading = model::MarkAt(model_, CaretOffset(transcript_));
   const size_t blocksBefore = model_.blocks().size();
 
-  for (const proto::Event& event : events) {
+  for (const std::vector<agent::Event>& batch : batches) {
     // Taken before the blocks are made, so that what the batch added can be
     // told from what was there.  An id and not a count: a tool result is
     // inserted behind its call, so the new blocks are not the tail.
     const size_t idBefore = model_.nextBlockId();
-    for (const model::Edit& edit :
-         model_.Append(proto::TranslateRecord(event.raw))) {
-      Apply(edit);
+    for (const model::Edit& edit : model_.Append(batch)) Apply(edit);
+    // Whatever the batch added, in the order it was added: the assistant's
+    // text, a tool call, a tool result.  What each kind of block is worth
+    // saying is AnnounceProgress's business, and a batch that added nothing
+    // has nothing for it to say.
+    if (model_.nextBlockId() != idBefore && WantsProgressSpeech()) {
+      AnnounceProgress(idBefore);
     }
-    // User as well as Assistant: a tool result comes back on a user record,
-    // and it is half of what the turn is doing.  What each kind of block is
-    // worth saying is AnnounceProgress's business -- our own prompt is a User
-    // record too, and it filters that out by kind.
-    if (event.kind == proto::EventKind::Assistant ||
-        event.kind == proto::EventKind::User) {
-      if (WantsProgressSpeech()) AnnounceProgress(idBefore);
-    }
-    if (event.kind == proto::EventKind::Assistant) {
-      ShowAnsweringModel(event);
-      // How full the window is right now.  The newest message wins, and there
-      // are several per turn -- each one was sent everything before it, so the
-      // last is the only one that is still true.
-      long long context = 0;
-      if (proto::ParseContextTokens(event.raw, &context)) {
-        details_.contextTokens = context;
-      }
-    }
-    if (event.kind == proto::EventKind::SystemThinkingTokens && !thinkingSaid_ &&
-        WantsProgressSpeech()) {
-      // Once per stretch of thinking, not once per record -- there are dozens
-      // of these per turn.  Cleared by anything else that speaks, so a turn
-      // that thinks, calls a tool and thinks again says it twice, which is
-      // what is happening.
-      thinkingSaid_ = true;
-      if (speech_.available()) speech_.Say(L"premýšľam", false);
-    }
-    if (event.kind == proto::EventKind::Result) {
-      busy_ = false;
-      // Overwritten, not added to: the numbers in modelUsage are the session's
-      // running total, so each result is the whole answer -- see proto::Usage.
-      // The model is passed in so that the context window reported is the one
-      // this session runs, and not a subagent's.
-      if (proto::ParseUsage(event.raw, model::Utf8FromUtf16(details_.model),
-                            &details_.usage)) {
-        details_.haveUsage = true;
-      }
-      // Empty, not "done".  Done says nothing a reader can use -- what was
-      // done, and when?  The field is there to answer "is it working right
-      // now", and the answer to that, once the turn is over, is nothing.
-      SetStatus(L"");
-      // A turn the reader stopped by hand ends differently from one that
-      // finished, and the difference has to be audible: "prerušujem" answers
-      // the key, this answers the turn, and without it a turn that stopped
-      // sounds like one that never got the request.  It arrived on its own,
-      // so it queues rather than cutting in -- invariant 7.
-      //
-      // Whatever the turn had already said stays said.  It arrived before Esc
-      // did, and unsaying it is not on offer anyway -- see invariant 7 on why
-      // nothing that came on its own may cut into the queue.
-      //
-      // Behind the window it is a sound, like any other end of a turn -- see
-      // SignalTurnEnd for why speech does not carry across to a background
-      // window at all.
-      if (interrupted_) {
-        interrupted_ = false;
-        if (InForeground() && speech_.available()) {
-          speech_.Say(L"prerušené", false);
-        } else {
-          MessageBeep(InForeground() ? MB_ICONASTERISK : kBackgroundEndSound);
+
+    for (const agent::Event& event : batch) {
+      if (const auto* changed = std::get_if<agent::ModelChanged>(&event)) {
+        ShowModel(changed->model);
+      } else if (const auto* context = std::get_if<agent::ContextUsed>(&event)) {
+        details_.contextTokens = context->tokens;
+      } else if (std::holds_alternative<agent::ThinkingTick>(event)) {
+        if (!thinkingSaid_ && WantsProgressSpeech()) {
+          // Once per stretch of thinking, not once per tick -- there are
+          // dozens of these per turn.  Cleared by anything else that speaks,
+          // so a turn that thinks, calls a tool and thinks again says it
+          // twice, which is what is happening.
+          thinkingSaid_ = true;
+          if (speech_.available()) speech_.Say(L"premýšľam", false);
         }
-      } else {
-        SignalTurnEnd();
+      } else if (const auto* usage = std::get_if<agent::UsageChanged>(&event)) {
+        // Overwritten, not added to: it is the session's running total, so
+        // each report is the whole answer.
+        details_.usage = usage->usage;
+        details_.haveUsage = true;
+      } else if (std::holds_alternative<agent::TurnEnded>(event)) {
+        OnTurnEnded();
+      } else if (const auto* limit =
+                     std::get_if<agent::RateLimitChanged>(&event)) {
+        ShowRateLimit(*limit);
       }
-    } else if (event.kind == proto::EventKind::SystemInit) {
-      // The turn field is NOT touched here.  system/init arrives at the start
-      // of every turn, not once per session -- there are four of them in
-      // tests/fixtures/basic.jsonl, one before each result -- so clearing the
-      // field here wiped out the "pracujem" that Send had just written, and
-      // the bar stayed blank for the whole turn.  Only Send and Result know
-      // whether anything is running.
-      ShowSessionFacts(event);
-    } else if (event.kind == proto::EventKind::RateLimit) {
-      ShowRateLimit(event);
     }
   }
   // Once per batch and off Session rather than off the records in it: the mode
@@ -591,6 +559,42 @@ void SessionPane::OnDrain() {
   FollowPermissionMode();
 
   if (model_.blocks().size() != blocksBefore) bookmarks_.Set(0, reading);
+}
+
+void SessionPane::OnTurnEnded() {
+  busy_ = false;
+  // Empty, not "done".  Done says nothing a reader can use -- what was done,
+  // and when?  The field is there to answer "is it working right now", and the
+  // answer to that, once the turn is over, is nothing.
+  //
+  // Only here and in Send.  The start of a turn is not a place to touch it:
+  // system/init arrives at the start of every turn, and clearing the field
+  // there once wiped out the "pracujem" that Send had just written, so the bar
+  // stayed blank for the whole turn.
+  SetStatus(L"");
+  // A turn the reader stopped by hand ends differently from one that
+  // finished, and the difference has to be audible: "prerušujem" answers the
+  // key, this answers the turn, and without it a turn that stopped sounds like
+  // one that never got the request.  It arrived on its own, so it queues
+  // rather than cutting in -- invariant 7.
+  //
+  // Whatever the turn had already said stays said.  It arrived before Esc did,
+  // and unsaying it is not on offer anyway -- see invariant 7 on why nothing
+  // that came on its own may cut into the queue.
+  //
+  // Behind the window it is a sound, like any other end of a turn -- see
+  // SignalTurnEnd for why speech does not carry across to a background window
+  // at all.
+  if (interrupted_) {
+    interrupted_ = false;
+    if (InForeground() && speech_.available()) {
+      speech_.Say(L"prerušené", false);
+    } else {
+      MessageBeep(InForeground() ? MB_ICONASTERISK : kBackgroundEndSound);
+    }
+  } else {
+    SignalTurnEnd();
+  }
 }
 
 void SessionPane::SignalWaiting() const {
@@ -957,35 +961,10 @@ void SessionPane::SetStatus(std::wstring text) {
   if (statusBar_) statusBar_->Set(StatusBar::kTurn, status_);
 }
 
-void SessionPane::ShowSessionFacts(const proto::Event& event) {
-  const auto text = [&event](const char* name) -> std::wstring {
-    auto found = event.raw.find(name);
-    if (found == event.raw.end() || !found->is_string()) return {};
-    return model::Utf16FromUtf8(found->get<std::string>());
-  };
-
-  // Gathered before the bar is written and whether or not there is a bar: the
-  // details dialog needs these too, and the bar is optional here.
-  //
-  // Only until an assistant record has named the model.  system/init carries
-  // the main-loop model, which for a mode-dependent alias is not the one that
-  // answers -- under opusplan in plan mode it says claude-sonnet-5 while Opus
-  // writes every message of the turn -- and it comes at the start of every
-  // turn, so it would put the wrong name back each time.
-  //
-  // The permissionMode in it is not read here: Session takes it along with
-  // every other report of the mode, and FollowPermissionMode brings it over.
-  if (!modelAnswered_ && !text("model").empty()) details_.model = text("model");
-  RefreshModelField();
-}
-
-void SessionPane::ShowAnsweringModel(const proto::Event& event) {
-  std::string answered;
-  if (!proto::ParseAnsweringModel(event.raw, &answered)) return;
-  modelAnswered_ = true;
-  const std::wstring model = model::Utf16FromUtf8(answered);
-  if (model == details_.model) return;
-  details_.model = model;
+void SessionPane::ShowModel(const std::string& model) {
+  // Into details_ whether or not there is a bar: the details dialog needs it
+  // too, and the bar is optional here.
+  details_.model = model::Utf16FromUtf8(model);
   RefreshModelField();
 }
 
@@ -1034,31 +1013,39 @@ void SessionPane::RefreshModelField() {
   statusBar_->Set(StatusBar::kModel, facts);
 }
 
-void SessionPane::ShowRateLimit(const proto::Event& event) {
-  proto::RateLimit limit;
-  if (!statusBar_ || !proto::ParseRateLimit(event.raw, &limit)) return;
+void SessionPane::ShowRateLimit(const agent::RateLimitChanged& limit) {
+  if (!statusBar_) return;
 
   const auto percent = [](double share) {
     return std::to_wstring(static_cast<int>(share * 100 + 0.5)) + L" %";
   };
+  // A window by its length, the short way: the field is read in one breath
+  // with three others.
+  const auto length = [](int minutes) {
+    if (minutes > 0 && minutes % (24 * 60) == 0) {
+      return std::to_wstring(minutes / (24 * 60)) + L" d";
+    }
+    if (minutes > 0 && minutes % 60 == 0) {
+      return std::to_wstring(minutes / 60) + L" h";
+    }
+    return std::to_wstring(minutes) + L" min";
+  };
   std::wstring text;
-  if (limit.fiveHourUtilization >= 0) {
-    text = L"5 h " + percent(limit.fiveHourUtilization);
-  }
-  if (limit.sevenDayUtilization >= 0) {
+  long long resetsAt = limit.resetsAt;
+  for (const agent::LimitWindow& window : limit.windows) {
+    if (window.used < 0) continue;
     if (!text.empty()) text += L", ";
-    text += L"7 d " + percent(limit.sevenDayUtilization);
+    text += length(window.minutes) + L" " + percent(window.used);
+    if (resetsAt == 0) resetsAt = window.resetsAt;
   }
-  if (text.empty() && limit.utilization >= 0) {
-    text = percent(limit.utilization);
-  }
-  if (limit.status == "rejected") {
+  if (text.empty() && limit.used >= 0) text = percent(limit.used);
+  if (limit.state == agent::LimitState::Exhausted) {
     text = text.empty() ? L"limit vyčerpaný" : L"limit vyčerpaný, " + text;
-  } else if (limit.status == "allowed_warning") {
+  } else if (limit.state == agent::LimitState::Warning) {
     text = text.empty() ? L"blízko limitu" : L"blízko limitu, " + text;
   }
-  if (limit.resetsAt > 0) {
-    const std::time_t when = static_cast<std::time_t>(limit.resetsAt);
+  if (resetsAt > 0) {
+    const std::time_t when = static_cast<std::time_t>(resetsAt);
     std::tm local = {};
     if (localtime_s(&local, &when) == 0) {
       wchar_t stamp[32] = {};

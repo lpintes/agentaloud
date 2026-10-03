@@ -62,24 +62,27 @@ std::wstring FormatContext(const SessionDetails& details) {
 
 std::wstring FormatCost(const SessionDetails& details) {
   if (!details.haveUsage) return kUnknown;
-  const proto::Usage& usage = details.usage;
-  if (usage.billedUsd > 0) return Money(usage.billedUsd);
+  const agent::Usage& usage = details.usage;
+  if (usage.billedUsd && *usage.billedUsd > 0) return Money(*usage.billedUsd);
+  // A CLI that states no cost at all gets no number: a zero here would read
+  // as "this was free".
+  if (!usage.listUsd) return kUnknown;
   // Both numbers, because on a subscription the billed one is 0 and printing
   // it alone would say the session was free, while printing only the list
   // price would claim money nobody is being charged.
-  return Money(usage.listUsd) + L" podľa cenníka, účtované 0";
+  return Money(*usage.listUsd) + L" podľa cenníka, účtované 0";
 }
 
 std::wstring FormatTokens(const SessionDetails& details) {
   if (!details.haveUsage) return kUnknown;
-  const proto::Usage& usage = details.usage;
+  const agent::Usage& usage = details.usage;
   std::wstring text = L"vstup " + Number(usage.inputTokens) + L", výstup " +
                       Number(usage.outputTokens);
-  if (usage.thinkingTokens > 0) {
-    text += L", myslenie " + Number(usage.thinkingTokens);
+  if (usage.reasoningTokens > 0) {
+    text += L", myslenie " + Number(usage.reasoningTokens);
   }
   text += L", cache čítaná " + Number(usage.cacheReadTokens) +
-          L", cache zapísaná " + Number(usage.cacheCreationTokens);
+          L", cache zapísaná " + Number(usage.cacheWriteTokens);
   return text;
 }
 

@@ -23,6 +23,7 @@
 #include "model/bookmarks.h"
 #include "model/transcript.h"
 #include "proto/session.h"
+#include "proto/translate.h"
 #include "ui/session_details.h"
 #include "ui/speech.h"
 #include "ui/status_bar.h"
@@ -145,13 +146,14 @@ class SessionPane {
                                          UINT_PTR id, DWORD_PTR data);
 
   void Apply(const model::Edit& edit);
+  // The end of a turn, however it ended: the bar is cleared, and the reader
+  // hears that it is over -- "prerušené" if they stopped it, otherwise
+  // SignalTurnEnd.
+  void OnTurnEnded();
   void SetStatus(std::wstring text);
-  // The model out of system/init, for as long as no assistant record has said
-  // better.  The permission mode in it is Session's to fold in.
-  void ShowSessionFacts(const proto::Event& event);
-  // The model that wrote an assistant record, which is the one to show from
-  // then on -- see proto::ParseAnsweringModel for why system/init is not.
-  void ShowAnsweringModel(const proto::Event& event);
+  // The model that is answering now.  Which record says that is the
+  // translator's business (invariant 21); this only shows it.
+  void ShowModel(const std::string& model);
   // Brings details_ and the bar up to the mode Session holds, and says a change
   // this pane did not make itself: a refused Shift+Tab, ExitPlanMode approved,
   // auto dropped by the CLI.  Called after every batch.
@@ -160,7 +162,7 @@ class SessionPane {
   // details_.permissionMode.  Shared by everything that moves either, so they
   // never format it differently.
   void RefreshModelField();
-  void ShowRateLimit(const proto::Event& event);
+  void ShowRateLimit(const agent::RateLimitChanged& limit);
   // Puts the caret at the start of a block and says which line that is.
   void GoToBlock(size_t index);
   // Whether the caret is still where the application left it, or at the end.
@@ -220,8 +222,15 @@ class SessionPane {
   // has moved, the reader is reading and it is theirs.
   size_t anchor_ = 0;
 
+  // Used on the reader thread only, where the records arrive: what it says
+  // about a record depends on the records before it, so it has to see them
+  // in order and see all of them.
+  proto::Translator translator_;
+
   std::mutex queueMutex_;
-  std::vector<proto::Event> queue_;
+  // One batch per record, translated.  A batch is what the transcript appends
+  // as one edit where it can.
+  std::vector<std::vector<agent::Event>> queue_;
   bool drainPosted_ = false;
 
   bool busy_ = false;
@@ -237,11 +246,6 @@ class SessionPane {
   // marked: a turn that spoke gets a word, a turn that stayed silent gets the
   // beep -- see SignalTurnEnd.
   bool spokeThisTurn_ = false;
-  // Whether an assistant record of this process has named its model.  From
-  // then on system/init no longer overwrites details_.model: at the start of
-  // every turn it would put back the main-loop model, which under opusplan in
-  // plan mode is not the one answering.
-  bool modelAnswered_ = false;
   std::wstring status_;
   // The folder name, kept because the bar is rewritten field by field and the
   // project one has to be put back after anything that clears it.

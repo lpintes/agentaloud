@@ -954,6 +954,127 @@ void TestAnsweringModel() {
   CHECK_EQ(untouched, std::string("claude-opus-5"));
 }
 
+// Kolko udalosti druhu T je v davke.
+template <typename T>
+size_t CountOf(const std::vector<agent::Event>& events) {
+  size_t count = 0;
+  for (const agent::Event& event : events) {
+    if (std::holds_alternative<T>(event)) ++count;
+  }
+  return count;
+}
+
+// Posledny ModelChanged v davke, alebo prazdny retazec.
+std::string ModelIn(const std::vector<agent::Event>& events) {
+  std::string model;
+  for (const agent::Event& event : events) {
+    if (const auto* changed = std::get_if<agent::ModelChanged>(&event)) {
+      model = changed->model;
+    }
+  }
+  return model;
+}
+
+void TestTranslatorModelAndTurn() {
+  TEST("translate: model, koniec tahu a limit -- co predtym citala pane sama");
+
+  // Invariant 21 na zaznamoch: opusplan v plan.  system/init hovori Sonnet,
+  // odpoveda Opus, a dalsi system/init ho uz nesmie vratit.
+  proto::Translator translator;
+  translator.SeedModel("opusplan");
+  const auto init = proto::Json::parse(R"({"type": "system",
+      "subtype": "init", "cwd": "C:/p", "model": "claude-sonnet-5"})");
+  const auto opus = proto::Json::parse(R"({"type": "assistant",
+      "parent_tool_use_id": null,
+      "message": {"model": "claude-opus-5", "content": []}})");
+
+  std::vector<agent::Event> events = translator.Translate(init);
+  CHECK_EQ(CountOf<agent::WorkingDirectory>(events), size_t{1});
+  CHECK_EQ(ModelIn(events), std::string("claude-sonnet-5"));
+  CHECK_EQ(ModelIn(translator.Translate(opus)), std::string("claude-opus-5"));
+  // Druhy tah: init znova so Sonnetom -- uz nie.
+  CHECK_EQ(CountOf<agent::ModelChanged>(translator.Translate(init)), size_t{0});
+  // Ten isty model znova nie je zmena.
+  CHECK_EQ(CountOf<agent::ModelChanged>(translator.Translate(opus)), size_t{0});
+  // Subagent na inom modeli session nemeni.
+  CHECK_EQ(CountOf<agent::ModelChanged>(translator.Translate(
+               proto::Json::parse(R"({"type": "assistant",
+                   "parent_tool_use_id": "toolu_01",
+                   "message": {"model": "claude-haiku-4-5", "content": []}})"))),
+           size_t{0});
+  // Po schvaleni ExitPlanMode ten isty tah pokracuje na Sonnete, a to uz
+  // povedal assistant, nie system/init.
+  CHECK_EQ(ModelIn(translator.Translate(proto::Json::parse(
+               R"({"type": "assistant", "parent_tool_use_id": null,
+                   "message": {"model": "claude-sonnet-5", "content": []}})"))),
+           std::string("claude-sonnet-5"));
+
+  // Premyslanie je znak zivota, nie blok.
+  CHECK_EQ(CountOf<agent::ThinkingTick>(translator.Translate(proto::Json::parse(
+               R"({"type": "system", "subtype": "thinking_tokens"})"))),
+           size_t{1});
+
+  // Koniec tahu: usage PRED TurnEnded, aby koniec tahu hovoril o tahu, ktoreho
+  // cisla uz su znama.  Usage sa cita pre model, ktory bezi -- tu Sonnet.
+  events = translator.Translate(proto::Json::parse(R"({"type": "result",
+      "subtype": "success", "total_cost_usd": 0,
+      "modelUsage": {
+        "claude-sonnet-5": {"costUSD": 0.5, "inputTokens": 10,
+                            "outputTokens": 20, "contextWindow": 200000},
+        "claude-opus-5": {"costUSD": 0.1, "inputTokens": 1,
+                          "outputTokens": 2, "contextWindow": 500000}}})"));
+  CHECK_EQ(events.size(), size_t{2});
+  const auto* usage = std::get_if<agent::UsageChanged>(&events[0]);
+  CHECK(usage != nullptr);
+  const auto* ended = std::get_if<agent::TurnEnded>(&events[1]);
+  CHECK(ended != nullptr);
+  if (usage != nullptr) {
+    CHECK_EQ(usage->usage.contextWindow, 200000LL);
+    CHECK_EQ(usage->usage.outputTokens, 22LL);
+    // Na predplatnom je uctovana cena skutocna nula, nie chybajuce cislo.
+    CHECK(usage->usage.billedUsd.has_value());
+    CHECK(usage->usage.listUsd.has_value());
+  }
+  if (ended != nullptr) {
+    CHECK(ended->outcome == agent::TurnOutcome::Completed);
+  }
+
+  // Preruseny tah (odmerane: error_during_execution + aborted_streaming).
+  events = translator.Translate(proto::Json::parse(R"({"type": "result",
+      "subtype": "error_during_execution",
+      "terminal_reason": "aborted_streaming"})"));
+  CHECK_EQ(CountOf<agent::TurnEnded>(events), size_t{1});
+  if (!events.empty()) {
+    const auto* aborted = std::get_if<agent::TurnEnded>(&events.back());
+    CHECK(aborted != nullptr &&
+          aborted->outcome == agent::TurnOutcome::Interrupted);
+  }
+
+  // Limit: okna podla dlzky, nie podla slova CLI.
+  events = translator.Translate(proto::Json::parse(R"({
+    "type": "rate_limit_event",
+    "rate_limit_info": {
+      "status": "allowed_warning", "rateLimitType": "five_hour",
+      "utilization": 0.42, "resetsAt": 1700000000,
+      "unifiedWindows": {
+        "five_hour": {"utilization": 0.42, "resetsAt": 1700000000},
+        "seven_day": {"utilization": 0.13, "resetsAt": 1700400000}}}})"));
+  CHECK_EQ(events.size(), size_t{1});
+  const auto* limit = events.empty()
+                          ? nullptr
+                          : std::get_if<agent::RateLimitChanged>(&events[0]);
+  CHECK(limit != nullptr);
+  if (limit != nullptr) {
+    CHECK(limit->state == agent::LimitState::Warning);
+    CHECK_EQ(limit->windows.size(), size_t{2});
+    if (limit->windows.size() == 2) {
+      CHECK_EQ(limit->windows[0].minutes, 300);
+      CHECK_EQ(limit->windows[1].minutes, 7 * 24 * 60);
+    }
+    CHECK_EQ(limit->resetsAt, 1700000000LL);
+  }
+}
+
 void TestUsageParsing() {
   TEST("events: cena a tokeny sa citaju z modelUsage, nie z usage");
   // Tvar je odpozorovany z tests/fixtures/basic.jsonl, nie vymysleny. Podstatne
@@ -2100,6 +2221,7 @@ int main(int argc, char** argv) {
   TestPermissionModeReports();
   TestPermissionModeTracker();
   TestAnsweringModel();
+  TestTranslatorModelAndTurn();
   TestUsageParsing();
   TestContextTokensParsing();
   TestNewlinesAreOneCharacter();

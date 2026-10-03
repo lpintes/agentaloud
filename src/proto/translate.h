@@ -23,18 +23,46 @@
 
 namespace proto {
 
-// One record of the stream, as the events it carries, in the order it
-// carries them.  A record is one batch: the transcript appends a batch as one
-// edit where it can, the same as when it read the record itself.
+// The stream of one session, record by record.  A class and not a function
+// because one question has an answer that depends on what came before: which
+// model is answering (invariant 21).  system/init names the session's
+// main-loop model at the start of every turn, and under a mode-dependent
+// alias that is not the one writing -- with opusplan in plan mode it says
+// claude-sonnet-5 while every assistant record is claude-opus-5.  So once an
+// assistant record has named the model, system/init no longer may.  The same
+// model is what a result's usage is read for: modelUsage has an entry per
+// model, and the context window wanted is the running one's.
 //
-// So far only what the transcript reads is translated; the pane still reads
-// the rest off the record (claude-gui-lkk.44.4).
+// Not thread-safe; one translator belongs to one reader.
+class Translator {
+ public:
+  // The model known before the stream says one: what --model asked for, or
+  // the last one that answered in a resumed history.  It does NOT count as an
+  // answer -- a resume launched with another --model is corrected by the
+  // first system/init, which is the fresher word.
+  void SeedModel(const std::string& model) { model_ = model; }
+
+  // One record, as the events it carries, in the order it carries them.  A
+  // record is one batch: the transcript appends a batch as one edit where it
+  // can, the same as when it read the record itself.
+  std::vector<agent::Event> Translate(const Json& record);
+
+ private:
+  std::string model_;
+  bool answered_ = false;
+};
+
+// One record through a translator of its own -- for a record whose meaning
+// does not depend on the ones before it, which is every record the transcript
+// reads.  The tests feed the transcript this way.
 std::vector<agent::Event> TranslateRecord(const Json& record);
 
 // The records of a session file (proto::ReadSessionRecords), as one list.
 // Differs from the stream in what a `user` record means: here it is also the
 // prompt a human typed and the mark of an interruption, both of which the live
-// path puts into the transcript itself (invariant 18).
+// path puts into the transcript itself (invariant 18).  The models that
+// answered come along as ModelChanged, so the last of them can seed the live
+// translator.
 std::vector<agent::Event> TranslateHistory(const std::vector<Json>& records);
 
 // A tool call out of its name and arguments.  The one way a call is built:

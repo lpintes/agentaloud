@@ -186,6 +186,11 @@ struct ContextUsed {
 struct RateLimitChanged {
   LimitState state = LimitState::Ok;
   std::vector<LimitWindow> windows;
+  // The two below are for a CLI that reports one limit at a time rather than
+  // every window: Claude's rate_limit_event names the window it is about and
+  // gives one reset time for the whole record.
+  double used = -1;        // 0..1, when there are no windows to say it
+  long long resetsAt = 0;  // when the limit this report is about resets
 };
 
 // The CLI has finished starting: commands(), account() and the mode are now

@@ -200,7 +200,7 @@ agent::ToolCall ToolCallFromInput(const std::string& name,
   return call;
 }
 
-std::vector<agent::Event> TranslateRecord(const Json& record) {
+std::vector<agent::Event> Translator::Translate(const Json& record) {
   std::vector<agent::Event> events;
   const Event event = Classify(record);
 
@@ -232,6 +232,21 @@ std::vector<agent::Event> TranslateRecord(const Json& record) {
               StringField(item, "name"), StringField(item, "id"), arguments)});
         }
       }
+      // Behind the content, so that what the turn said is said before the
+      // status bar changes under it.
+      if (std::string answering; ParseAnsweringModel(event.raw, &answering)) {
+        answered_ = true;
+        if (answering != model_) {
+          model_ = answering;
+          events.push_back(agent::ModelChanged{answering});
+        }
+      }
+      // How full the window is right now.  The newest message wins, and there
+      // are several per turn -- each one was sent everything before it, so the
+      // last is the only one that is still true.
+      if (long long tokens = 0; ParseContextTokens(event.raw, &tokens)) {
+        events.push_back(agent::ContextUsed{tokens, 0});
+      }
       break;
     }
     case EventKind::User: {
@@ -253,20 +268,76 @@ std::vector<agent::Event> TranslateRecord(const Json& record) {
       events.push_back(agent::ToolDenied{StringField(event.raw, "tool_name"),
                                          StringField(event.raw, "message")});
       break;
-    // Only cwd is taken from it here: tool paths are shortened against the
-    // project.  The pane reads the rest of it itself, for now.
-    case EventKind::SystemInit:
+    // The permission mode in it is not read here: Session folds it in with
+    // every other report of the mode.
+    case EventKind::SystemInit: {
       events.push_back(agent::WorkingDirectory{StringField(event.raw, "cwd")});
+      // Only until an assistant record has named the model -- see Translator.
+      const std::string model = StringField(event.raw, "model");
+      if (!answered_ && !model.empty() && model != model_) {
+        model_ = model;
+        events.push_back(agent::ModelChanged{model});
+      }
       break;
+    }
+    // Ticks while the model thinks, one every few tokens, with nothing in them
+    // worth showing -- but the earliest sign that a turn is doing something.
+    case EventKind::SystemThinkingTokens:
+      events.push_back(agent::ThinkingTick{});
+      break;
+    case EventKind::Result: {
+      // The usage first: whatever is said at the end of a turn is said about a
+      // turn whose numbers are already in.
+      Usage usage;
+      if (ParseUsage(event.raw, model_, &usage)) {
+        agent::Usage out;
+        out.inputTokens = usage.inputTokens;
+        out.outputTokens = usage.outputTokens;
+        out.cacheReadTokens = usage.cacheReadTokens;
+        out.cacheWriteTokens = usage.cacheCreationTokens;
+        out.reasoningTokens = usage.thinkingTokens;
+        out.contextWindow = usage.contextWindow;
+        // Both always, because Claude always says both -- and on a
+        // subscription the billed one is a true zero, not a missing number.
+        out.billedUsd = usage.billedUsd;
+        out.listUsd = usage.listUsd;
+        events.push_back(agent::UsageChanged{out});
+      }
+      agent::TurnEnded ended;
+      if (StringField(event.raw, "terminal_reason") == "aborted_streaming") {
+        ended.outcome = agent::TurnOutcome::Interrupted;
+      } else if (event.subtype != "success") {
+        ended.outcome = agent::TurnOutcome::Failed;
+      }
+      events.push_back(ended);
+      break;
+    }
+    case EventKind::RateLimit: {
+      RateLimit limit;
+      if (!ParseRateLimit(event.raw, &limit)) break;
+      agent::RateLimitChanged out;
+      if (limit.status == "rejected") {
+        out.state = agent::LimitState::Exhausted;
+      } else if (limit.status == "allowed_warning") {
+        out.state = agent::LimitState::Warning;
+      }
+      if (limit.fiveHourUtilization >= 0) {
+        out.windows.push_back({300, limit.fiveHourUtilization, 0});
+      }
+      if (limit.sevenDayUtilization >= 0) {
+        out.windows.push_back({7 * 24 * 60, limit.sevenDayUtilization, 0});
+      }
+      out.used = limit.utilization;
+      out.resetsAt = limit.resetsAt;
+      events.push_back(out);
+      break;
+    }
     case EventKind::Unknown:
       events.push_back(agent::Unrecognised{
           event.raw.value("type", std::string("<no type>"))});
       break;
     case EventKind::SystemHook:
-    case EventKind::SystemThinkingTokens:
     case EventKind::SystemOther:
-    case EventKind::RateLimit:
-    case EventKind::Result:
     case EventKind::ControlRequest:
     case EventKind::ControlResponse:
       break;
@@ -274,8 +345,13 @@ std::vector<agent::Event> TranslateRecord(const Json& record) {
   return events;
 }
 
+std::vector<agent::Event> TranslateRecord(const Json& record) {
+  return Translator().Translate(record);
+}
+
 std::vector<agent::Event> TranslateHistory(const std::vector<Json>& records) {
   std::vector<agent::Event> events;
+  Translator translator;
   for (const Json& record : records) {
     // A `user` record is up to three things at once, and the order below is
     // the order they were said in.  It is not an if/else chain by accident:
@@ -291,7 +367,7 @@ std::vector<agent::Event> TranslateHistory(const std::vector<Json>& records) {
     }
     // Everything the live path makes of the same record.  A record that was a
     // prompt has no tool_result in it, so this adds nothing twice.
-    for (agent::Event& event : TranslateRecord(record)) {
+    for (agent::Event& event : translator.Translate(record)) {
       events.push_back(std::move(event));
     }
   }

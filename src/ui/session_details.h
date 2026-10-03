@@ -23,7 +23,7 @@
 #include <functional>
 #include <string>
 
-#include "proto/events.h"
+#include "agent/events.h"
 #include "win/dialog.h"
 
 namespace ui {
@@ -44,7 +44,7 @@ struct SessionDetails {
   std::wstring account;
   std::wstring project;         // the full path, not the folder name
   bool haveUsage = false;       // false until the first result record
-  proto::Usage usage;
+  agent::Usage usage;
   // How full the context is, out of the newest assistant message.  Kept apart
   // from `usage` because it comes off a different record and arrives sooner:
   // the size shows during the first turn, the window it is measured against
