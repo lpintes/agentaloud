@@ -1,5 +1,5 @@
-#ifndef PROTO_SESSIONS_H
-#define PROTO_SESSIONS_H
+#ifndef PROTO_CLAUDE_SESSIONS_H
+#define PROTO_CLAUDE_SESSIONS_H
 
 // What conversations this project already has, read off the disk.
 //

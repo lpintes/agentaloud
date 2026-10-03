@@ -1,4 +1,4 @@
-#include "proto/control.h"
+#include "proto/claude/control.h"
 
 namespace proto {
 namespace {

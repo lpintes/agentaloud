@@ -1,5 +1,5 @@
-#ifndef PROTO_CLAUDE_BACKEND_H
-#define PROTO_CLAUDE_BACKEND_H
+#ifndef PROTO_CLAUDE_CLAUDE_BACKEND_H
+#define PROTO_CLAUDE_CLAUDE_BACKEND_H
 
 // Claude Code behind the port: a proto::Session for the process and the
 // control channel, a proto::Translator for the records, and the knowledge of
@@ -14,8 +14,8 @@
 #include <vector>
 
 #include "agent/backend.h"
-#include "proto/session.h"
-#include "proto/translate.h"
+#include "proto/claude/session.h"
+#include "proto/claude/translate.h"
 
 namespace proto {
 

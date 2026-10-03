@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-#include "proto/claude_backend.h"
+#include "proto/claude/claude_backend.h"
 #include "ui/main_window.h"
 #include "win/console.h"
 #include "win/dialog.h"

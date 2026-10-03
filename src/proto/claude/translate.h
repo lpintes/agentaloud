@@ -1,5 +1,5 @@
-#ifndef PROTO_TRANSLATE_H
-#define PROTO_TRANSLATE_H
+#ifndef PROTO_CLAUDE_TRANSLATE_H
+#define PROTO_CLAUDE_TRANSLATE_H
 
 // Claude's records, said in the port's words (agent/events.h).
 //

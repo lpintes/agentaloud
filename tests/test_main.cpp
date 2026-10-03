@@ -42,12 +42,12 @@
 #include "model/history.h"
 #include "model/transcript.h"
 #include "model/utf.h"
-#include "proto/ask.h"
-#include "proto/control.h"
-#include "proto/events.h"
+#include "proto/claude/ask.h"
+#include "proto/claude/control.h"
+#include "proto/claude/events.h"
 #include "proto/jsonl.h"
-#include "proto/sessions.h"
-#include "proto/translate.h"
+#include "proto/claude/sessions.h"
+#include "proto/claude/translate.h"
 
 namespace {
 

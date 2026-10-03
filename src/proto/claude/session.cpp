@@ -1,4 +1,4 @@
-#include "proto/session.h"
+#include "proto/claude/session.h"
 
 #include <objbase.h>
 

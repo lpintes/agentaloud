@@ -1,4 +1,4 @@
-#include "proto/sessions.h"
+#include "proto/claude/sessions.h"
 
 #include <cstdio>
 #include <cstdlib>

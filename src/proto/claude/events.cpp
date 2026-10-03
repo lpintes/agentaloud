@@ -1,4 +1,4 @@
-#include "proto/events.h"
+#include "proto/claude/events.h"
 
 namespace proto {
 namespace {

@@ -1,5 +1,5 @@
-#ifndef PROTO_SESSION_H
-#define PROTO_SESSION_H
+#ifndef PROTO_CLAUDE_SESSION_H
+#define PROTO_CLAUDE_SESSION_H
 
 // One conversation with Claude: a `claude -p` process, its stream, and the
 // rules about when it may be shut down.
@@ -17,8 +17,8 @@
 #include <string>
 #include <vector>
 
-#include "proto/control.h"
-#include "proto/events.h"
+#include "proto/claude/control.h"
+#include "proto/claude/events.h"
 #include "win/process.h"
 
 namespace proto {

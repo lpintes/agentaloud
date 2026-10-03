@@ -1,8 +1,8 @@
-#include "proto/translate.h"
+#include "proto/claude/translate.h"
 
-#include "proto/ask.h"
-#include "proto/events.h"
-#include "proto/sessions.h"
+#include "proto/claude/ask.h"
+#include "proto/claude/events.h"
+#include "proto/claude/sessions.h"
 
 namespace proto {
 namespace {

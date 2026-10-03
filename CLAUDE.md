@@ -247,7 +247,7 @@ pozná `HWND`.**
 |---|---|---|
 | `src/win/` | `window`, `dialog` (prevzaté z `c:/b/eureka-a4`), `process` | čo je na druhom konci rúr |
 | `src/agent/` | port: `events` (udalosti), `backend` (rozhranie, `Capabilities`) | ktoré CLI beží; JSON; `windows.h` |
-| `src/proto/` | adaptéry: `session`, `translate`, `claude_backend` … | ako sa transkript zobrazuje |
+| `src/proto/` | `jsonl` (spoločné) a adaptér na CLI v podadresári: `claude/` (`session`, `translate`, `claude_backend` …) | ako sa transkript zobrazuje |
 | `src/model/` | `transcript`, `bookmarks`, `history` | že existuje RichEdit; **ktoré CLI beží** |
 | `src/ui/` | pohľady, dialógy, stavový riadok, reč | **ktoré CLI beží** |
 
@@ -451,7 +451,7 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    To isté platí pre **protokolový obal**: neúspešný nástroj vracia telo
    zabalené v `<tool_use_error>…</tool_use_error>`. Je to značka pre stroj,
    nie text pre čitateľa — nahlas znie ako „menšie ako tool podčiarkovník
-   error". Strháva ju `UnwrapToolError` v adaptéri (`proto/translate.cpp`),
+   error". Strháva ju `UnwrapToolError` v adaptéri (`proto/claude/translate.cpp`),
    a **nie** vo `Widen()`, hoci by sa to
    ponúkalo: `Widen` prechádza všetok text zo streamu vrátane odpovede
    asistenta, takže by zožrala aj vetu, v ktorej o tom tagu niekto píše. Tag

@@ -1,7 +1,7 @@
-#include "proto/claude_backend.h"
+#include "proto/claude/claude_backend.h"
 
-#include "proto/ask.h"
-#include "proto/sessions.h"
+#include "proto/claude/ask.h"
+#include "proto/claude/sessions.h"
 
 namespace proto {
 namespace {

@@ -7,7 +7,7 @@
 // permission prompt with Yes and No, and the user answered "I cannot sensibly
 // confirm this, I only have yes and no" -- the question was there on screen and
 // there was no way to answer it.  What arrives is not a permission at all: see
-// proto/ask.h for the shape and for how the answer travels back.
+// proto/claude/ask.h for the shape and for how the answer travels back.
 //
 // One question per dialog, in turn.  A question is at most four options and a
 // call is at most four questions, so the alternative was a template with

@@ -19,7 +19,7 @@
 #include <cstdio>
 #include <string>
 
-#include "proto/session.h"
+#include "proto/claude/session.h"
 
 namespace {
 

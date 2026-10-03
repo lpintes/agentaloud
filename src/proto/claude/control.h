@@ -1,5 +1,5 @@
-#ifndef PROTO_CONTROL_H
-#define PROTO_CONTROL_H
+#ifndef PROTO_CLAUDE_CONTROL_H
+#define PROTO_CLAUDE_CONTROL_H
 
 // The control protocol: the half of the stream where the CLI asks us
 // something and waits for an answer, rather than telling us what happened.

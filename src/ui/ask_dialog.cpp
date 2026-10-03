@@ -34,7 +34,7 @@ std::wstring OneLine(std::wstring text) {
 }
 
 // One question, on screen.  The answers come back as labels rather than
-// indices because that is what the wire wants -- see proto/ask.h.
+// indices because that is what the wire wants -- see proto/claude/ask.h.
 class AskDialog : public win::Dialog {
  public:
   AskDialog(const agent::Question& question, size_t ordinal, size_t total)

@@ -78,11 +78,14 @@ AGENT_SRCS := src/agent/backend.cpp
 # ale iba cita -- test mu podstrci vlastny adresar.  session.cpp vlastni
 # proces, teda aj win::Process, a preto ho testy nelinkuju -- keby museli, znamenalo by to,
 # ze sa spracovanie protokolu niekde zamotalo so spustanim procesu.
-PROTO_PURE_SRCS := src/proto/jsonl.cpp src/proto/events.cpp \
-                   src/proto/control.cpp src/proto/ask.cpp \
-                   src/proto/sessions.cpp src/proto/translate.cpp
-PROTO_SRCS := $(PROTO_PURE_SRCS) src/proto/session.cpp \
-              src/proto/claude_backend.cpp
+#
+# Kazde CLI ma vlastny podadresar s adapterom (proto/claude/, neskor
+# proto/codex/); spolocne je len jsonl.
+PROTO_PURE_SRCS := src/proto/jsonl.cpp src/proto/claude/events.cpp \
+                   src/proto/claude/control.cpp src/proto/claude/ask.cpp \
+                   src/proto/claude/sessions.cpp src/proto/claude/translate.cpp
+PROTO_SRCS := $(PROTO_PURE_SRCS) src/proto/claude/session.cpp \
+              src/proto/claude/claude_backend.cpp
 
 # Transkript a jeho mapa rozsahov.  Nevie o windows.h, a prave preto sa da
 # testovat bez okna -- co je vacsina toho, preco maju tie testy cenu.

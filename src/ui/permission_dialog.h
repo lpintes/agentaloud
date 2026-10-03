@@ -15,7 +15,7 @@
 // reading a different one back would be worse than either alone.
 //
 // AskUserQuestion never gets here.  It arrives as a permission request but is
-// not one -- see proto/ask.h and ui/ask_dialog.h.
+// not one -- see proto/claude/ask.h and ui/ask_dialog.h.
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>

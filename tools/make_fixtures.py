@@ -147,7 +147,7 @@ def path_rewrites():
 
     Tvary su tri, lebo CLI ich pise tromi sposobmi: s obratenymi lomkami,
     s lomkami dopredu, a s pomlckami namiesto oboch (kluc adresara projektu
-    v ~/.claude/projects -- ProjectKey v proto/sessions.h)."""
+    v ~/.claude/projects -- ProjectKey v proto/claude/sessions.h)."""
     home = os.path.expanduser("~")
     dashed = re.sub(r"[^A-Za-z0-9]", "-", home)
     return [

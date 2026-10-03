@@ -1,5 +1,5 @@
-#ifndef PROTO_EVENTS_H
-#define PROTO_EVENTS_H
+#ifndef PROTO_CLAUDE_EVENTS_H
+#define PROTO_CLAUDE_EVENTS_H
 
 // Envelope-level classification of what comes off the stream.
 //

@@ -1,5 +1,5 @@
-#ifndef PROTO_ASK_H
-#define PROTO_ASK_H
+#ifndef PROTO_CLAUDE_ASK_H
+#define PROTO_CLAUDE_ASK_H
 
 // AskUserQuestion: the one tool whose permission request is not a permission
 // request at all.

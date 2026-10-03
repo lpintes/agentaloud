@@ -1,4 +1,4 @@
-#include "proto/ask.h"
+#include "proto/claude/ask.h"
 
 namespace proto {
 namespace {
