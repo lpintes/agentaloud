@@ -21,7 +21,7 @@
 #include <string>
 #include <vector>
 
-#include "proto/ask.h"
+#include "agent/events.h"
 
 namespace ui {
 
@@ -33,7 +33,7 @@ namespace ui {
 // call rather than sending a half-answer.  Half-answers are legal on the wire
 // -- the CLI tells the model to ask again about what is missing -- but Esc
 // here means "I am not answering this", and asking again is not that.
-bool AskQuestions(HWND owner, const std::vector<proto::AskQuestion>& questions,
+bool AskQuestions(HWND owner, const std::vector<agent::Question>& questions,
                   std::vector<std::vector<std::string>>* chosen);
 
 }  // namespace ui

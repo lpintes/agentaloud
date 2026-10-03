@@ -374,4 +374,40 @@ std::vector<agent::Event> TranslateHistory(const std::vector<Json>& records) {
   return events;
 }
 
+// The modes in a word of Slovak, for the status bar and for the spoken
+// confirmation.  Both are read aloud -- the bar on NVDA+End, the confirmation
+// on the key -- and a Slovak screen reader makes "acceptEdits" into noise.
+// Short, because in the bar the mode stands next to three other fields and
+// NVDA reads the lot in one breath.
+//
+// The gloss is what the mode actually does, the way the CLI's own Shift+Tab
+// hint glosses it: "did that work" wants the name, "what did I just turn on"
+// wants this.
+//
+// The cycle is the terminal's, read out of the CLI binary 2026-09-10:
+//   default -> acceptEdits -> plan -> auto -> default
+// bypassPermissions is a mode too but the control channel refuses it from a
+// stdio host (see MakeSetPermissionMode); dontAsk is switchable but not in the
+// rotation.  Both still get a label: a session can be started in them.
+agent::Capabilities ClaudeCapabilities() {
+  agent::Capabilities capabilities;
+  capabilities.agentName = "claude";
+  capabilities.modes = {
+      {"default", "normálny", "pýta sa na každú úpravu aj na príkazy", true,
+       true},
+      {"acceptEdits", "automatické úpravy",
+       "súbory mení sám, na príkazy sa pýta", true, false},
+      {"plan", "plánovanie", "len skúma a navrhuje, súborov sa nedotkne", true,
+       false},
+      {"auto", "auto", "Claude sám rozhodne, čo je bezpečné", true, false},
+      {"bypassPermissions", "bez povolení", "nepýta sa na nič", false, false},
+      {"dontAsk", "bez pýtania", "riskantné rovno zamietne", false, false},
+  };
+  capabilities.questions = true;
+  capabilities.slashCommands = true;
+  capabilities.resume = true;
+  capabilities.allowForSession = false;
+  return capabilities;
+}
+
 }  // namespace proto

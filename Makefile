@@ -67,6 +67,9 @@ LDLIBS   := -lole32 -lshell32 -lcomctl32 -luuid -lgdi32 -lwinmm
 # Nezavisle na ClaudeLens, da sa vziat do ineho projektu tak ako je.
 WIN_SRCS   := src/win/window.cpp src/win/dialog.cpp src/win/process.cpp \
               src/win/clipboard.cpp src/win/console.cpp
+# Port: co appka od coding agenta potrebuje, bez ohladu na to, ktore CLI to
+# je.  Len std typy, ziadny JSON a ziadne windows.h.
+AGENT_SRCS := src/agent/backend.cpp
 # Vsetko, co hovori s Claudom: proces, rury, JSONL aj control kanal.  Su
 # spolu preto, ze prestanu platit naraz -- ked sa zmeni CLI.
 #
@@ -78,7 +81,8 @@ WIN_SRCS   := src/win/window.cpp src/win/dialog.cpp src/win/process.cpp \
 PROTO_PURE_SRCS := src/proto/jsonl.cpp src/proto/events.cpp \
                    src/proto/control.cpp src/proto/ask.cpp \
                    src/proto/sessions.cpp src/proto/translate.cpp
-PROTO_SRCS := $(PROTO_PURE_SRCS) src/proto/session.cpp
+PROTO_SRCS := $(PROTO_PURE_SRCS) src/proto/session.cpp \
+              src/proto/claude_backend.cpp
 
 # Transkript a jeho mapa rozsahov.  Nevie o windows.h, a prave preto sa da
 # testovat bez okna -- co je vacsina toho, preco maju tie testy cenu.
@@ -90,16 +94,16 @@ UI_SRCS := src/ui/session_pane.cpp src/ui/main_window.cpp src/ui/speech.cpp \
            src/ui/ask_dialog.cpp src/ui/permission_dialog.cpp \
            src/ui/command_dialog.cpp src/ui/keys_dialog.cpp
 
-APP_SRCS := $(WIN_SRCS) $(PROTO_SRCS) $(MODEL_SRCS) $(UI_SRCS) src/main.cpp
+APP_SRCS := $(WIN_SRCS) $(AGENT_SRCS) $(PROTO_SRCS) $(MODEL_SRCS) $(UI_SRCS) src/main.cpp
 APP_OBJS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(APP_SRCS))
 
 # Dialogove sablony.  Len appka: spike ani testy okno nemaju.
 APP_RES := $(BUILD)/ui/claudelens.res.o
 
-SPIKE_SRCS := $(WIN_SRCS) $(PROTO_SRCS) src/spike_console.cpp
+SPIKE_SRCS := $(WIN_SRCS) $(AGENT_SRCS) $(PROTO_SRCS) src/spike_console.cpp
 SPIKE_OBJS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(SPIKE_SRCS))
 
-TEST_SRCS := $(PROTO_PURE_SRCS) $(MODEL_SRCS)
+TEST_SRCS := $(AGENT_SRCS) $(PROTO_PURE_SRCS) $(MODEL_SRCS)
 TEST_OBJS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(TEST_SRCS)) \
              $(BUILD)/tests/test_main.o
 

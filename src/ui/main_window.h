@@ -16,7 +16,9 @@ namespace ui {
 
 class MainWindow : public win::Window {
  public:
-  bool Open(HINSTANCE instance, const proto::Session::Options& options);
+  // Takes the backend over and hands it on to the pane.
+  bool Open(HINSTANCE instance, std::unique_ptr<agent::Backend> backend,
+            const agent::StartOptions& options);
 
  protected:
   LRESULT HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) override;

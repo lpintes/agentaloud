@@ -3,7 +3,8 @@
 namespace ui {
 
 bool MainWindow::Open(HINSTANCE instance,
-                      const proto::Session::Options& options) {
+                      std::unique_ptr<agent::Backend> backend,
+                      const agent::StartOptions& options) {
   if (!Create(L"ClaudeLensMain", L"ClaudeLens",
               WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, 900, 700, nullptr)) {
     return false;
@@ -17,7 +18,7 @@ bool MainWindow::Open(HINSTANCE instance,
   GetClientRect(hwnd_, &client);
   Arrange(client.right, client.bottom);
 
-  if (!pane_->Start(options)) return false;
+  if (!pane_->Start(std::move(backend), options)) return false;
   Show(SW_SHOW);
   pane_->FocusPrompt();
   WarnIfMute();
@@ -112,8 +113,15 @@ LRESULT MainWindow::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     case kMsgPermission:
       return pane_ ? pane_->OnPermission(lParam) : 0;
 
+    case kMsgQuestion:
+      return pane_ ? pane_->OnQuestion(lParam) : 0;
+
+    case kMsgHistory:
+      if (pane_) pane_->OnHistoryPosted();
+      return 0;
+
     case WM_CLOSE:
-      // Let the pane's Session shut the child down in the right order -- the
+      // Let the pane's backend shut the child down in the right order -- the
       // turn first, the pipe after.  Destroying the window first would take
       // the message queue away while the reader thread still wants it.
       pane_.reset();

@@ -47,7 +47,7 @@ std::wstring Shorten(const std::wstring& text, size_t limit) {
 // What one command looks like in the list: the name first, because that is
 // what is being looked for and what a screen reader reads first, then the
 // argument hint, then as much description as fits.
-std::wstring LineFor(const proto::SlashCommand& command) {
+std::wstring LineFor(const agent::SlashCommand& command) {
   std::wstring line = L"/" + model::Utf16FromUtf8(command.name);
   if (!command.argumentHint.empty()) {
     line += L" " + model::Utf16FromUtf8(command.argumentHint);
@@ -65,7 +65,7 @@ std::wstring LineFor(const proto::SlashCommand& command) {
 // the list stops answering the question that was asked.  The aliases are in
 // because a plugin's command is offered under its long name
 // ("mattpocock-skills:tdd") and remembered under the short one.
-bool Matches(const proto::SlashCommand& command, const std::wstring& filter) {
+bool Matches(const agent::SlashCommand& command, const std::wstring& filter) {
   if (filter.empty()) return true;
   if (Lowered(model::Utf16FromUtf8(command.name)).find(filter) !=
       std::wstring::npos) {
@@ -82,10 +82,10 @@ bool Matches(const proto::SlashCommand& command, const std::wstring& filter) {
 
 class CommandDialog : public win::Dialog {
  public:
-  explicit CommandDialog(const std::vector<proto::SlashCommand>& commands)
+  explicit CommandDialog(const std::vector<agent::SlashCommand>& commands)
       : commands_(commands) {}
 
-  const proto::SlashCommand& chosen() const { return commands_[chosenIndex_]; }
+  const agent::SlashCommand& chosen() const { return commands_[chosenIndex_]; }
 
  protected:
   bool OnInit() override;
@@ -106,7 +106,7 @@ class CommandDialog : public win::Dialog {
                                      LPARAM lParam, UINT_PTR id,
                                      DWORD_PTR data);
 
-  const std::vector<proto::SlashCommand>& commands_;
+  const std::vector<agent::SlashCommand>& commands_;
   size_t chosenIndex_ = 0;
 };
 
@@ -168,7 +168,7 @@ void CommandDialog::ShowDetail() {
     SetText(IDC_CMD_DETAIL, L"");
     return;
   }
-  const proto::SlashCommand& command = commands_[static_cast<size_t>(index)];
+  const agent::SlashCommand& command = commands_[static_cast<size_t>(index)];
   std::wstring text;
   if (!command.argumentHint.empty()) {
     text += L"Argumenty: " + model::Utf16FromUtf8(command.argumentHint) + L"\n";
@@ -252,8 +252,8 @@ LRESULT CALLBACK CommandDialog::FilterProc(HWND window, UINT message,
 
 }  // namespace
 
-bool PickCommand(HWND owner, const std::vector<proto::SlashCommand>& commands,
-                 proto::SlashCommand* chosen) {
+bool PickCommand(HWND owner, const std::vector<agent::SlashCommand>& commands,
+                 agent::SlashCommand* chosen) {
   if (commands.empty()) return false;
   CommandDialog dialog(commands);
   if (dialog.ShowModal(owner, IDD_COMMANDS) != IDOK) return false;

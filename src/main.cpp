@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "proto/claude_backend.h"
 #include "proto/sessions.h"
 #include "ui/main_window.h"
 #include "win/console.h"
@@ -316,14 +317,20 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     return 1;
   }
 
-  proto::Session::Options options;
-  options.workingDir = arguments.project;
-  options.permissionMode = arguments.permissionMode;
+  agent::StartOptions options;
+  options.projectDir = arguments.project;
+  // The CLI's own word, which is ASCII: a copy, not a conversion.
+  options.mode.assign(arguments.permissionMode.begin(),
+                      arguments.permissionMode.end());
   options.model = arguments.model;
+  // --resume travels here, value and all, until the port takes it over
+  // (claude-gui-lkk.44.4, step d).
   options.extraArgs = arguments.extraArgs;
 
+  // The one place that knows which CLI is behind the window.
   ui::MainWindow window;
-  if (!window.Open(instance, options)) {
+  if (!window.Open(instance, std::make_unique<proto::ClaudeBackend>(),
+                   options)) {
     MessageBoxW(nullptr, L"Nepodarilo sa spustiť session.", L"ClaudeLens",
                 MB_OK | MB_ICONERROR);
     return 1;

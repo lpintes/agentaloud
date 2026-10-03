@@ -1,0 +1,215 @@
+#include "proto/claude_backend.h"
+
+#include "proto/ask.h"
+#include "proto/sessions.h"
+
+namespace proto {
+namespace {
+
+// A mode name or a model id from one spelling into the other.  Both are ASCII
+// -- the CLI's own words -- so this is a copy, not a conversion, and it keeps
+// proto/ from reaching up into model/ for Utf16FromUtf8 (see sessions.h).
+std::wstring Ascii(const std::string& text) {
+  return std::wstring(text.begin(), text.end());
+}
+
+std::string Ascii(const std::wstring& text) {
+  std::string out;
+  out.reserve(text.size());
+  for (wchar_t character : text) out.push_back(static_cast<char>(character));
+  return out;
+}
+
+// `decision_reason_type` as a sentence.  The wire's words are for a program:
+// "rule" alone in a dialog says nothing about which rule or whose.
+//
+// Both values below were measured, not read -- "rule" in tools/spike_control.py
+// (a git commit against an ask rule) and "subcommandResults" during the probes
+// on claude-gui-lkk.25.  Anything else is passed through as it came: an unknown
+// word is still more than no word, and inventing a translation for it would be
+// the one failure the dialog cannot afford.  Empty stays empty; the dialog
+// says that the CLI gave none.
+std::string ReasonSentence(const std::string& type) {
+  if (type == "rule") return "pravidlo v nastaveniach alebo hook (rule)";
+  if (type == "subcommandResults") {
+    return "vyhodnotenie podpríkazov (subcommandResults)";
+  }
+  return type;
+}
+
+}  // namespace
+
+ClaudeBackend::ClaudeBackend() : capabilities_(ClaudeCapabilities()) {}
+
+bool ClaudeBackend::Start(const agent::StartOptions& options,
+                          Callbacks callbacks) {
+  callbacks_ = std::move(callbacks);
+
+  Session::Options session;
+  session.workingDir = options.projectDir;
+  session.model = options.model;
+  session.permissionMode = Ascii(options.mode);
+  session.extraArgs = options.extraArgs;
+  if (options.resume == agent::StartOptions::Resume::ById) {
+    session.extraArgs.push_back(L"--resume");
+    session.extraArgs.push_back(options.resumeId);
+  }
+
+  // What usage is read for until the stream names a model: the one asked for,
+  // or -- below -- the one the history ended on.  Only a seed, not an answer:
+  // the resume may have been launched with another --model, and the first
+  // system/init is then the fresher word.
+  translator_.SeedModel(Ascii(options.model));
+
+  // A resumed session gets nothing of its history from the stream, so it is
+  // read back off the file the CLI keeps (invariant 18).  A resume whose file
+  // cannot be found -- --resume takes a session title, and a title is not a
+  // file name -- has no history, and that is said by saying nothing.
+  std::vector<Json> records;
+  if (ResumesConversation(session.extraArgs) &&
+      ReadSessionRecords(
+          SessionFilePath(session.workingDir,
+                          ResumedConversation(session.extraArgs)),
+          &records)) {
+    std::vector<agent::Event> history = TranslateHistory(records);
+    for (const agent::Event& event : history) {
+      if (const auto* changed = std::get_if<agent::ModelChanged>(&event)) {
+        translator_.SeedModel(changed->model);
+      }
+    }
+    if (callbacks_.onHistory) callbacks_.onHistory(std::move(history));
+  }
+
+  return session_.Start(
+      session, [this](const Event& event) { OnRecord(event); },
+      [this](const PermissionRequest& request) {
+        return OnPermission(request);
+      });
+}
+
+void ClaudeBackend::OnRecord(const Event& event) {
+  std::vector<agent::Event> batch = translator_.Translate(event.raw);
+
+  // The mode, off Session rather than off the record: it arrives on four kinds
+  // of record and Session has already folded in all of them, together with
+  // the rules about which report may move it (PermissionModeTracker).
+  // Reported after the record's own events, as a change -- a ModeChanged that
+  // repeats the mode the pane already has is harmless, it ignores it.
+  const std::string mode = session_.permissionMode();
+  if (!mode.empty() && mode != reportedMode_) {
+    reportedMode_ = mode;
+    batch.push_back(agent::ModeChanged{mode});
+  }
+  if (!reportedReady_ && ready()) {
+    reportedReady_ = true;
+    batch.push_back(agent::Ready{});
+  }
+  if (!batch.empty() && callbacks_.onEvents) {
+    callbacks_.onEvents(std::move(batch));
+  }
+}
+
+PermissionDecision ClaudeBackend::OnPermission(
+    const PermissionRequest& request) {
+  PermissionDecision decision;
+
+  // AskUserQuestion is not a permission at all, however it travels (invariant
+  // 12).  It is the model asking the reader something, and the answer goes
+  // back in the field that edits a tool's arguments -- see proto/ask.h.
+  //
+  // The parse has to succeed as well as the name match: an input that cannot
+  // be drawn falls through to the general prompt, which at least shows it.
+  std::vector<AskQuestion> asked;
+  if (request.toolName == kAskUserQuestionTool &&
+      ParseAskUserQuestion(request.input, &asked) && callbacks_.onQuestion) {
+    agent::QuestionRequest question;
+    for (const AskQuestion& item : asked) {
+      agent::Question out;
+      // Claude files an answer under the text of its question.
+      out.id = item.question;
+      out.text = item.question;
+      out.header = item.header;
+      out.multiSelect = item.multiSelect;
+      out.allowsOther = true;
+      for (const AskOption& option : item.options) {
+        out.options.push_back({option.label, option.description});
+      }
+      question.questions.push_back(std::move(out));
+    }
+    const agent::QuestionAnswer answer = callbacks_.onQuestion(question);
+    if (answer.declined) {
+      // Written for the model.  "Denied" would read as a rule refusing the
+      // tool and invite a retry; this says a person declined to answer, which
+      // is a thing to stop for.
+      decision.denyMessage =
+          "Pouzivatel na otazku neodpovedal a dialog zavrel. Neopakuj ju, "
+          "spytaj sa obycajnym textom, co dalej.";
+    } else {
+      decision.allow = true;
+      decision.updatedInput =
+          MakeAskAnswers(request.input, asked, answer.chosen);
+    }
+    return decision;
+  }
+
+  if (!callbacks_.onPermission) return decision;
+  agent::PermissionRequest out;
+  out.call = ToolCallFromInput(request.toolName, request.toolUseId,
+                               request.input);
+  out.title = request.displayName;
+  out.description = request.description;
+  out.reason = ReasonSentence(request.decisionReasonType);
+  out.offered = {agent::Verdict::Allow, agent::Verdict::Deny};
+  const agent::PermissionAnswer answer = callbacks_.onPermission(out);
+  decision.allow = answer.verdict == agent::Verdict::Allow ||
+                   answer.verdict == agent::Verdict::AllowForSession;
+  decision.denyMessage = answer.message;
+  return decision;
+}
+
+bool ClaudeBackend::SendPrompt(const std::string& utf8Text) {
+  return session_.SendPrompt(utf8Text);
+}
+
+bool ClaudeBackend::Interrupt() { return session_.Interrupt(); }
+
+bool ClaudeBackend::SetMode(const std::string& id) {
+  return session_.SetPermissionMode(id);
+}
+
+void ClaudeBackend::Stop(unsigned turnTimeoutMs) { session_.Stop(turnTimeoutMs); }
+
+std::string ClaudeBackend::conversationId() const {
+  return session_.sessionId();
+}
+
+std::string ClaudeBackend::mode() const { return session_.permissionMode(); }
+
+agent::Account ClaudeBackend::account() const {
+  const InitializeInfo handshake = session_.handshake();
+  agent::Account account;
+  account.email = handshake.accountEmail;
+  account.plan = handshake.subscriptionType;
+  // Said only when it is NOT the ordinary one.  Through Bedrock or Vertex the
+  // billing is somebody else's, so "0 účtované" would mean something different
+  // again.
+  if (!handshake.apiProvider.empty() && handshake.apiProvider != "firstParty") {
+    account.billingNote = handshake.apiProvider;
+  }
+  return account;
+}
+
+std::vector<agent::SlashCommand> ClaudeBackend::commands() const {
+  std::vector<agent::SlashCommand> out;
+  for (const SlashCommand& command : session_.handshake().commands) {
+    out.push_back({command.name, command.description, command.argumentHint,
+                   command.aliases});
+  }
+  return out;
+}
+
+bool ClaudeBackend::ready() const {
+  return !session_.handshake().requestId.empty();
+}
+
+}  // namespace proto

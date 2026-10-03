@@ -702,6 +702,29 @@ void TestInitializeResponseParsing() {
       &ignored));
 }
 
+// Cyklus Shift+Tab sa presunul z proto::NextPermissionMode do portu
+// (agent::NextMode nad zoznamom rezimov adaptera).  Tu sa drzi proti tomu
+// staremu pre kazdy rezim, aj neznamy -- prave tam sa dva cykly najlahsie
+// rozidu a nikto by si to nevsimol.
+void TestPortModeCycleMatchesClaude() {
+  TEST("port: cyklus rezimov Claude je ten isty ako predtym");
+  const agent::Capabilities claude = proto::ClaudeCapabilities();
+  for (const char* mode : {"default", "acceptEdits", "plan", "auto",
+                           "bypassPermissions", "dontAsk", "manual", "vymysleny"}) {
+    CHECK_EQ(agent::NextMode(claude, mode), proto::NextPermissionMode(mode));
+  }
+  // Neznamy rezim (CLI este neodpovedalo) sa necykluje -- klavesa to povie.
+  CHECK_EQ(agent::NextMode(claude, ""), std::string());
+  // Bezny rezim sa v stavovom riadku nepise.
+  const agent::Mode* ordinary = agent::FindMode(claude, "default");
+  CHECK(ordinary != nullptr && ordinary->ordinary);
+  const agent::Mode* plan = agent::FindMode(claude, "plan");
+  CHECK(plan != nullptr && !plan->ordinary);
+  CHECK(agent::FindMode(claude, "manual") == nullptr);
+  // Agent bez rezimov nema kam cyklovat.
+  CHECK_EQ(agent::NextMode(agent::Capabilities(), "default"), std::string());
+}
+
 void TestPermissionModeSwitch() {
   TEST("control: Shift+Tab meni rezim za behu");
 
@@ -2218,6 +2241,7 @@ int main(int argc, char** argv) {
   TestRateLimitParsing();
   TestInitializeResponseParsing();
   TestPermissionModeSwitch();
+  TestPortModeCycleMatchesClaude();
   TestPermissionModeReports();
   TestPermissionModeTracker();
   TestAnsweringModel();

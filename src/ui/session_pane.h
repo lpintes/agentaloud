@@ -2,28 +2,32 @@
 #define UI_SESSION_PANE_H
 
 // One conversation on screen: the transcript above, the prompt below, and the
-// Session behind them.
+// agent behind them.
 //
 // It does not know whether it is the whole of a window or one page of a tab
 // control, and nothing in here may ask.  That is what makes "open in a new
 // window" a menu item later rather than a rewrite -- see claude-gui-lkk.7.
 //
+// Nor does it know which CLI the agent is.  It holds an agent::Backend and
+// asks it what it can do (agent::Capabilities); what Claude or Codex call
+// things is their adapter's business.
+//
 // The host window has one duty: forward the kMsg* messages below.  They exist
-// because Session's callbacks run on its reader thread and every one of these
-// controls may only be touched from the thread that made it.
+// because the backend's callbacks run on its reader thread and every one of
+// these controls may only be touched from the thread that made it.
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
 
+#include "agent/backend.h"
 #include "model/bookmarks.h"
 #include "model/transcript.h"
-#include "proto/session.h"
-#include "proto/translate.h"
 #include "ui/session_details.h"
 #include "ui/speech.h"
 #include "ui/status_bar.h"
@@ -37,6 +41,12 @@ constexpr UINT kMsgDrain = WM_APP + 1;
 // blocks until there is an answer, which is exactly what is wanted: the CLI
 // is holding the tool until we reply.
 constexpr UINT kMsgPermission = WM_APP + 2;
+// The model is asking the reader a multiple-choice question.  Sent, for the
+// same reason as kMsgPermission.
+constexpr UINT kMsgQuestion = WM_APP + 3;
+// A resumed conversation's history, when the backend hands it over on its
+// reader thread.  Posted; the history waits in the pane until it is drained.
+constexpr UINT kMsgHistory = WM_APP + 4;
 
 class SessionPane {
  public:
@@ -46,11 +56,15 @@ class SessionPane {
   // here works without it, it just has nowhere to put the four facts.
   void SetStatusBar(StatusBar* bar) { statusBar_ = bar; }
   void Layout(int width, int height);
-  bool Start(const proto::Session::Options& options);
+  // The pane owns the backend from here on.
+  bool Start(std::unique_ptr<agent::Backend> backend,
+             const agent::StartOptions& options);
 
-  // Called by the host for kMsgDrain and kMsgPermission.
+  // Called by the host for the kMsg* messages above.
   void OnDrain();
   LRESULT OnPermission(LPARAM pending);
+  LRESULT OnQuestion(LPARAM pending);
+  void OnHistoryPosted();
 
   void FocusPrompt() const;
   // Where the focus was when the window last lost it -- the prompt the first
@@ -154,10 +168,20 @@ class SessionPane {
   // The model that is answering now.  Which record says that is the
   // translator's business (invariant 21); this only shows it.
   void ShowModel(const std::string& model);
-  // Brings details_ and the bar up to the mode Session holds, and says a change
-  // this pane did not make itself: a refused Shift+Tab, ExitPlanMode approved,
-  // auto dropped by the CLI.  Called after every batch.
-  void FollowPermissionMode();
+  // Brings details_ and the bar up to the mode the backend reported last, and
+  // says a change this pane did not make itself: a refused Shift+Tab,
+  // ExitPlanMode approved, auto dropped by the CLI.  Called once per drain
+  // with the newest ModeChanged in it, so a drain that carried two changes
+  // says only where it ended up.
+  void FollowPermissionMode(const std::string& live);
+  // The mode's name and what it does, out of the backend's list; the id
+  // itself when the backend does not know it, which is still more than
+  // nothing.
+  std::wstring ModeLabel(const std::wstring& id) const;
+  std::wstring ModeSentence(const std::wstring& id) const;
+  // The resumed conversation, into the transcript as one edit, with the caret
+  // put at its end.
+  void RestoreHistory(const std::vector<agent::Event>& events);
   // Rewrites the bar's model field from details_.model and
   // details_.permissionMode.  Shared by everything that moves either, so they
   // never format it differently.
@@ -189,7 +213,7 @@ class SessionPane {
   // where the box speaks for itself.  See the definition for why speech is not
   // an option here and why the sound is neither of the two already in use.
   void SignalWaiting() const;
-  // Takes the id and the account off the Session at the moment they are
+  // Takes the id and the account off the backend at the moment they are
   // needed.  See the note on the definition for why they are not kept up to
   // date instead, and why the permission mode is no longer among them.
   void RefreshFacts();
@@ -210,7 +234,6 @@ class SessionPane {
   StatusBar* statusBar_ = nullptr;
   model::Transcript model_;
   model::Bookmarks bookmarks_;
-  proto::Session session_;
   Speech speech_;
   // The id this turn's blocks start from, so that when it ends we know which
   // of the answers is the new one to read out.  An id and not an index: a tool
@@ -222,16 +245,14 @@ class SessionPane {
   // has moved, the reader is reading and it is theirs.
   size_t anchor_ = 0;
 
-  // Used on the reader thread only, where the records arrive: what it says
-  // about a record depends on the records before it, so it has to see them
-  // in order and see all of them.
-  proto::Translator translator_;
-
   std::mutex queueMutex_;
-  // One batch per record, translated.  A batch is what the transcript appends
-  // as one edit where it can.
+  // One batch per message off the wire.  A batch is what the transcript
+  // appends as one edit where it can.
   std::vector<std::vector<agent::Event>> queue_;
   bool drainPosted_ = false;
+  // A history handed over on the reader thread, waiting for kMsgHistory.
+  // Under queueMutex_.
+  std::vector<agent::Event> history_;
 
   bool busy_ = false;
   // Set by Esc, cleared by the Result that follows it and by the next prompt.
@@ -254,6 +275,12 @@ class SessionPane {
   // than asked for when the dialog opens, because most of it comes off records
   // that have long gone past by then.
   SessionDetails details_;
+
+  // LAST, so that it is destroyed FIRST.  Its destructor waits out the turn
+  // and stops the reader thread, and that thread writes into queue_ and sends
+  // to host_ until it stops -- members destroyed before it would be destroyed
+  // under a thread still using them.
+  std::unique_ptr<agent::Backend> backend_;
 };
 
 }  // namespace ui

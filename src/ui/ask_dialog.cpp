@@ -37,7 +37,7 @@ std::wstring OneLine(std::wstring text) {
 // indices because that is what the wire wants -- see proto/ask.h.
 class AskDialog : public win::Dialog {
  public:
-  AskDialog(const proto::AskQuestion& question, size_t ordinal, size_t total)
+  AskDialog(const agent::Question& question, size_t ordinal, size_t total)
       : question_(question), ordinal_(ordinal), total_(total) {}
 
   const std::vector<std::string>& chosen() const { return chosen_; }
@@ -61,7 +61,7 @@ class AskDialog : public win::Dialog {
   // application spends the rest of its time avoiding.
   bool Refuse(const wchar_t* why, int focusId) const;
 
-  const proto::AskQuestion& question_;
+  const agent::Question& question_;
   const size_t ordinal_;  // 1-based, for the title
   const size_t total_;
   std::vector<std::string> chosen_;
@@ -80,7 +80,7 @@ bool AskDialog::OnInit() {
   }
   SetWindowTextW(hwnd_, caption.c_str());
 
-  SetTextLines(IDC_ASK_QUESTION, model::Utf16FromUtf8(question_.question));
+  SetTextLines(IDC_ASK_QUESTION, model::Utf16FromUtf8(question_.text));
   // Whether one answer is wanted or several is in the label, and so in the
   // name NVDA reads out when the list takes the focus.  Without it the two
   // lists are indistinguishable until something is tried.
@@ -95,7 +95,7 @@ bool AskDialog::OnInit() {
   // and the focus then sits somewhere invisible with nothing to read.
   SetEnabled(unused, false);
 
-  for (const proto::AskOption& option : question_.options) {
+  for (const agent::QuestionOption& option : question_.options) {
     std::wstring line = model::Utf16FromUtf8(option.label);
     if (!option.description.empty()) {
       line += L" — " + model::Utf16FromUtf8(option.description);
@@ -171,7 +171,7 @@ bool AskDialog::OnOk() {
 
 }  // namespace
 
-bool AskQuestions(HWND owner, const std::vector<proto::AskQuestion>& questions,
+bool AskQuestions(HWND owner, const std::vector<agent::Question>& questions,
                   std::vector<std::vector<std::string>>* chosen) {
   chosen->clear();
   for (size_t i = 0; i < questions.size(); ++i) {

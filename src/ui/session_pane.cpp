@@ -8,9 +8,6 @@
 
 #include "model/history.h"
 #include "model/utf.h"
-#include "proto/ask.h"
-#include "proto/sessions.h"
-#include "proto/translate.h"
 #include "ui/ask_dialog.h"
 #include "ui/command_dialog.h"
 #include "ui/keys_dialog.h"
@@ -35,55 +32,17 @@ constexpr int kMargin = 8;
 constexpr int kLabelHeight = 18;
 constexpr int kPromptLines = 5;
 
-// The wire mode name in a word of Slovak, for the status bar and for the
-// spoken confirmation.  Both are read aloud -- the bar on NVDA+End, the
-// confirmation on the key -- and a Slovak screen reader makes "acceptEdits"
-// into noise.  Short, because in the bar the mode stands next to three other
-// fields and NVDA reads the lot in one breath.  The session details dialog
-// keeps the raw wire word on purpose (see session_details.cpp); this is the
-// human-facing side of the same fact.  An unrecognised mode names itself
-// rather than disappearing.
-std::wstring PermissionModeLabel(const std::wstring& wire) {
-  if (wire == L"default") return L"normálny";
-  if (wire == L"acceptEdits") return L"automatické úpravy";
-  if (wire == L"plan") return L"plánovanie";
-  if (wire == L"auto") return L"auto";
-  if (wire == L"bypassPermissions") return L"bez povolení";
-  if (wire == L"dontAsk") return L"bez pýtania";
-  return wire;
-}
-
-// What the mode actually does, the way the CLI's own Shift+Tab hint glosses it.
-// Said after the label when the key switches the mode -- "did that work" wants
-// the name, "what did I just turn on" wants this.  Empty for a mode with no
-// short gloss worth reading.
-std::wstring PermissionModeGloss(const std::wstring& wire) {
-  if (wire == L"default") return L"pýta sa na každú úpravu aj na príkazy";
-  if (wire == L"acceptEdits") return L"súbory mení sám, na príkazy sa pýta";
-  if (wire == L"plan") return L"len skúma a navrhuje, súborov sa nedotkne";
-  if (wire == L"auto") return L"Claude sám rozhodne, čo je bezpečné";
-  if (wire == L"bypassPermissions") return L"nepýta sa na nič";
-  if (wire == L"dontAsk") return L"riskantné rovno zamietne";
-  return {};
-}
-
-// What is said when the mode changes, whoever changed it: the name first, so
-// "did the key work" is answered at once, then what the mode does.  One
-// sentence for the key and for a change the CLI made, so the two never sound
-// like different things.
-std::wstring PermissionModeSentence(const std::wstring& wire) {
-  std::wstring said = L"režim " + PermissionModeLabel(wire);
-  const std::wstring gloss = PermissionModeGloss(wire);
-  if (!gloss.empty()) said += L" — " + gloss;
-  return said;
-}
-
-// What the reader thread hands across for a permission decision.  Lives on
-// that thread's stack for the duration of the SendMessage, which is safe
-// precisely because SendMessage does not return until we are done with it.
+// What the reader thread hands across for a decision.  Lives on that thread's
+// stack for the duration of the SendMessage, which is safe precisely because
+// SendMessage does not return until we are done with it.
 struct PendingPermission {
-  const proto::PermissionRequest* request;
-  proto::PermissionDecision decision;
+  const agent::PermissionRequest* request;
+  agent::PermissionAnswer answer;
+};
+
+struct PendingQuestion {
+  const agent::QuestionRequest* request;
+  agent::QuestionAnswer answer;
 };
 
 int TextLength(HWND edit) {
@@ -379,13 +338,15 @@ void SessionPane::Apply(const model::Edit& edit) {
   }
 }
 
-bool SessionPane::Start(const proto::Session::Options& options) {
+bool SessionPane::Start(std::unique_ptr<agent::Backend> backend,
+                        const agent::StartOptions& options) {
+  backend_ = std::move(backend);
   // The folder name in the bar, the whole path in the title.  The bar is read
   // out in one breath along with three other fields, and a path of eight
   // components there buries everything after it; the title is announced when
   // the window takes focus and nowhere else, which is exactly the right place
   // for the answer to "which checkout is this".
-  std::wstring path = options.workingDir;
+  std::wstring path = options.projectDir;
   while (!path.empty() && (path.back() == L'\\' || path.back() == L'/')) {
     path.pop_back();
   }
@@ -394,108 +355,112 @@ bool SessionPane::Start(const proto::Session::Options& options) {
   // The dialog gets the whole path, for the same reason the title does: it is
   // read on request and not in one breath with three other fields.
   details_.project = path;
-  details_.permissionMode = options.permissionMode;
+  details_.permissionMode = model::Utf16FromUtf8(options.mode);
   // What was asked for, until the stream says what it actually got.  An alias
   // ("sonnet") is not the id the usage records are keyed by, but it is only
-  // ever read by a human here: the translator is seeded with it too, and by
-  // the time a result asks it whose usage to read it holds the real id,
-  // because both system/init and the assistant records arrive before the
-  // result of the turn they belong to.
+  // ever read by a human here; which model's usage to read is the backend's
+  // question, and it answers it with the real id.
   details_.model = options.model;
   details_.requestedModel = options.model;
   if (statusBar_) statusBar_->Set(StatusBar::kProject, L"projekt " + project_);
   SetWindowTextW(host_, (L"ClaudeLens — " + path).c_str());
-  // A resumed session gets nothing of its history from the stream, so it is
-  // read back off the file the CLI keeps.  A resume whose file cannot be found
-  // -- --resume takes a session title, and a title is not a file name -- opens
-  // on an empty transcript, and the application says nothing about it: what
-  // was restored is in the transcript, and resuming is a deliberate act, not a
-  // question waiting for an answer.
-  std::vector<proto::Json> history;
-  const bool restored =
-      proto::ResumesConversation(options.extraArgs) &&
-      proto::ReadSessionRecords(
-          proto::SessionFilePath(
-              options.workingDir,
-              proto::ResumedConversation(options.extraArgs)),
-          &history);
 
-  if (restored) {
-    // One edit for the lot.  The replay only ever adds after what is already
-    // in the buffer -- a tool result is filed behind its own call, and every
-    // call it could be filed behind arrived in the same replay -- so the whole
-    // of it is one contiguous insertion at the old end.  Applying a few
-    // thousand edits one at a time would be a slow way to the same text, and
-    // each of them would go through EM_REPLACESEL and the range check.
-    const size_t before = model_.Text().size();
-    const std::vector<agent::Event> events = proto::TranslateHistory(history);
-    const model::HistoryCounts counts = model::RestoreHistory(events, &model_);
-    // The model that answered last before the session was closed is the best
-    // thing known until this process says otherwise.  Only a seed, not an
-    // answer: the resume may have been launched with another --model, and the
-    // first system/init is then the fresher word.
-    for (const agent::Event& event : events) {
-      if (const auto* changed = std::get_if<agent::ModelChanged>(&event)) {
-        details_.model = model::Utf16FromUtf8(changed->model);
-      }
+  agent::Backend::Callbacks callbacks;
+  callbacks.onEvents = [this](std::vector<agent::Event> batch) {
+    // Reader thread.  Queue and wake the window; never touch a control.
+    bool wake = false;
+    {
+      std::lock_guard<std::mutex> lock(queueMutex_);
+      queue_.push_back(std::move(batch));
+      // One post per burst: a busy turn produces hundreds of records and a
+      // message each would be its own kind of stall.
+      wake = !drainPosted_;
+      drainPosted_ = true;
     }
-    if (model_.Text().size() > before && counts.blocks > 0) {
-      model::Edit edit;
-      edit.start = before;
-      edit.inserted = model_.Text().substr(before);
-      Apply(edit);
+    if (wake) PostMessageW(host_, kMsgDrain, 0, 0);
+  };
+  callbacks.onHistory = [this](std::vector<agent::Event> events) {
+    // Claude hands it over from inside Start, on this very thread and before
+    // there is a process -- then it goes in now, ahead of everything, which
+    // is also what keeps the bar below from showing the asked-for model when
+    // the history already knows better.  A backend that has to ask its CLI
+    // for the history gets it on the reader thread, and then it waits for
+    // the window like everything else from there.
+    if (GetWindowThreadProcessId(host_, nullptr) == GetCurrentThreadId()) {
+      RestoreHistory(events);
+      return;
     }
-    // At the end, not at offset zero.  A conversation is resumed in order to
-    // carry it on, so the caret belongs where it will be carried on from --
-    // otherwise the first thing the reader has to do is walk past everything
-    // they have already read to reach what comes next.  What is behind them is
-    // not lost: Ctrl+Home leads to the first prompt, which is the answer to
-    // "which conversation is this".
-    //
-    // The anchor goes with it, because "at the end" survives no append on its
-    // own (see Apply) and the first turn's running commentary depends on it --
-    // invariant 11.
-    PutCaretAtEnd(transcript_);
-    anchor_ = model_.Text().size();
-  }
+    {
+      std::lock_guard<std::mutex> lock(queueMutex_);
+      history_ = std::move(events);
+    }
+    PostMessageW(host_, kMsgHistory, 0, 0);
+  };
+  callbacks.onPermission = [this](const agent::PermissionRequest& request) {
+    PendingPermission pending{&request, {}};
+    SendMessageW(host_, kMsgPermission, 0, reinterpret_cast<LPARAM>(&pending));
+    return pending.answer;
+  };
+  callbacks.onQuestion = [this](const agent::QuestionRequest& request) {
+    PendingQuestion pending{&request, {}};
+    SendMessageW(host_, kMsgQuestion, 0, reinterpret_cast<LPARAM>(&pending));
+    return pending.answer;
+  };
+
   // What is known already goes into the bar now: the first system/init comes
   // only with the first turn, and a bar that says nothing about the mode until
   // then cannot answer "am I in plan mode" when it is asked -- before the first
-  // prompt is exactly when it is.
+  // prompt is exactly when it is.  After Start, because a history handed over
+  // inside it may have named the model.
+  const bool started = backend_->Start(options, std::move(callbacks));
   RefreshModelField();
-  // What usage is read for until the stream names a model: the one asked
-  // for, or the one the history ended on.
-  translator_.SeedModel(model::Utf8FromUtf16(details_.model));
-  return session_.Start(
-      options,
-      [this](const proto::Event& event) {
-        // Reader thread.  Translate, queue and wake the window; never touch a
-        // control.  Translated here and not on the window's thread because
-        // the translator has to see every record in order, and this is where
-        // they are in order.
-        //
-        // A record that makes no event is queued all the same, as an empty
-        // batch: a system/status carrying a new mode is one of those, and the
-        // drain it wakes is what brings the mode over (FollowPermissionMode).
-        std::vector<agent::Event> batch = translator_.Translate(event.raw);
-        bool wake = false;
-        {
-          std::lock_guard<std::mutex> lock(queueMutex_);
-          queue_.push_back(std::move(batch));
-          // One post per burst: a busy turn produces hundreds of records and
-          // a message each would be its own kind of stall.
-          wake = !drainPosted_;
-          drainPosted_ = true;
-        }
-        if (wake) PostMessageW(host_, kMsgDrain, 0, 0);
-      },
-      [this](const proto::PermissionRequest& request) {
-        PendingPermission pending;
-        pending.request = &request;
-        SendMessageW(host_, kMsgPermission, 0,
-                     reinterpret_cast<LPARAM>(&pending));
-        return pending.decision;
-      });
+  return started;
+}
+
+void SessionPane::RestoreHistory(const std::vector<agent::Event>& events) {
+  // One edit for the lot.  The replay only ever adds after what is already in
+  // the buffer -- a tool result is filed behind its own call, and every call it
+  // could be filed behind arrived in the same replay -- so the whole of it is
+  // one contiguous insertion at the old end.  Applying a few thousand edits one
+  // at a time would be a slow way to the same text, and each of them would go
+  // through EM_REPLACESEL and the range check.
+  const size_t before = model_.Text().size();
+  const model::HistoryCounts counts = model::RestoreHistory(events, &model_);
+  // The model that answered last before the session was closed is the best
+  // thing known until this process says otherwise.
+  for (const agent::Event& event : events) {
+    if (const auto* changed = std::get_if<agent::ModelChanged>(&event)) {
+      details_.model = model::Utf16FromUtf8(changed->model);
+    }
+  }
+  if (model_.Text().size() > before && counts.blocks > 0) {
+    model::Edit edit;
+    edit.start = before;
+    edit.inserted = model_.Text().substr(before);
+    Apply(edit);
+  }
+  // At the end, not at offset zero.  A conversation is resumed in order to
+  // carry it on, so the caret belongs where it will be carried on from --
+  // otherwise the first thing the reader has to do is walk past everything
+  // they have already read to reach what comes next.  What is behind them is
+  // not lost: Ctrl+Home leads to the first prompt, which is the answer to
+  // "which conversation is this".
+  //
+  // The anchor goes with it, because "at the end" survives no append on its
+  // own (see Apply) and the first turn's running commentary depends on it --
+  // invariant 11.
+  PutCaretAtEnd(transcript_);
+  anchor_ = model_.Text().size();
+}
+
+void SessionPane::OnHistoryPosted() {
+  std::vector<agent::Event> events;
+  {
+    std::lock_guard<std::mutex> lock(queueMutex_);
+    events.swap(history_);
+  }
+  RestoreHistory(events);
+  RefreshModelField();
 }
 
 void SessionPane::OnDrain() {
@@ -511,6 +476,9 @@ void SessionPane::OnDrain() {
   // overwriting slot 0 with it would cost the reader the place they wanted.
   const model::Mark reading = model::MarkAt(model_, CaretOffset(transcript_));
   const size_t blocksBefore = model_.blocks().size();
+  // The newest mode the drain carried.  Followed once, after the lot: two
+  // changes in one drain are said as where they ended up.
+  std::optional<std::string> mode;
 
   for (const std::vector<agent::Event>& batch : batches) {
     // Taken before the blocks are made, so that what the batch added can be
@@ -550,13 +518,12 @@ void SessionPane::OnDrain() {
       } else if (const auto* limit =
                      std::get_if<agent::RateLimitChanged>(&event)) {
         ShowRateLimit(*limit);
+      } else if (const auto* changed = std::get_if<agent::ModeChanged>(&event)) {
+        mode = changed->id;
       }
     }
   }
-  // Once per batch and off Session rather than off the records in it: the mode
-  // arrives on four kinds of record, and Session has already folded in all of
-  // them -- including the ones still on their way to this queue.
-  FollowPermissionMode();
+  if (mode) FollowPermissionMode(*mode);
 
   if (model_.blocks().size() != blocksBefore) bookmarks_.Set(0, reading);
 }
@@ -637,43 +604,30 @@ void SessionPane::SignalWaiting() const {
 
 LRESULT SessionPane::OnPermission(LPARAM pointer) {
   PendingPermission* pending = reinterpret_cast<PendingPermission*>(pointer);
-  const proto::PermissionRequest& request = *pending->request;
 
-  // Before either box goes up, not after: the call below does not return until
+  // Before the box goes up, not after: the call below does not return until
   // there is an answer.
   SignalWaiting();
 
-  // AskUserQuestion is not a permission at all, however it travels.  It is the
-  // model asking the reader something, and the answer goes back in the field
-  // that edits a tool's arguments -- see proto/ask.h, where the shape and the
-  // measurement behind it are written down.  Until this branch existed the
-  // question was put through the box below, so a question with three options
-  // was offered with Yes and No and the answer was lost.
-  //
-  // The parse has to succeed as well as the name match: an input we cannot
-  // draw falls through to the general prompt, which at least shows it.
-  std::vector<proto::AskQuestion> questions;
-  if (request.toolName == proto::kAskUserQuestionTool &&
-      proto::ParseAskUserQuestion(request.input, &questions)) {
-    std::vector<std::vector<std::string>> chosen;
-    if (AskQuestions(host_, questions, &chosen)) {
-      pending->decision.allow = true;
-      pending->decision.updatedInput =
-          proto::MakeAskAnswers(request.input, questions, chosen);
-    } else {
-      // Written for the model, like every deny message here.  "Denied" would
-      // read as a rule refusing the tool and invite a retry; this says a
-      // person declined to answer, which is a thing to stop for.
-      pending->decision.denyMessage =
-          "Pouzivatel na otazku neodpovedal a dialog zavrel. Neopakuj ju, "
-          "spytaj sa obycajnym textom, co dalej.";
-    }
-    return 0;
-  }
-
-  pending->decision.allow = AskPermission(host_, request);
-  pending->decision.denyMessage =
+  pending->answer.verdict = AskPermission(host_, *pending->request)
+                                ? agent::Verdict::Allow
+                                : agent::Verdict::Deny;
+  pending->answer.message =
       "Používateľ to zamietol. Nepokračuj a spýtaj sa, čo ďalej.";
+  return 0;
+}
+
+LRESULT SessionPane::OnQuestion(LPARAM pointer) {
+  PendingQuestion* pending = reinterpret_cast<PendingQuestion*>(pointer);
+
+  // The model asking the reader something, which is not a permission however
+  // it travelled -- telling the two apart is the adapter's business
+  // (invariant 12).  Until that was done a question with three options was
+  // offered with Yes and No and the answer was lost.
+  SignalWaiting();
+
+  pending->answer.declined =
+      !AskQuestions(host_, pending->request->questions, &pending->answer.chosen);
   return 0;
 }
 
@@ -968,8 +922,28 @@ void SessionPane::ShowModel(const std::string& model) {
   RefreshModelField();
 }
 
-void SessionPane::FollowPermissionMode() {
-  const std::wstring live = model::Utf16FromUtf8(session_.permissionMode());
+std::wstring SessionPane::ModeLabel(const std::wstring& id) const {
+  const agent::Mode* mode =
+      agent::FindMode(backend_->capabilities(), model::Utf8FromUtf16(id));
+  return mode != nullptr ? model::Utf16FromUtf8(mode->label) : id;
+}
+
+// What is said when the mode changes, whoever changed it: the name first, so
+// "did the key work" is answered at once, then what the mode does.  One
+// sentence for the key and for a change the CLI made, so the two never sound
+// like different things.
+std::wstring SessionPane::ModeSentence(const std::wstring& id) const {
+  std::wstring said = L"režim " + ModeLabel(id);
+  const agent::Mode* mode =
+      agent::FindMode(backend_->capabilities(), model::Utf8FromUtf16(id));
+  if (mode != nullptr && !mode->gloss.empty()) {
+    said += L" — " + model::Utf16FromUtf8(mode->gloss);
+  }
+  return said;
+}
+
+void SessionPane::FollowPermissionMode(const std::string& reported) {
+  const std::wstring live = model::Utf16FromUtf8(reported);
   if (live.empty() || live == details_.permissionMode) return;
   // A mode appearing where none was known is not a change: that is the
   // handshake answering a session started without --permission-mode.
@@ -988,7 +962,7 @@ void SessionPane::FollowPermissionMode() {
   // not commentary but a correction of a fact the reader holds, it is one
   // sentence, and it is rare.
   if (InForeground() && speech_.available()) {
-    speech_.Say(PermissionModeSentence(live), false);
+    speech_.Say(ModeSentence(live), false);
   }
 }
 
@@ -1004,11 +978,14 @@ void SessionPane::RefreshModelField() {
   std::wstring facts;
   if (!details_.model.empty()) facts = L"model " + details_.model;
   const std::wstring& mode = details_.permissionMode;
-  // "default" is left off: it is the state a reader assumes, and naming it
-  // every time would crowd the field that has to be read in one breath.
-  if (!mode.empty() && mode != L"default") {
+  // The ordinary mode is left off: it is the state a reader assumes, and
+  // naming it every time would crowd the field that has to be read in one
+  // breath.
+  const agent::Mode* known =
+      agent::FindMode(backend_->capabilities(), model::Utf8FromUtf16(mode));
+  if (!mode.empty() && !(known != nullptr && known->ordinary)) {
     if (!facts.empty()) facts += L", ";
-    facts += L"režim " + PermissionModeLabel(mode);
+    facts += L"režim " + ModeLabel(mode);
   }
   statusBar_->Set(StatusBar::kModel, facts);
 }
@@ -1093,7 +1070,7 @@ void SessionPane::Send() {
     anchor_ = model_.Text().size();
   }
 
-  session_.SendPrompt(model::Utf8FromUtf16(text));
+  backend_->SendPrompt(model::Utf8FromUtf16(text));
   SetWindowTextW(prompt_, L"");
   interrupted_ = false;
   thinkingSaid_ = false;
@@ -1112,7 +1089,7 @@ void SessionPane::Interrupt() {
     Announce(L"nič nebeží");
     return;
   }
-  if (!session_.Interrupt()) {
+  if (!backend_->Interrupt()) {
     // The session and the pane disagree about whether a turn is running.  Say
     // so rather than pretending: the reader is about to wait for something to
     // stop that nobody is stopping.
@@ -1129,7 +1106,7 @@ void SessionPane::Interrupt() {
 }
 
 void SessionPane::CyclePermissionMode() {
-  const std::string current = session_.permissionMode();
+  const std::string current = backend_->mode();
   if (current.empty()) {
     // Started without --permission-mode, and the CLI has not answered the
     // handshake yet: the mode comes from settings and nobody here knows it.
@@ -1138,8 +1115,14 @@ void SessionPane::CyclePermissionMode() {
     Announce(L"režim zatiaľ nie je známy, CLI ešte štartuje");
     return;
   }
-  const std::string next = proto::NextPermissionMode(current);
-  if (!session_.SetPermissionMode(next)) {
+  const std::string next = agent::NextMode(backend_->capabilities(), current);
+  if (next.empty()) {
+    // An agent whose modes cannot be switched while it runs.  Said, like
+    // every key that has nothing to do -- invariant 6.
+    Announce(L"režim sa za behu prepnúť nedá");
+    return;
+  }
+  if (!backend_->SetMode(next)) {
     // The pipe is gone.  Say so rather than leaving the key silent.
     Announce(L"režim sa nepodarilo prepnúť");
     return;
@@ -1155,7 +1138,7 @@ void SessionPane::CyclePermissionMode() {
   // FollowPermissionMode from saying this same mode a second time.
   details_.permissionMode = model::Utf16FromUtf8(next);
   RefreshModelField();
-  Announce(PermissionModeSentence(details_.permissionMode));
+  Announce(ModeSentence(details_.permissionMode));
 }
 
 void SessionPane::CopySessionId() {
@@ -1178,31 +1161,30 @@ void SessionPane::CopySessionId() {
 
 void SessionPane::RefreshFacts() {
   // Asked for at the moment they are wanted, not kept up to date from the
-  // records: Session takes the id off the FIRST record that carries one,
+  // records: the backend may learn the id off whichever record carries it,
   // whichever kind that turns out to be, and copying it in system/init would
   // mean the id existed but stayed invisible until an init happened to come.
-  details_.id = model::Utf16FromUtf8(session_.sessionId());
+  details_.id = model::Utf16FromUtf8(backend_->conversationId());
   // The mode is not taken here.  It used to be, from the handshake, and the
   // handshake is a snapshot from the start: after a Shift+Tab F2 showed the
   // mode the session had already left.  details_.permissionMode is kept up to
   // date by FollowPermissionMode after every batch, and taking it here as well
   // would absorb a change without it being said or put into the bar.
-  const proto::InitializeInfo handshake = session_.handshake();
+  const agent::Account known = backend_->account();
   // The address and what it is paying with, in one field: separately they
   // would be two rows to tab through for one fact.  Nothing is invented when a
   // piece is missing -- the field is only as complete as the answer was.
-  std::wstring account = model::Utf16FromUtf8(handshake.accountEmail);
-  if (!handshake.subscriptionType.empty()) {
+  std::wstring account = model::Utf16FromUtf8(known.email);
+  if (!known.plan.empty()) {
     if (!account.empty()) account += L", ";
-    account += model::Utf16FromUtf8(handshake.subscriptionType);
+    account += model::Utf16FromUtf8(known.plan);
   }
-  // Said only when it is NOT the ordinary one.  Through Bedrock or Vertex the
-  // billing is somebody else's, so "0 účtované" would mean something different
-  // again -- and on the usual account the word would be noise in a field whose
-  // whole job is to be read in one breath.
-  if (!handshake.apiProvider.empty() && handshake.apiProvider != "firstParty") {
+  // Empty in the ordinary case; the backend says it only when the cost
+  // numbers mean something unusual, and a word on the usual account would be
+  // noise in a field whose whole job is to be read in one breath.
+  if (!known.billingNote.empty()) {
     if (!account.empty()) account += L", ";
-    account += model::Utf16FromUtf8(handshake.apiProvider);
+    account += model::Utf16FromUtf8(known.billingNote);
   }
   if (!account.empty()) details_.account = account;
 }
@@ -1225,8 +1207,11 @@ void SessionPane::ShowDetails() {
 }
 
 void SessionPane::ShowCommands() {
-  const std::vector<proto::SlashCommand> commands =
-      session_.handshake().commands;
+  if (!backend_->capabilities().slashCommands) {
+    Announce(L"tento agent zoznam príkazov neposiela");
+    return;
+  }
+  const std::vector<agent::SlashCommand> commands = backend_->commands();
   // The list comes with the answer to the initialize handshake, and that
   // answer is not immediate -- in this project, whose SessionStart hook runs
   // bd prime, it took over twenty seconds.  So "no list yet" is a normal state
@@ -1238,7 +1223,7 @@ void SessionPane::ShowCommands() {
     return;
   }
 
-  proto::SlashCommand chosen;
+  agent::SlashCommand chosen;
   if (!PickCommand(host_, commands, &chosen)) return;
 
   // Into the prompt, at the caret, as text -- not sent, and not run.  A

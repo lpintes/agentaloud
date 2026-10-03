@@ -22,7 +22,7 @@
 
 #include <vector>
 
-#include "proto/control.h"
+#include "agent/backend.h"
 
 namespace ui {
 
@@ -34,8 +34,8 @@ namespace ui {
 //
 // The hint itself goes no further than this dialog.  Saying it out loud after
 // the dialog closes does not work: see the note at the end of ShowCommands.
-bool PickCommand(HWND owner, const std::vector<proto::SlashCommand>& commands,
-                 proto::SlashCommand* chosen);
+bool PickCommand(HWND owner, const std::vector<agent::SlashCommand>& commands,
+                 agent::SlashCommand* chosen);
 
 }  // namespace ui
 

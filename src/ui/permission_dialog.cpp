@@ -4,7 +4,6 @@
 
 #include "model/transcript.h"
 #include "model/utf.h"
-#include "proto/translate.h"
 #include "ui/resource.h"
 #include "win/dialog.h"
 
@@ -17,33 +16,20 @@ namespace {
 // answer.  "Neuvedený" says the CLI sent nothing, which is what happened.
 const wchar_t kMissing[] = L"neuvedený";
 
-// `decision_reason_type` as a sentence.  The wire's words are for a program:
-// "rule" alone in a dialog says nothing about which rule or whose.
-//
-// Both values below were measured, not read -- "rule" in tools/spike_control.py
-// (a git commit against an ask rule) and "subcommandResults" during the probes
-// on claude-gui-lkk.25.  Anything else is passed through as it came: an unknown
-// word is still more than no word, and inventing a translation for it would be
-// the one failure this dialog cannot afford.
-std::wstring ReasonSentence(const std::string& type) {
-  if (type.empty()) return kMissing;
-  if (type == "rule") return L"pravidlo v nastaveniach alebo hook (rule)";
-  if (type == "subcommandResults") {
-    return L"vyhodnotenie podpríkazov (subcommandResults)";
-  }
-  return model::Utf16FromUtf8(type);
+std::wstring OrMissing(const std::string& text) {
+  return text.empty() ? std::wstring(kMissing) : model::Utf16FromUtf8(text);
 }
 
 class PermissionDialog : public win::Dialog {
  public:
-  explicit PermissionDialog(const proto::PermissionRequest& request)
+  explicit PermissionDialog(const agent::PermissionRequest& request)
       : request_(request) {}
 
  protected:
   bool OnInit() override;
 
  private:
-  const proto::PermissionRequest& request_;
+  const agent::PermissionRequest& request_;
 };
 
 bool PermissionDialog::OnInit() {
@@ -53,21 +39,19 @@ bool PermissionDialog::OnInit() {
   // of its own the name would be a Tab away, and a reader answering quickly
   // would be answering about a tool nobody named.
   const std::string& name =
-      request_.displayName.empty() ? request_.toolName : request_.displayName;
+      request_.title.empty() ? request_.call.name : request_.title;
   SetWindowTextW(hwnd_, (L"ClaudeLens — povolenie: " +
                          model::Utf16FromUtf8(name)).c_str());
 
-  SetText(IDC_PERM_DESCRIPTION,
-          request_.description.empty()
-              ? std::wstring(kMissing)
-              : model::Utf16FromUtf8(request_.description));
-  SetText(IDC_PERM_REASON, ReasonSentence(request_.decisionReasonType));
+  SetText(IDC_PERM_DESCRIPTION, OrMissing(request_.description));
+  // Already a sentence: what the CLI's word for it means is the adapter's to
+  // know (proto::ClaudeBackend).
+  SetText(IDC_PERM_REASON, OrMissing(request_.reason));
 
   // The transcript's own rendering of the call, not a JSON dump: one field per
   // line, and the long ones as text.  Whatever is allowed here is what will be
   // read back in the transcript afterwards, character for character.
-  std::wstring arguments = model::RenderToolCall(proto::ToolCallFromInput(
-      request_.toolName, request_.toolUseId, request_.input));
+  std::wstring arguments = model::RenderToolCall(request_.call);
   if (arguments.empty()) arguments = L"bez argumentov";
   SetTextLines(IDC_PERM_INPUT, arguments);
 
@@ -79,7 +63,7 @@ bool PermissionDialog::OnInit() {
 
 }  // namespace
 
-bool AskPermission(HWND owner, const proto::PermissionRequest& request) {
+bool AskPermission(HWND owner, const agent::PermissionRequest& request) {
   PermissionDialog dialog(request);
   return dialog.ShowModal(owner, IDD_PERMISSION) == IDOK;
 }

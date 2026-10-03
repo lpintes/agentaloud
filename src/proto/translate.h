@@ -18,6 +18,7 @@
 #include <string>
 #include <vector>
 
+#include "agent/backend.h"
 #include "agent/events.h"
 #include "proto/jsonl.h"
 
@@ -64,6 +65,12 @@ std::vector<agent::Event> TranslateRecord(const Json& record);
 // answered come along as ModelChanged, so the last of them can seed the live
 // translator.
 std::vector<agent::Event> TranslateHistory(const std::vector<Json>& records);
+
+// What Claude Code can do, in the port's words -- above all its permission
+// modes, their Slovak names and the order Shift+Tab steps through them.  Here
+// and not in ClaudeBackend so that a test can hold the cycle against the one
+// it replaced without starting a process.
+agent::Capabilities ClaudeCapabilities();
 
 // A tool call out of its name and arguments.  The one way a call is built:
 // the transcript gets it from a tool_use block and the permission dialog from

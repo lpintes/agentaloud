@@ -42,6 +42,9 @@ struct Mode {
   // Claude's dontAsk and bypassPermissions.  Such a mode still needs a label,
   // because a session can be started in it.
   bool inCycle = true;
+  // The state a reader assumes.  Left out of the status bar: naming it every
+  // time would crowd the field that has to be read in one breath.
+  bool ordinary = false;
 };
 
 struct Capabilities {
@@ -60,10 +63,11 @@ struct Capabilities {
   bool allowForSession = false;
 };
 
-// The next mode in the cycle, or empty when `current` is not a mode of this
-// agent at all -- the one case where the key must say so instead of guessing
-// (invariant 20).  A known mode outside the cycle restarts at the second mode
-// of the cycle, so the key always moves.
+// The next mode in the cycle, or empty when `current` is empty -- the mode is
+// not known yet, and that is the one case where the key must say so instead
+// of guessing (invariant 20).  Any other mode outside the cycle, known or not,
+// restarts at the second mode of the cycle, so the key always moves.  Empty
+// too when the agent has no modes.
 std::string NextMode(const Capabilities& capabilities,
                      const std::string& current);
 
@@ -100,6 +104,10 @@ enum class Verdict {
 
 struct PermissionRequest {
   ToolCall call;  // complete, even where the wire sends it in two halves
+  // What the dialog's caption names; the call's own name when empty.
+  std::string title;
+  // The model's own sentence about what the call is for.  May be empty.
+  std::string description;
   // Why this was asked, as a sentence for the reader ("pravidlo v nastaveniach
   // hovorí pýtať sa").  Empty when the CLI gives no reason.
   std::string reason;
@@ -117,6 +125,8 @@ struct QuestionRequest {
   std::vector<Question> questions;
 };
 
+// What the model is told when the reader declines is the adapter's to write:
+// it is a sentence for the model, in the shape that CLI passes on.
 struct QuestionAnswer {
   bool declined = false;
   // Parallel to QuestionRequest::questions.  An empty entry leaves that
@@ -143,8 +153,10 @@ struct StartOptions {
 class Backend {
  public:
   struct Callbacks {
-    // The live stream.  Called on the reader thread.
-    std::function<void(const Event&)> onEvent;
+    // The live stream, one batch per message off the wire, in order.  A batch
+    // is what the transcript appends as one edit where it can.  Never empty.
+    // Called on the reader thread.
+    std::function<void(std::vector<Event>)> onEvents;
     // The conversation so far, when resuming, before anything live -- all of
     // it in one call, so the transcript can insert it as one edit (invariant
     // 18).  May be called on the starting thread or the reader thread; a GUI

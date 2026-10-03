@@ -250,8 +250,9 @@ To isté pravidlo má **tri ďalšie vrstvy a všetky sedia v `system/init`**, k
     `agents` a `terminal_slash_commands` sú zoznam toho, čo má autor
     nainštalované. Kľúč zostáva a hodnota sa vyprázdni, takže fixtúra ďalej
     hovorí, že to pole existuje a že je to pole — čo je jediné, čo o ňom
-    appka vie. Overené grepom: zo `system/init` číta `ShowSessionFacts`
-    `model`, `permissionMode` a `session_id`, nič viac.
+    appka vie. Overené grepom: zo `system/init` číta appka `model`, `cwd`,
+    `permissionMode` a `session_id`, nič viac (dnes `proto::Translator`
+    a `Session`).
   • **`tools` je dvoch druhov naraz.** `Bash`, `Read` a `Edit` sú tvar
     protokolu a v tej istej fixtúre sa aj používajú, kdežto mená s prefixom
     `mcp__` sú MCP servery tohto stroja — v `basic.jsonl` ich bolo 104
@@ -307,14 +308,30 @@ globálnemu PATH sa never (viď poznámku o 32/64-bit v globálnom `CLAUDE.md`).
 
 ## Architecture Overview
 
-Štyri vrstvy. Každá vidí len tú pod sebou a **iba `ui/` pozná `HWND`.**
+Štyri vrstvy a port medzi nimi. Každá vidí len tú pod sebou a **iba `ui/`
+pozná `HWND`.**
 
 | Vrstva | Obsah | Nesmie vedieť |
 |---|---|---|
 | `src/win/` | `window`, `dialog` (prevzaté z `c:/b/eureka-a4`), `process` | čo je na druhom konci rúr |
-| `src/proto/` | `jsonl`, `events`, `control`, `session` | ako sa transkript zobrazuje |
-| `src/model/` | `transcript`, `bookmarks`, `history` | že existuje RichEdit |
-| `src/ui/` | pohľady, dialógy, stavový riadok, reč | — |
+| `src/agent/` | port: `events` (udalosti), `backend` (rozhranie, `Capabilities`) | ktoré CLI beží; JSON; `windows.h` |
+| `src/proto/` | adaptéry: `session`, `translate`, `claude_backend` … | ako sa transkript zobrazuje |
+| `src/model/` | `transcript`, `bookmarks`, `history` | že existuje RichEdit; **ktoré CLI beží** |
+| `src/ui/` | pohľady, dialógy, stavový riadok, reč | **ktoré CLI beží** |
+
+**Appka nehovorí s Claudom, hovorí s portom** (claude-gui-lkk.44). `ui/` drží
+`agent::Backend` a pýta sa ho, čo vie (`agent::Capabilities`), nikdy nie, aké
+CLI to je. `model/` dostáva `agent::Event`, nie záznamy. Čo Claude volá ako,
+vie len jeho adaptér: `proto::Translator` prekladá záznamy na udalosti,
+`proto::ClaudeBackend` obaľuje `Session` a pozná režimy, `AskUserQuestion`
+aj históriu na disku. Ktorý adaptér sa vyrobí, rozhoduje **iba `main.cpp`** —
+fabrika v `agent/` by znamenala, že port závisí od svojich adaptérov. Ďalšie
+CLI (Codex, claude-gui-lkk.44.5) je nový adaptér, nie prechod celým UI.
+
+Vzor je ports and adapters a slovník portu je podľa ACP (Agent Client
+Protocol), ale nie je to ACP a nikomu sa nehovorí — prečo, je v
+`claude-gui-lkk.44`. Text ide portom ako UTF-8 a čistí sa až v `model/`
+(invarianty 4 a 8), raz pre všetky CLI.
 
 `session` je v `proto/`, nie v `model/`, lebo proces, rúry, JSONL aj control
 kanál prestanú platiť naraz — keď sa zmení CLI.
@@ -502,7 +519,8 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    To isté platí pre **protokolový obal**: neúspešný nástroj vracia telo
    zabalené v `<tool_use_error>…</tool_use_error>`. Je to značka pre stroj,
    nie text pre čitateľa — nahlas znie ako „menšie ako tool podčiarkovník
-   error". Strháva ju `UnwrapToolError`, a **nie** vo `Widen()`, hoci by sa to
+   error". Strháva ju `UnwrapToolError` v adaptéri (`proto/translate.cpp`),
+   a **nie** vo `Widen()`, hoci by sa to
    ponúkalo: `Widen` prechádza všetok text zo streamu vrátane odpovede
    asistenta, takže by zožrala aj vetu, v ktorej o tom tagu niekto píše. Tag
    sa vyskytuje výlučne v `tool_result`, takže tam patrí aj jeho odstránenie.
@@ -686,7 +704,10 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     s „Áno" a „Nie": otázka na obrazovke bola a odpovedať sa na ňu nedalo.
     **Zlyháva to ticho v tom najhoršom zmysle** — vyzerá to ako odpovedaná
     otázka, len s nezmyselnou odpoveďou. Preto sa `AskUserQuestion` musí vetviť
-    **pred** všeobecným promptom na povolenie (`ui::SessionPane::OnPermission`)
+    **pred** všeobecným promptom na povolenie — v adaptéri
+    (`proto::ClaudeBackend::OnPermission`), ktorý z toho spraví
+    `agent::QuestionRequest`; panel dostane otázku a povolenie zvlášť
+    a nevie, že pricestovali rovnako —
     a vetví sa podľa **mena nástroja**, nie podľa `requires_user_interaction`:
     ten príznak hovorí, že sa čaká na človeka, nie ako vyzerá payload, a čítať
     payload podľa neho je to isté hádanie o krok neskôr.
@@ -706,7 +727,10 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     znova. Keby to boli dve rôzne vykreslenia, čitateľ povolí jedno a prečíta
     si druhé, a ten rozdiel by nikto nenašiel: obe by vyzerali rozumne. Preto
     `model::RenderToolCall` vyšiel z anonymného priestoru `transcript.cpp` a
-    berú ho obaja — `ui::AskPermission` aj `MakeToolUse`.
+    berú ho obaja — `ui::AskPermission` aj `MakeToolUse`. A obaja ho volajú
+    nad tým istým `agent::ToolCall`, ktorý pre Claude skladá jediná funkcia
+    `proto::ToolCallFromInput` — z `tool_use` bloku aj zo žiadosti
+    `can_use_tool`.
 
     Dovtedy tam bol `input.dump(2)` v `MessageBoxe` a bol to posledný zvyšok
     surového JSONu v UI. Dump je pravdivý a nečitateľný naraz: viacriadková
@@ -905,10 +929,14 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     vedie vedomosť: `proto::ReadSessionRecords` vie, **čo je v tom súbore**
     (prepustí `user` a `assistant`, teda práve tie typy, ktoré disk a stream
     zdieľajú, a zahodí `isSidechain` — rozhovor subagenta vložený medzi tieto
-    by znel, akoby si Claude odpovedal sám); `model::RestoreHistory` vie,
-    **ako sa zo záznamu robí blok**, a robí to tými istými metódami
-    `Transcript`u ako živá cesta. Čokoľvek iné by bolo druhé vykreslenie tej
-    istej konverzácie a tie dve by sa rozišli bez svedka.
+    by znel, akoby si Claude odpovedal sám); `proto::TranslateHistory` z nich
+    robí udalosti portu tým istým prekladačom ako živá cesta a pridá
+    `UserPrompt` a `Interrupted`; `model::RestoreHistory` z udalostí robí
+    bloky tým istým `Transcript::Append` ako živá cesta — po jednej, lebo
+    v jednej dávke by výsledok paralelného nástroja nemal za čo zapadnúť.
+    Čokoľvek iné by bolo druhé vykreslenie tej istej konverzácie a tie dve by
+    sa rozišli bez svedka. Číta to `proto::ClaudeBackend::Start` a odovzdá
+    cez `onHistory`.
 
     Filtrovať sa **musí v `proto/`**, nie až v modeli: nezdieľané typy by inak
     prešli ako záznam neznámeho typu, a to je práve ten poplach, ktorý stráži
@@ -1017,7 +1045,9 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     s prázdnym telom, jediná cesta je `--dangerously-skip-permissions` pri
     štarte. `dontAsk` sa prepnúť dá, ale v rotácii terminálu nie je.
     Mimocyklový mód začína nanovo na `acceptEdits`, nech klávesa vždy pohne
-    (`proto::NextPermissionMode`). **Neznámy** mód klávesa neprepne a povie to
+    (`agent::NextMode` nad zoznamom `proto::ClaudeCapabilities()`; test drží
+    zhodu so starým `proto::NextPermissionMode` pre každý mód). **Neznámy**
+    — teda zatiaľ žiadny — mód klávesa neprepne a povie to
     („režim zatiaľ nie je známy") — to je jediný prípad, keď cyklus nemá z čoho
     vyjsť a hádanie by poslalo mód, na ktorý čitateľ nestlačil.
 
@@ -1067,7 +1097,9 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     Mód sa **ohlasuje synchrónne na klávese** (`CyclePermissionMode`), nie až na
     potvrdení: podľa invariantu 7 smie prerušiť reč len odozva na klávesu.
     Zmenu, ktorú panel neurobil sám — odmietnutý Shift+Tab, `ExitPlanMode`,
-    zhodené `auto` — preberá po každej dávke `SessionPane::FollowPermissionMode`:
+    zhodené `auto` — ohlási `proto::ClaudeBackend` ako `agent::ModeChanged`
+    (porovná `Session::permissionMode()` po každom zázname) a panel ju raz za
+    dávku preberie v `SessionPane::FollowPermissionMode`:
     prepíše stavový riadok a povie tú istú vetu ako klávesa, **do fronty**
     a len v popredí (invariant 11). Nie je to priebežný komentár, ale oprava
     faktu, ktorý čitateľ drží — posledné, čo počul, bol mód, ktorý už neplatí.
@@ -1081,7 +1113,8 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     session už odišla.
 
     Stavový riadok aj reč hovoria **slovenský názov**
-    (`PermissionModeLabel`); dialóg F2 drží surové slovo CLI zámerne
+    (`agent::Mode::label`, pre Claude v `proto::ClaudeCapabilities()` — názov
+    módu pozná adaptér, nie panel); dialóg F2 drží surové slovo CLI zámerne
     (`session_details.cpp`). Prežitie módu medzi spusteniami je samostatná
     práca (claude-gui-lkk.6.1 notes) — CLI ho headless behu neuchová.
 
@@ -1108,9 +1141,11 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     Poradie zdrojov je poradie čerstvosti: `--model` zo spustenia → pri
     `--resume` posledný model z histórie → `system/init` → `assistant`. Keď raz
     prehovoril `assistant`, `system/init` už model **neprepisuje**
-    (`SessionPane::modelAnswered_`): chodí na začiatku každého ťahu a pri
-    `opusplan` v `plan` by vrátil Sonnet na celé premýšľanie pred prvou
-    správou. `ParseUsage` dostáva ten istý model, takže `contextWindow` patrí
+    (`proto::Translator`, ktorý to pravidlo drží a posiela výsledok ako
+    `agent::ModelChanged`; testuje ho `TestTranslatorModelAndTurn`): chodí na
+    začiatku každého ťahu a pri `opusplan` v `plan` by vrátil Sonnet na celé
+    premýšľanie pred prvou správou. `ParseUsage` dostáva ten istý model —
+    model, ktorý drží prekladač —, takže `contextWindow` patrí
     modelu, ktorý beží. F2 k modelu pripíše „zvolený opusplan", keď zvolené
     meno v modeli nie je — je to jediné miesto, ktoré povie, že sa model mimo
     `plan` zmení.

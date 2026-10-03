@@ -20,14 +20,14 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-#include "proto/control.h"
+#include "agent/backend.h"
 
 namespace ui {
 
 // True = allow the call.  False is every other way out, Esc included: a
 // permission prompt closed without an answer is a refusal, because the tool
 // runs only on a "yes".
-bool AskPermission(HWND owner, const proto::PermissionRequest& request);
+bool AskPermission(HWND owner, const agent::PermissionRequest& request);
 
 }  // namespace ui
 
