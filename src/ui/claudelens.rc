@@ -10,6 +10,8 @@
 #include <windows.h>
 
 #include "ui/resource.h"
+// Generated from git describe into build/ -- see the Makefile.
+#include "claudelens_version.h"
 
 // This file is UTF-8 and windres would otherwise read it as codepage 1252,
 // which turns every accented letter in a caption into two.  It compiles either
@@ -18,6 +20,32 @@
 #pragma code_page(65001)
 
 LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+
+// What Explorer shows under Properties -> Details, and what a release checks
+// the file against before publishing it under a tag.  Slovak, Unicode.
+1 VERSIONINFO
+FILEVERSION     CLAUDELENS_FILEVERSION
+PRODUCTVERSION  CLAUDELENS_FILEVERSION
+FILEOS          VOS_NT_WINDOWS32
+FILETYPE        VFT_APP
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "041B04B0"
+        BEGIN
+            VALUE "FileDescription", "ClaudeLens"
+            VALUE "ProductName", "ClaudeLens"
+            VALUE "FileVersion", CLAUDELENS_VERSION
+            VALUE "ProductVersion", CLAUDELENS_VERSION
+            VALUE "OriginalFilename", "claudelens.exe"
+            VALUE "LegalCopyright", "Copyright (c) 2026 Lubos Pintes, MIT"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x041B, 1200
+    END
+END
 
 IDD_SESSION_DETAILS DIALOGEX 0, 0, 320, 182
 STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU

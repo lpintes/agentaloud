@@ -233,6 +233,35 @@ teda `PostMessage`.
 Testovaciu inštanciu zatváraj **podľa PID**, nikdy `taskkill /IM` — používateľ
 má vlastnú ClaudeLens spustenú.
 
+### Vydanie
+
+```bash
+./release            # push, spusti vydanie.yml, pocka a vypise adresu
+```
+
+`.github/workflows/zostavenie.yml`
+beží pri každom pushi do main a pri PR: Windows, msys2 **UCRT64**, ten istý
+`./build.sh all` a `./build.sh check` ako lokálne, a varovanie prekladača je
+chyba. `vydanie.yml` dopočíta číslo `vRRRR.M.N`, zavolá `zostavenie.yml` so
+značkou, overí, že EXE nesie tú istú verziu, a až potom značku a vydanie
+zverejní. Balík: `claudelens.exe`, `nvdaControllerClient.dll`, `LICENSE.txt`
+a licencia DLL ako `nvdaControllerClient-LICENSE.txt`.
+
+**Verzia nie je napísaná nikde** — dáva ju `git describe` (Makefile →
+`build/claudelens_version.h` → VERSIONINFO, `--version`, nápoveda). Mimo
+značky je to `0.0.0-<hash>` alebo `<značka>-N-g<hash>`, s `-dirty` pri
+necommitnutých zmenách. Hlavička sa prepíše len pri zmene obsahu, takže
+preklad bez nového commitu neprekladá nič.
+
+Runner má `core.autocrlf=true`, a preto ho workflow pred checkoutom vypína:
+`build.sh` s CRLF bash zhodí a fixtúry by sa zmenili pod testami. Riešenie cez
+`.gitattributes` `eol=lf` zamietnuté — pár súborov (CLAUDE.md, AGENTS.md,
+`transcript.cpp`, `test_main.cpp`) je v indexe CRLF a renormalizácia by ich
+prepísala celé.
+
+Repozitár je súkromný, takže aj vydania vidí len ten, kto má do neho
+prístup. Verejné vydanie zo súkromného repa GitHub nedovolí.
+
 
 ucrt64, nie mingw64 — UCRT je systémové CRT novších Windowsov a odpadá
 `msvcrt` a jeho zaobchádzanie s UTF-8. Prekladač sa volá absolútnou cestou;

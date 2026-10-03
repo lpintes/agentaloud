@@ -771,6 +771,13 @@ void TestArguments() {
   // --help vyhra aj nad preklepom pred nim; main ho obsluzi prvy.
   app::Arguments help = app::Parse(W{L"--bogus", L"--help"});
   CHECK(help.help);
+  // --version rovnako: okno nevznikne a kontroly backendu mlcia.
+  app::Arguments version = app::Parse(W{L".", L"--version", L"--bogus"});
+  CHECK(version.version);
+  CHECK(version.error.empty());
+  app::Arguments versionBackend = app::Parse(W{L"--backend", L"x", L"--version"});
+  app::CheckBackend(&versionBackend, {"claude"});
+  CHECK(versionBackend.error.empty());
 
   // Hole --resume: na konci aj pred oddelovacom.
   app::Arguments bare = app::Parse(W{L".", L"--resume"});
@@ -815,8 +822,10 @@ void TestArguments() {
   CHECK(first.error.find(L"--bogus") != std::wstring::npos);
 
   // Napoveda hovori pravdu: kazdy rezim aj kazdy backend v nej je.
-  const std::wstring text = app::HelpText(known, claude);
+  const std::wstring text = app::HelpText(L"2026.10.1", known, claude);
   CHECK(text.find(L"--backend") != std::wstring::npos);
+  CHECK(text.find(L"ClaudeLens 2026.10.1 ") == 0);
+  CHECK(text.find(L"--version") != std::wstring::npos);
   for (const agent::Mode& mode : claude.modes) {
     CHECK(text.find(model::Utf16FromUtf8(mode.id)) != std::wstring::npos);
   }

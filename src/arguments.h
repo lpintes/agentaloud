@@ -49,6 +49,8 @@ struct Arguments {
   // empty project means "ask which folder" and that is a dialog -- the one
   // answer --help must not give.
   bool help = false;
+  // --version: the same as help in everything but the text.
+  bool version = false;
   // Something on the command line was not understood.  Non-empty means no
   // window either: an option that was refused was typed for a reason, and
   // opening a session without it would be doing something other than what was
@@ -76,9 +78,12 @@ Arguments Parse(const std::vector<std::wstring>& words);
 void CheckBackend(Arguments* arguments, const std::vector<std::string>& known);
 void CheckMode(Arguments* arguments, const agent::Capabilities& capabilities);
 
-// The help, filled in from what is true: the backends there are and the modes
-// of the default one.
-std::wstring HelpText(const std::vector<std::string>& backends,
+// The help, filled in from what is true: the version, the backends there are
+// and the modes of the default one.  The version comes in from main.cpp, the
+// one file that includes the header generated from git describe -- were it
+// included here, the tests would be relinked by every commit.
+std::wstring HelpText(const std::wstring& version,
+                      const std::vector<std::string>& backends,
                       const agent::Capabilities& defaultBackend);
 
 }  // namespace app

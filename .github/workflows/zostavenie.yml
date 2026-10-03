@@ -1,0 +1,113 @@
+# Zostavenie a testy pri kazdom pushi do main a pri kazdom pull requeste
+# (claude-gui-lkk.50).
+#
+# Bezi na Windows s msys2, nie krizovym prekladom z Linuxu: ide ten isty
+# build.sh a ten isty ucrt64 prekladac ako na stroji autora, takze vydana
+# binarka vznika tak isto ako lokalna.  msys2 je na runneri predinstalovany
+# v C:\msys64, takze predvolena cesta v build.sh (/c/msys64/ucrt64/bin) plati.
+#
+# Testy bezia vsetky, ktore bezia aj lokalne: `./build.sh check`.  Soak nad
+# korpusom nie -- ten potrebuje sukromne prepisy a zapina sa premennou
+# CLAUDELENS_CORPUS, ktora tu nastavena nie je.
+
+name: Zostavenie
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  # Vydanie (vydanie.yml) vola tento isty workflow, aby sa zostavovalo na
+  # jednom mieste.  Poda mu znacku, ktoru tu dostane len lokalny klon.
+  workflow_call:
+    inputs:
+      znacka:
+        description: Značka vydania, napríklad v2026.10.1
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  zostavenie:
+    name: Preklad a testy
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      # Strom ma byt po bajtoch ten isty ako u autora, kde je autocrlf false.
+      # Windowsovy runner ma true, takze by build.sh dostal CRLF (bash na nom
+      # zlyha az za behu, na `\r` v premennej) a fixtury aj raw literaly
+      # v testoch by sa zmenili pod testami.  .gitattributes s eol=lf by to
+      # vyriesilo tiez, ale par suborov je v indexe CRLF a renormalizacia by
+      # ich prepisala cele.
+      - name: Konce riadkov
+        shell: pwsh
+        run: git config --global core.autocrlf false
+
+      # Cela historia aj so znackami: bez nich git describe nenajde verziu
+      # a zostavenie by sa volalo 0.0.0-hash.
+      - name: Zdrojáky
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # Len pri vydani.  Znacka vznikne v tomto klone, nie na GitHube, takze
+      # git describe ju najde a EXE dostane presne tuto verziu -- Makefile
+      # o vydani nic vediet nemusi.  Na GitHub ju zapise az zverejnenie, a to
+      # len ked vsetko preslo.
+      - name: Značka vydania
+        if: inputs.znacka != ''
+        shell: pwsh
+        run: git tag "${{ inputs.znacka }}"
+
+      # release: false = pouzi C:\msys64 z runnera a len doinstaluj balicky;
+      # balicky si akcia kesuje sama.  Preklad sa zamerne nekesuje: vydana
+      # binarka ma vzniknut z cisteho stromu (Makefile, -MMD).
+      #
+      # make je msysovy (/usr/bin), lebo build.sh vola `make` a recepty su
+      # pisane pre sh; ucrt64 ma len mingw32-make.  git je msysovy preto, aby
+      # ho $(shell git describe) v Makefile nasiel aj bez PATH z Windows.
+      - name: Prekladač msys2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          release: false
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            make
+            git
+
+      # Klon urobil git z Windows; msysovy git moze vlastnika adresara vidiet
+      # inak a odmietnut ho ako "dubious ownership".  Zlyhalo by to ticho:
+      # git describe by nevratil nic a verzia by bola 0.0.0-nezname.
+      - name: Git pre msys2
+        run: git config --global --add safe.directory "$(pwd)"
+
+      # "Hotovo" v tomto projekte znamena bez jedineho varovania, a make pri
+      # varovani neskonci chybou -- tak ho chytime vo vystupe.
+      - name: Preklad
+        run: |
+          set -o pipefail
+          ./build.sh -j4 all 2>&1 | tee preklad.log
+          if grep -q 'warning:' preklad.log; then
+            echo 'Preklad hlási varovanie.' >&2
+            exit 1
+          fi
+
+      - name: Testy
+        run: ./build.sh check
+
+      # Exe a DLL vedla neho: bez nej nema appka hlas (invariant 6).
+      # v6 a nie v4/v5: tie bezia na Node 20, ktory GitHub vyraduje.
+      - name: Uloženie artefaktu
+        uses: actions/upload-artifact@v6
+        with:
+          name: ClaudeLens
+          path: |
+            bin/claudelens.exe
+            bin/nvdaControllerClient.dll
+          if-no-files-found: error
+          retention-days: 30

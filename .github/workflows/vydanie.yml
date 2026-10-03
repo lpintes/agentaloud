@@ -1,0 +1,146 @@
+# Vydanie (claude-gui-lkk.50).  Spusta ho autor, nic ine -- skriptom
+# ./release, alebo rucne:
+#
+#   gh workflow run vydanie.yml
+#
+# Cislo si dopocita samo: rok a mesiac podla dnesneho datumu (UTC), poradie
+# o jedno vyssie nez posledna znacka v tom mesiaci, v novom mesiaci od 1.
+#
+# Poradie je zamerne: najprv cislo, potom zostavenie a testy, potom balik a
+# jeho kontrola, a znacka na GitHube vznikne AZ pri zverejneni.  Ked cokolvek
+# zlyha, nezostane po tom ani znacka, ani polovicne vydanie.
+
+name: Vydanie
+
+on:
+  workflow_dispatch:
+
+# Dve vydania naraz by si spocitali to iste cislo.
+concurrency:
+  group: vydanie
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  cislo:
+    name: Číslo vydania
+    runs-on: ubuntu-latest
+    outputs:
+      znacka: ${{ steps.cislo.outputs.znacka }}
+    steps:
+      - name: Zdrojáky
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Ďalšie číslo vydania
+        id: cislo
+        shell: pwsh
+        run: |
+          # Vydava sa z main a nic ine.  Vetva s rozrobenou vecou by sa inak
+          # ponukla ako vydanie.
+          if ('${{ github.ref }}' -ne 'refs/heads/main') {
+            Write-Error "Vydanie sa robí z main, nie z ${{ github.ref }}."; exit 1
+          }
+          # Ten isty commit dvakrat by boli dve cisla pre jedno EXE.
+          $here = git tag --points-at HEAD --list 'v[0-9]*'
+          if ($here) { Write-Error "Tento commit už vydaný je: $here"; exit 1 }
+
+          $now = [DateTime]::UtcNow
+          $prefix = "v$($now.Year).$($now.Month)."
+          $serials = git tag --list "$prefix*" | ForEach-Object {
+            if ($_ -match "^v$($now.Year)\.$($now.Month)\.(\d+)$") { [int]$Matches[1] }
+          }
+          $next = 1 + ($serials | Measure-Object -Maximum).Maximum
+          $tag = "$prefix$next"
+          "Vydanie: $tag"
+          "znacka=$tag" >> $env:GITHUB_OUTPUT
+
+  zostavenie:
+    name: Zostavenie
+    needs: cislo
+    uses: ./.github/workflows/zostavenie.yml
+    with:
+      znacka: ${{ needs.cislo.outputs.znacka }}
+
+  zverejnenie:
+    name: Zverejnenie
+    needs: [cislo, zostavenie]
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      ZNACKA: ${{ needs.cislo.outputs.znacka }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Zdrojáky
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Artefakt zostavenia
+        uses: actions/download-artifact@v7
+        with:
+          name: ClaudeLens
+          path: vydanie
+
+      # EXE musi o sebe hovorit to iste cislo, pod ktorym ho zverejnime --
+      # inak by --version a Vlastnosti suboru klamali o tom, co je to za
+      # vydanie, a nikto by to nezistil.
+      - name: Verzia EXE
+        shell: pwsh
+        run: |
+          $want = $env:ZNACKA.Substring(1)
+          $have = (Get-Item vydanie\claudelens.exe).VersionInfo.ProductVersion
+          if ($have -ne $want) { Write-Error "EXE hovorí '$have', vydanie je '$want'."; exit 1 }
+          "EXE je $have"
+
+      # Vyslovny zoznam suborov, nie "zabal bin\": tam lezia aj testy a spike.
+      # Licencia DLL ide pod vlastnym menom -- vedla LICENSE.txt projektu by
+      # mali dve rovnake mena.
+      - name: Balík
+        shell: pwsh
+        run: |
+          $name = "ClaudeLens-$($env:ZNACKA.Substring(1))"
+          $stage = "balik\$name"
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          Copy-Item vydanie\claudelens.exe, vydanie\nvdaControllerClient.dll, LICENSE.txt $stage
+          Copy-Item vendor\nvda\LICENSE.txt "$stage\nvdaControllerClient-LICENSE.txt"
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          [IO.Compression.ZipFile]::CreateFromDirectory((Resolve-Path balik).Path,
+              "$PWD\vydanie\$name.zip")
+          # Ten isty ZIP este raz bez verzie v mene, aby existoval trvaly odkaz
+          # .../releases/latest/download/ClaudeLens.zip -- s verziou v mene by
+          # kazde vydanie malo inu adresu a rozposlany odkaz by zastaral.
+          Copy-Item "vydanie\$name.zip" vydanie\ClaudeLens.zip
+          # Holy exe a DLL vedla ZIP-u nejdu: von ide len balik.
+          Remove-Item vydanie\claudelens.exe, vydanie\nvdaControllerClient.dll
+
+      - name: Kontrolné súčty
+        shell: pwsh
+        run: |
+          $lines = Get-ChildItem vydanie -File | Sort-Object Name | ForEach-Object {
+            "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
+          }
+          [IO.File]::WriteAllText("$PWD\vydanie\SHA256SUMS.txt", ($lines -join "`n") + "`n")
+          Get-Content vydanie\SHA256SUMS.txt
+
+      # Poznamky su predmety commitov od posledneho vydania.  Pri prvom by to
+      # bola cela historia, a ta do poznamok nepatri.
+      - name: Zverejnenie
+        shell: pwsh
+        run: |
+          $previous = git describe --tags --abbrev=0 --match 'v[0-9]*' 2>$null
+          if ($previous) {
+            $notes = "Zmeny od $($previous):`n`n" + ((git log --no-merges --pretty='- %s' "$previous..HEAD") -join "`n")
+          } else {
+            $notes = 'Prvé vydanie.'
+          }
+          Set-Content -Encoding utf8NoBOM poznamky.md $notes
+          $version = $env:ZNACKA.Substring(1)
+          gh release create $env:ZNACKA --target $env:GITHUB_SHA `
+            --title "ClaudeLens $version" --notes-file poznamky.md `
+            (Get-ChildItem vydanie -File).FullName
+          if ($LASTEXITCODE -ne 0) { exit 1 }

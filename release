@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+# Vydanie jedným príkazom:  ./release
+#
+# 1. git push -- neškodný, keď nie je čo pushnúť.
+# 2. Spustí vydanie.yml, počká naň a vypíše adresu vydania.
+#
+# Testy sa tu lokálne nekontrolujú: CI ich púšťa všetky samo
+# (zostavenie.yml).  Soak nad korpusom sa nepúšťa nikde automaticky a vydanie
+# na ňom nestojí.
+#
+# Na "Zostavenie", ktoré spustil push, sa nečaká: vydanie.yml volá ten istý
+# zostavenie.yml znova (so značkou, ktorú EXE musí niesť), a keď v ňom preklad
+# alebo test zlyhá, zverejnenie sa nespustí a nevznikne ani značka.
+#
+# Priebeh ide na konzolu RIADOK PO RIADKU a len pri zmene -- dokončený krok,
+# výsledok.  Nie cez `gh run watch`: ten obrazovku stále prekresľuje, takže
+# čítačka číta dookola to isté.  Na konci zaznie tón: dva stúpajúce = vydané,
+# jeden nízky = zlyhalo; čakanie trvá niekoľko minút a nemusí sa pri ňom sedieť.
+#
+# Potrebuje git a gh; JSON číta gh sám cez --jq, jq netreba.
+#
+# Funkcie sa dajú načítať bez spustenia (`source release`), takže sledovanie
+# sa dá overiť na už skončenom behu a netreba kvôli tomu vydávať.
+
+say() { printf '%s\n' "$*"; }
+
+# Tón hostiteľa, ak je po ruke PowerShell (Git Bash aj WSL ho majú); inak
+# zvonček terminálu.
+tone() {
+  local notes="$1"
+  if command -v powershell.exe >/dev/null 2>&1; then
+    powershell.exe -NoProfile -Command "$notes" >/dev/null 2>&1 && return
+  fi
+  printf '\a'
+}
+
+fail() {
+  say "ZLYHALO: $*"
+  tone '[Console]::Beep(330,600)'
+  exit 1
+}
+
+# Čaká na beh a vypisuje každý dokončený krok práve raz; výsledok behu
+# (success, failure...) nechá v RESULT.  Kroky, ktoré robí GitHub sám za
+# každým behom (Set up job, Post ...), sa nevypisujú.  Výpadok siete medzi
+# dvoma otázkami nie je dôvod zahodiť čakanie: prázdna odpoveď je len
+# "zatiaľ nič".
+watch_run() {
+  local id="$1" answer status job step conclusion word
+  local -A seen=()
+  while true; do
+    answer=$(gh run view "$id" --json status,conclusion,jobs --jq '
+      (.status + "\t" + (.conclusion // "")),
+      (.jobs[] | .name as $job | .steps[] | select(.status == "completed")
+        | [$job, .name, (.conclusion // "")] | join("\t"))' 2>/dev/null)
+    if [[ -n "$answer" ]]; then
+      IFS=$'\t' read -r status conclusion <<<"${answer%%$'\n'*}"
+      while IFS=$'\t' read -r job step word; do
+        [[ -z "$step" || "$step" =~ ^(Set\ up\ job|Complete\ job|Post\ ) ]] && continue
+        [[ -n "${seen["$job|$step"]}" ]] && continue
+        seen["$job|$step"]=1
+        case "$word" in
+          success) word=hotovo ;;
+          skipped) word=preskočené ;;
+          *) word="ZLYHALO ($word)" ;;
+        esac
+        say "  $word: $job / ${step#Run }"
+      done < <(tail -n +2 <<<"$answer")
+      if [[ "$status" == completed ]]; then
+        RESULT="$conclusion"
+        return
+      fi
+    fi
+    sleep 5
+  done
+}
+
+# Beh sa po `gh workflow run` objaví až o chvíľu, preto sa chvíľu hľadá.
+# Tretí argument je najskorší čas vzniku (ISO v UTC; ako text sa porovnáva
+# správne), aby sa nenašiel starší beh toho istého commitu.
+find_run() {
+  local workflow="$1" event="$2" since="${3:-}" id tries
+  for ((tries = 0; tries < 24; tries++)); do
+    id=$(gh run list --workflow "$workflow" --commit "$SHA" --event "$event" \
+           --limit 10 --json databaseId,createdAt \
+           --jq "[.[] | select(.createdAt >= \"$since\")][0].databaseId // empty" \
+           2>/dev/null)
+    if [[ -n "$id" ]]; then
+      printf '%s' "$id"
+      return
+    fi
+    sleep 5
+  done
+}
+
+main() {
+  cd "$(dirname "$0")" || fail 'neviem prejsť do priečinka repozitára.'
+
+  # --- Kontroly pred čímkoľvek ------------------------------------------------
+  local branch
+  branch=$(git rev-parse --abbrev-ref HEAD)
+  [[ "$branch" == main ]] || fail "vydáva sa z main, teraz je vetva $branch."
+  # Necommitnuté zmeny vydanie nezastavia -- zostavuje sa na GitHube z main --
+  # ale kto ich tu má, mohol by si myslieť, že v ňom sú.
+  [[ -z "$(git status --porcelain)" ]] ||
+    say 'Pozor: v pracovnom strome sú necommitnuté zmeny. Do vydania nepôjdu.'
+
+  # --- 1. Push ----------------------------------------------------------------
+  say '1/2 Push'
+  git push || fail 'git push neprešiel.'
+  SHA=$(git rev-parse HEAD)
+  local short=${SHA:0:7} released
+  # Ten istý commit dvakrát vydaný nebude; vydanie.yml by to odmietlo tiež, ale
+  # až keď sa preň nájde stroj a stiahne zdrojáky.
+  released=$(git ls-remote --tags origin 'v[0-9]*' | grep "^$SHA" | sed 's#.*refs/tags/##')
+  [[ -z "$released" ]] || fail "commit $short už vydaný je: $released."
+
+  # --- 2. Vydanie -------------------------------------------------------------
+  say "2/2 Vydanie commitu $short"
+  local started release
+  started=$(date -u -d '-10 seconds' +%Y-%m-%dT%H:%M:%SZ)
+  gh workflow run vydanie.yml --ref main || fail 'vydanie sa nepodarilo spustiť.'
+  release=$(find_run vydanie.yml workflow_dispatch "$started")
+  [[ -n "$release" ]] || fail 'spustené vydanie sa nenašlo.'
+  watch_run "$release"
+  [[ "$RESULT" == success ]] || fail "vydanie skončilo: $RESULT."
+
+  # Značku vydania si stiahne aj lokálny klon, aby ju git describe našiel
+  # a nasledujúci lokálny preklad sa volal 2026.10.1-1-g…, nie 0.0.0-….
+  git fetch --tags --quiet || true
+
+  say ''
+  say "Vydané: $(gh release view --json tagName --jq .tagName)"
+  say "Stránka: $(gh release view --json url --jq .url)"
+  say 'Trvalý odkaz na balík: https://github.com/lpintes/claude-lens/releases/latest/download/ClaudeLens.zip'
+  tone '[Console]::Beep(660,150); [Console]::Beep(880,250)'
+}
+
+# Spustený, nie načítaný cez `source`.
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

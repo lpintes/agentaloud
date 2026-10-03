@@ -90,6 +90,9 @@ Arguments Parse(const std::vector<std::wstring>& words) {
     } else if (word == L"--help" || word == L"-h") {
       arguments.help = true;
       break;
+    } else if (word == L"--version") {
+      arguments.version = true;
+      break;
     // Anything else that starts with a dash is an option this process does not
     // have, and the one thing it must not become is the project folder: that
     // is how --fork-session used to end up as a path and the session started
@@ -108,7 +111,9 @@ Arguments Parse(const std::vector<std::wstring>& words) {
 }
 
 void CheckBackend(Arguments* arguments, const std::vector<std::string>& known) {
-  if (arguments->help || !arguments->error.empty()) return;
+  if (arguments->help || arguments->version || !arguments->error.empty()) {
+    return;
+  }
   if (arguments->backend.empty()) arguments->backend = kDefaultBackend;
   for (const std::string& name : known) {
     if (name == arguments->backend) return;
@@ -118,7 +123,9 @@ void CheckBackend(Arguments* arguments, const std::vector<std::string>& known) {
 }
 
 void CheckMode(Arguments* arguments, const agent::Capabilities& capabilities) {
-  if (arguments->help || !arguments->error.empty()) return;
+  if (arguments->help || arguments->version || !arguments->error.empty()) {
+    return;
+  }
   if (arguments->permissionMode.empty()) return;
   const std::string mode = model::Utf8FromUtf16(arguments->permissionMode);
   if (agent::FindMode(capabilities, mode) != nullptr) return;
@@ -138,14 +145,16 @@ void CheckMode(Arguments* arguments, const agent::Capabilities& capabilities) {
 //
 // It names every option this process understands, and then says what happens
 // to the ones it does not, because that is the failure nobody would guess.
-std::wstring HelpText(const std::vector<std::string>& backends,
+std::wstring HelpText(const std::wstring& version,
+                      const std::vector<std::string>& backends,
                       const agent::Capabilities& defaultBackend) {
   std::wstring modes;
   for (const agent::Mode& mode : defaultBackend.modes) {
     modes += L"        " + Wide(mode.id) + L" — " + Wide(mode.label) + L"\n";
   }
   return
-      L"ClaudeLens — okno namiesto terminálu pre Claude Code a podobné CLI.\n"
+      L"ClaudeLens " + version +
+      L" — okno namiesto terminálu pre Claude Code a podobné CLI.\n"
       L"\n"
       L"Použitie:\n"
       L"  ClaudeLens [voľby] [priečinok] [-- parametre CLI]\n"
@@ -192,6 +201,9 @@ std::wstring HelpText(const std::vector<std::string>& backends,
       L"\n"
       L"  --help, -h\n"
       L"      Tento text.\n"
+      L"\n"
+      L"  --version\n"
+      L"      Iba verziu ClaudeLens.\n"
       L"\n"
       L"Voľba pred --, ktorú ClaudeLens nepozná — napríklad --fork-session —\n"
       L"sa neprepošle a ani sa z nej nestane cesta: povie to a skončí.  Kto\n"

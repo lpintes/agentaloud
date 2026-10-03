@@ -12,6 +12,8 @@
 #include <vector>
 
 #include "arguments.h"
+// Generated from git describe into build/ -- see the Makefile.
+#include "claudelens_version.h"
 #include "proto/claude/claude_backend.h"
 #include "ui/main_window.h"
 #include "win/console.h"
@@ -23,6 +25,9 @@ namespace {
 // file is the one place that knows them: everything else holds an
 // agent::Backend and asks it what it can do (claude-gui-lkk.44).
 const std::vector<std::string> kBackends = {"claude"};
+
+// From the git tag, so no copy of it can go stale (Makefile).  ASCII.
+const wchar_t kVersion[] = L"" CLAUDELENS_VERSION;
 
 std::unique_ptr<agent::Backend> MakeBackend(const std::string& name) {
   if (name == "claude") return std::make_unique<proto::ClaudeBackend>();
@@ -106,10 +111,18 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     // window it makes dies with the process, so the text would appear and
     // vanish, which is the same as not printing it.
     const std::wstring help = app::HelpText(
-        kBackends, MakeBackend(app::kDefaultBackend)->capabilities());
+        kVersion, kBackends, MakeBackend(app::kDefaultBackend)->capabilities());
     if (!win::WriteToParentConsole(help)) {
       MessageBoxW(nullptr, help.c_str(), L"ClaudeLens — nápoveda",
                   MB_OK | MB_ICONINFORMATION);
+    }
+    CoUninitialize();
+    return 0;
+  }
+  if (arguments.version) {
+    const std::wstring text = std::wstring(L"ClaudeLens ") + kVersion + L"\n";
+    if (!win::WriteToParentConsole(text)) {
+      MessageBoxW(nullptr, text.c_str(), L"ClaudeLens", MB_OK | MB_ICONINFORMATION);
     }
     CoUninitialize();
     return 0;
