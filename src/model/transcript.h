@@ -26,7 +26,7 @@
 #include <string>
 #include <vector>
 
-#include "proto/events.h"
+#include "agent/events.h"
 
 namespace model {
 
@@ -63,8 +63,7 @@ const wchar_t* SpeakerPrefix(BlockKind kind);
 // puts it up before it runs, the transcript keeps it afterwards -- and those
 // two must be the same text.  A reader who allows a command has to be allowing
 // the one they are then going to read.
-std::wstring RenderToolCall(const std::string& toolName,
-                            const proto::Json& input);
+std::wstring RenderToolCall(const agent::ToolCall& call);
 
 struct Block {
   // Assigned once and never changed.  The index of a block DOES change: a tool
@@ -82,12 +81,14 @@ struct Block {
   std::wstring summary;  // the single line shown when collapsed, no newline
   std::wstring body;     // the whole thing, may be many lines, no newline
   std::string toolUseId; // ties ToolUse to its ToolResult; empty otherwise
-  // Which tool this is.  Set on a ToolUse from the record, and on a ToolResult
-  // copied off the call it is filed behind -- the result record names only the
-  // tool_use_id.  It is here because what a result is worth showing depends on
-  // the tool: "the file has been updated successfully" repeats the call and
-  // costs a line, where the output of a Bash is the whole point.
+  // Which tool this is.  Set on a ToolUse from the call, and on a ToolResult
+  // copied off the call it is filed behind -- a result names only the call's
+  // id.  The kind is here because what a result is worth showing depends on
+  // it: "the file has been updated successfully" repeats the call and costs a
+  // line, where the output of a shell command is the whole point.  The name is
+  // for showing only.
   std::wstring toolName;
+  agent::ToolKind toolKind = agent::ToolKind::Other;
   bool isError = false;
 
   // Offsets into Transcript::Text(), maintained by Transcript.  length always
@@ -125,11 +126,12 @@ class Transcript {
   // tinguishable from one that ended by itself -- it just stops.
   Edit AppendInterrupted();
 
-  // Zero or more blocks, and therefore zero or more edits: a record carrying
-  // two tool results for two calls made in parallel writes into two different
-  // places, and an Edit is one contiguous range by design -- the view needs
-  // the minimal range to put the caret back.
-  std::vector<Edit> Append(const proto::Event& event);
+  // One batch -- the events of one record, as an adapter translated them --
+  // and zero or more blocks out of it, and therefore zero or more edits: a
+  // batch carrying two tool results for two calls made in parallel writes into
+  // two different places, and an Edit is one contiguous range by design -- the
+  // view needs the minimal range to put the caret back.
+  std::vector<Edit> Append(const std::vector<agent::Event>& events);
 
   Edit SetCollapsed(size_t index, bool collapsed);
 
@@ -193,11 +195,11 @@ class Transcript {
   // Empty when the call is not in the transcript, which happens when a tool
   // was started before we attached to the session.
   std::optional<size_t> PlaceForResult(const std::string& toolUseId) const;
-  // The name of the tool a result answers, taken off its call.  Empty when the
-  // call is not here, and then the result is rendered as any tool's would be.
-  std::wstring ToolNameFor(const std::string& toolUseId) const;
+  // The call a result answers.  nullptr when the call is not here, and then
+  // the result is rendered as any tool's would be.
+  const Block* CallFor(const std::string& toolUseId) const;
   std::wstring Render(const Block& block) const;
-  void NoteUnknown(const proto::Event& event);
+  void NoteUnknown(const std::string& type);
 
   std::wstring text_;
   std::vector<Block> blocks_;

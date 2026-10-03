@@ -1,0 +1,301 @@
+#include "proto/translate.h"
+
+#include "proto/ask.h"
+#include "proto/events.h"
+#include "proto/sessions.h"
+
+namespace proto {
+namespace {
+
+std::string StringField(const Json& object, const char* name) {
+  auto found = object.find(name);
+  if (found == object.end() || !found->is_string()) return {};
+  return found->get<std::string>();
+}
+
+// What each tool is for, and which of its arguments says what the call does.
+// Falling back to the whole input would put a diff into a summary line.
+//
+// This is the catalogue of Claude Code's own tools, which is why it is here
+// and not in model/: Codex calls the same things commandExecution and
+// fileChange, and the transcript should not have to know either name.
+struct ToolEntry {
+  const char* tool;
+  agent::ToolKind kind;
+  const char* primary;  // nullptr: no field says it on its own
+  bool isPath;
+};
+
+constexpr ToolEntry kTools[] = {
+    {"Bash", agent::ToolKind::Shell, "command", false},
+    {"PowerShell", agent::ToolKind::Shell, "command", false},
+    {"Read", agent::ToolKind::ReadFile, "file_path", true},
+    {"Edit", agent::ToolKind::EditFile, "file_path", true},
+    {"Write", agent::ToolKind::CreateFile, "file_path", true},
+    {"NotebookEdit", agent::ToolKind::EditFile, "notebook_path", true},
+    {"Glob", agent::ToolKind::Search, "pattern", false},
+    {"Grep", agent::ToolKind::Search, "pattern", false},
+    {"WebFetch", agent::ToolKind::Fetch, "url", false},
+    {"Skill", agent::ToolKind::Other, "skill", false},
+    {kAskUserQuestionTool, agent::ToolKind::Question, nullptr, false},
+};
+
+// The questions of an AskUserQuestion call, read leniently.  ParseAskUserQuestion
+// in ask.h is the strict one -- it decides whether a dialog can be put up, and
+// a question without options cannot be answered there.  This is for showing
+// the call, and a question is worth showing even with nothing to choose from.
+std::vector<agent::Question> ReadQuestions(const Json& input) {
+  std::vector<agent::Question> questions;
+  auto list = input.find("questions");
+  if (list == input.end() || !list->is_array()) return questions;
+  for (const Json& item : *list) {
+    if (!item.is_object()) continue;
+    agent::Question question;
+    question.text = StringField(item, "question");
+    if (question.text.empty()) continue;
+    // Claude files an answer under the text of its question.
+    question.id = question.text;
+    question.header = StringField(item, "header");
+    question.multiSelect = item.value("multiSelect", false);
+    auto options = item.find("options");
+    if (options != item.end() && options->is_array()) {
+      for (const Json& option : *options) {
+        if (!option.is_object()) continue;
+        agent::QuestionOption entry;
+        entry.label = StringField(option, "label");
+        if (entry.label.empty()) continue;
+        entry.description = StringField(option, "description");
+        question.options.push_back(std::move(entry));
+      }
+    }
+    questions.push_back(std::move(question));
+  }
+  return questions;
+}
+
+// tool_result content is a string on the simple path and an array of parts
+// when the tool returned an image or several pieces.
+std::string ResultText(const Json& block) {
+  auto content = block.find("content");
+  if (content == block.end()) return {};
+  if (content->is_string()) return content->get<std::string>();
+  if (!content->is_array()) return content->dump();
+
+  std::string text;
+  bool first = true;
+  for (const Json& part : *content) {
+    if (!part.is_object()) continue;
+    if (!first) text.push_back('\n');
+    first = false;
+    const std::string type = StringField(part, "type");
+    if (type == "text") {
+      text += StringField(part, "text");
+    } else if (type == "image") {
+      // Nothing useful can be done with it in a RichEdit; the view offers to
+      // open it instead.  See claude-gui-lkk.5.
+      text += "[obrázok]";
+    } else {
+      text += part.dump();
+    }
+  }
+  return text;
+}
+
+// The wrapper the CLI puts around a failed tool's message.  It is protocol,
+// not text for a reader: spoken, "menšie ako tool podčiarkovník use..." is
+// noise in front of the one sentence that says what went wrong (invariant 8).
+//
+// It is also the second witness that this is an error.  is_error does come on
+// the wire -- tests/fixtures/basic.jsonl has it -- so the field is read first
+// and this only fills in behind it.  Reading the tag is not guessing: nothing
+// else in the corpus is wrapped in it.
+//
+// Here and not in the text cleaning that model/ does to everything: that runs
+// over the assistant's answers too, and would eat a sentence ABOUT the tag.
+bool UnwrapToolError(std::string& text) {
+  static const std::string open = "<tool_use_error>";
+  static const std::string close = "</tool_use_error>";
+  if (text.size() < open.size() + close.size()) return false;
+  if (text.compare(0, open.size(), open) != 0) return false;
+  if (text.compare(text.size() - close.size(), close.size(), close) != 0) {
+    return false;
+  }
+  text = text.substr(open.size(), text.size() - open.size() - close.size());
+  return true;
+}
+
+agent::ToolResult MakeToolResult(const Json& block) {
+  agent::ToolResult result;
+  result.callId = StringField(block, "tool_use_id");
+  result.text = ResultText(block);
+  const bool wrapped = UnwrapToolError(result.text);
+  result.isError = block.value("is_error", false) || wrapped;
+  return result;
+}
+
+// The content blocks of an assistant or user message, or nullptr.
+const Json* Content(const Json& record) {
+  auto message = record.find("message");
+  if (message == record.end() || !message->is_object()) return nullptr;
+  auto content = message->find("content");
+  if (content == message->end() || !content->is_array()) return nullptr;
+  return &*content;
+}
+
+}  // namespace
+
+agent::ToolCall ToolCallFromInput(const std::string& name,
+                                  const std::string& id, const Json& input) {
+  agent::ToolCall call;
+  call.id = id;
+  call.name = name;
+
+  const ToolEntry* entry = nullptr;
+  for (const ToolEntry& candidate : kTools) {
+    if (name == candidate.tool) entry = &candidate;
+  }
+  if (entry != nullptr) call.kind = entry->kind;
+
+  if (!input.is_object()) {
+    // Not a shape any tool has.  Shown whole, as JSON, under no field name.
+    call.fields.push_back({std::string(), input.dump(2)});
+    call.primary = input.dump();
+    return call;
+  }
+
+  for (auto it = input.begin(); it != input.end(); ++it) {
+    call.fields.push_back({it.key(), it.value().is_string()
+                                         ? it.value().get<std::string>()
+                                         : it.value().dump()});
+  }
+
+  if (entry != nullptr && entry->primary != nullptr) {
+    call.primary = StringField(input, entry->primary);
+    call.primaryIsPath = entry->isPath && !call.primary.empty();
+  }
+  if (call.primary.empty()) {
+    // The description is the model's own one-line account of the call, and
+    // the best there is when no argument says it alone.  A question renders
+    // its summary out of the questions and comes here only when it has none.
+    call.primary = StringField(input, "description");
+    if (call.primary.empty()) call.primary = input.dump();
+  }
+
+  if (name == "Edit") {
+    agent::TextReplacement replacement;
+    replacement.before = StringField(input, "old_string");
+    replacement.after = StringField(input, "new_string");
+    replacement.everywhere = input.value("replace_all", false);
+    if (!replacement.before.empty() || !replacement.after.empty()) {
+      call.replacements.push_back(std::move(replacement));
+    }
+  } else if (name == "Write") {
+    auto content = input.find("content");
+    if (content != input.end() && content->is_string()) {
+      call.newContent = content->get<std::string>();
+    }
+  } else if (name == kAskUserQuestionTool) {
+    call.questions = ReadQuestions(input);
+  }
+  return call;
+}
+
+std::vector<agent::Event> TranslateRecord(const Json& record) {
+  std::vector<agent::Event> events;
+  const Event event = Classify(record);
+
+  switch (event.kind) {
+    case EventKind::Assistant: {
+      const Json* content = Content(event.raw);
+      if (content == nullptr) break;
+      for (const Json& item : *content) {
+        if (!item.is_object()) continue;
+        const std::string type = StringField(item, "type");
+        // Empty text and empty thinking blocks do arrive -- a message can
+        // carry a block that never got any content.  They are not worth a
+        // line each; "premýšľanie (0 riadkov)" is noise between the things
+        // the reader came for.  An empty tool_result is different and stays:
+        // that a command printed nothing is an answer.
+        if (type == "thinking") {
+          std::string text = StringField(item, "thinking");
+          if (!text.empty()) events.push_back(agent::Thinking{std::move(text)});
+        } else if (type == "text") {
+          std::string text = StringField(item, "text");
+          if (!text.empty()) {
+            events.push_back(agent::AssistantText{std::move(text)});
+          }
+        } else if (type == "tool_use") {
+          auto input = item.find("input");
+          const Json arguments =
+              input != item.end() ? *input : Json::object();
+          events.push_back(agent::ToolCallStarted{ToolCallFromInput(
+              StringField(item, "name"), StringField(item, "id"), arguments)});
+        }
+      }
+      break;
+    }
+    case EventKind::User: {
+      // Only tool results.  Our own prompts go into the transcript when they
+      // are sent, and the CLI's synthetic nudges ("your previous response had
+      // no visible output") are machinery the user did not write and should
+      // not read.
+      const Json* content = Content(event.raw);
+      if (content == nullptr) break;
+      for (const Json& item : *content) {
+        if (!item.is_object()) continue;
+        if (StringField(item, "type") == "tool_result") {
+          events.push_back(agent::ToolCallFinished{MakeToolResult(item)});
+        }
+      }
+      break;
+    }
+    case EventKind::SystemPermissionDenied:
+      events.push_back(agent::ToolDenied{StringField(event.raw, "tool_name"),
+                                         StringField(event.raw, "message")});
+      break;
+    // Only cwd is taken from it here: tool paths are shortened against the
+    // project.  The pane reads the rest of it itself, for now.
+    case EventKind::SystemInit:
+      events.push_back(agent::WorkingDirectory{StringField(event.raw, "cwd")});
+      break;
+    case EventKind::Unknown:
+      events.push_back(agent::Unrecognised{
+          event.raw.value("type", std::string("<no type>"))});
+      break;
+    case EventKind::SystemHook:
+    case EventKind::SystemThinkingTokens:
+    case EventKind::SystemOther:
+    case EventKind::RateLimit:
+    case EventKind::Result:
+    case EventKind::ControlRequest:
+    case EventKind::ControlResponse:
+      break;
+  }
+  return events;
+}
+
+std::vector<agent::Event> TranslateHistory(const std::vector<Json>& records) {
+  std::vector<agent::Event> events;
+  for (const Json& record : records) {
+    // A `user` record is up to three things at once, and the order below is
+    // the order they were said in.  It is not an if/else chain by accident:
+    // one record measured in the corpus carries six content parts, and text
+    // beside a tool result is a shape the format allows.
+    if (IsInterruptMark(record)) {
+      // The same mark the live path writes when the reader presses Esc.
+      // Without it an answer that was cut short reads, later on, exactly like
+      // one that ended by itself: it just stops.
+      events.push_back(agent::Interrupted{});
+    } else if (std::string prompt = HumanPromptText(record); !prompt.empty()) {
+      events.push_back(agent::UserPrompt{std::move(prompt)});
+    }
+    // Everything the live path makes of the same record.  A record that was a
+    // prompt has no tool_result in it, so this adds nothing twice.
+    for (agent::Event& event : TranslateRecord(record)) {
+      events.push_back(std::move(event));
+    }
+  }
+  return events;
+}
+
+}  // namespace proto

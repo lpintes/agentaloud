@@ -77,7 +77,7 @@ WIN_SRCS   := src/win/window.cpp src/win/dialog.cpp src/win/process.cpp \
 # ze sa spracovanie protokolu niekde zamotalo so spustanim procesu.
 PROTO_PURE_SRCS := src/proto/jsonl.cpp src/proto/events.cpp \
                    src/proto/control.cpp src/proto/ask.cpp \
-                   src/proto/sessions.cpp
+                   src/proto/sessions.cpp src/proto/translate.cpp
 PROTO_SRCS := $(PROTO_PURE_SRCS) src/proto/session.cpp
 
 # Transkript a jeho mapa rozsahov.  Nevie o windows.h, a prave preto sa da

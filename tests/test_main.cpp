@@ -47,6 +47,7 @@
 #include "proto/events.h"
 #include "proto/jsonl.h"
 #include "proto/sessions.h"
+#include "proto/translate.h"
 
 namespace {
 
@@ -109,7 +110,7 @@ std::map<model::BlockKind, size_t> CountKinds(const model::Transcript& t) {
 bool Replay(const std::vector<proto::Json>& records, model::Transcript* into,
             std::string* problem) {
   for (const proto::Json& record : records) {
-    into->Append(proto::Classify(record));
+    into->Append(proto::TranslateRecord(record));
     if (!into->CheckInvariants(problem)) return false;
   }
   return true;
@@ -160,7 +161,7 @@ void TestRangeMap() {
        "input": {"command": "echo ahoj"}}
     ]}
   })");
-  transcript.Append(proto::Classify(assistant));
+  transcript.Append(proto::TranslateRecord(assistant));
   CHECK(transcript.CheckInvariants(&problem));
   CHECK_EQ(transcript.blocks().size(), size_t{4});
 
@@ -205,7 +206,7 @@ void TestBlockAtAndNavigation() {
        "input": {"file_path": "a.txt"}}
     ]}
   })");
-  transcript.Append(proto::Classify(assistant));
+  transcript.Append(proto::TranslateRecord(assistant));
   transcript.AppendUserPrompt(L"prompt B");
 
   // Kazdy offset padne do nejakeho bloku a hranice sedia.
@@ -269,7 +270,7 @@ void TestControlCharactersNeverReachTheBuffer() {
        "content": "command-name\u0000$\u0000\u0000 function kge\u000b\u001c koniec"}
     ]}
   })");
-  transcript.Append(proto::Classify(binary));
+  transcript.Append(proto::TranslateRecord(binary));
 
   std::string problem;
   CHECK(transcript.CheckInvariants(&problem));
@@ -324,12 +325,12 @@ void TestErrorNavigationAndFirstLine() {
        "content": "prvy riadok\ndruhy riadok\ntreti riadok"}
     ]}
   })");
-  transcript.Append(proto::Classify(failed));
+  transcript.Append(proto::TranslateRecord(failed));
   proto::Json denied = proto::Json::parse(R"({
     "type": "system", "subtype": "permission_denied",
     "tool_name": "Bash", "tool_input": {"command": "rm -rf /"}
   })");
-  transcript.Append(proto::Classify(denied));
+  transcript.Append(proto::TranslateRecord(denied));
 
   // Predikat, ktory pouziva ui::SessionPane::Navigate pre 'e' / 'E'.
   const model::Transcript::BlockPredicate trouble =
@@ -385,7 +386,7 @@ void TestInterruptLeavesAMark() {
     "type": "assistant",
     "message": {"content": [{"type": "text", "text": "zacal som odpoved"}]}
   })");
-  transcript.Append(proto::Classify(partial));
+  transcript.Append(proto::TranslateRecord(partial));
   transcript.AppendInterrupted();
   CHECK(transcript.CheckInvariants(&problem));
   CHECK_EQ(transcript.blocks().size(), size_t{3});
@@ -426,7 +427,7 @@ void TestToolResultsSitBehindTheirCall() {
        "input": {"file_path": "druhy.txt"}}
     ]}
   })");
-  transcript.Append(proto::Classify(calls));
+  transcript.Append(proto::TranslateRecord(calls));
   CHECK(transcript.CheckInvariants(&problem));
   CHECK_EQ(transcript.blocks().size(), size_t{3});
 
@@ -439,7 +440,7 @@ void TestToolResultsSitBehindTheirCall() {
     ]}
   })");
   const std::vector<model::Edit> edits =
-      transcript.Append(proto::Classify(second));
+      transcript.Append(proto::TranslateRecord(second));
   CHECK_EQ(edits.size(), size_t{1});
   CHECK(transcript.CheckInvariants(&problem));
 
@@ -454,7 +455,7 @@ void TestToolResultsSitBehindTheirCall() {
       {"type": "tool_result", "tool_use_id": "toolu_A", "content": "hotovo"}
     ]}
   })");
-  transcript.Append(proto::Classify(first));
+  transcript.Append(proto::TranslateRecord(first));
   CHECK(transcript.CheckInvariants(&problem));
 
   // Ziadane poradie: prompt, volanie A, vysledok A, volanie B, vysledok B.
@@ -481,7 +482,7 @@ void TestToolResultsSitBehindTheirCall() {
        "content": "sirota"}
     ]}
   })");
-  transcript.Append(proto::Classify(orphan));
+  transcript.Append(proto::TranslateRecord(orphan));
   CHECK(transcript.CheckInvariants(&problem));
   CHECK_EQ(transcript.blocks().size(), size_t{6});
   CHECK_EQ(transcript.blocks()[5].toolUseId,
@@ -499,7 +500,7 @@ void TestBookmarksSurviveCollapsing() {
       {"type": "text", "text": "odpoved na dvoch\nriadkoch"}
     ]}
   })");
-  transcript.Append(proto::Classify(assistant));
+  transcript.Append(proto::TranslateRecord(assistant));
   CHECK_EQ(transcript.blocks().size(), size_t{3});
 
   // Kurzor na druhom riadku odpovede, teda vnutri bloku a nie na jeho zaciatku.
@@ -1065,7 +1066,7 @@ void TestNewlinesAreOneCharacter() {
        "content": "riadok\r\nriadok\r\n"}
     ]}
   })");
-  transcript.Append(proto::Classify(assistant));
+  transcript.Append(proto::TranslateRecord(assistant));
   transcript.SetCollapsed(transcript.blocks().size() - 1, false);
   CHECK(transcript.Text().find(L'\r') == std::wstring::npos);
 
@@ -1086,7 +1087,7 @@ void TestAnsiEscapesAreStripped() {
        "content": "\u001b[31;1mchyba\u001b[0m\n\u001b[2K\u001b[1Ghotovo"}
     ]}
   })");
-  transcript.Append(proto::Classify(result));
+  transcript.Append(proto::TranslateRecord(result));
   transcript.SetCollapsed(transcript.blocks().size() - 1, false);
   const std::wstring& text = transcript.Text();
   CHECK(text.find(L'\x1b') == std::wstring::npos);
@@ -1105,7 +1106,7 @@ void TestAnsiEscapesAreStripped() {
     "type": "assistant",
     "message": {"content": [{"type": "text", "text": "pred\u001b\"po"}]}
   })");
-  lone.Append(proto::Classify(odd));
+  lone.Append(proto::TranslateRecord(odd));
   CHECK(lone.Text().find(L"pred\"po") != std::wstring::npos);
 }
 
@@ -1119,7 +1120,7 @@ void TestToolPathsAreShortened() {
   proto::Json init = proto::Json::parse(R"({
     "type": "system", "subtype": "init", "cwd": "C:/projekt/appka"
   })");
-  transcript.Append(proto::Classify(init));
+  transcript.Append(proto::TranslateRecord(init));
 
   proto::Json call = proto::Json::parse(R"({
     "type": "assistant",
@@ -1128,7 +1129,7 @@ void TestToolPathsAreShortened() {
        "input": {"file_path": "C:\\projekt\\appka\\src\\model\\transcript.cpp"}}
     ]}
   })");
-  transcript.Append(proto::Classify(call));
+  transcript.Append(proto::TranslateRecord(call));
   // Opacne lomky proti lomkam a velke pismena proti malym: to iste miesto.
   CHECK_EQ(transcript.blocks().back().summary,
            std::wstring(L"Write: src\\model\\transcript.cpp"));
@@ -1141,7 +1142,7 @@ void TestToolPathsAreShortened() {
        "input": {"file_path": "C:\\Users\\niekto\\AppData\\Local\\Temp\\hlboko\\este\\hlbsie\\a\\b\\c\\dolezity_subor.txt"}}
     ]}
   })");
-  transcript.Append(proto::Classify(outside));
+  transcript.Append(proto::TranslateRecord(outside));
   const std::wstring& summary = transcript.blocks().back().summary;
   CHECK(summary.find(L"dolezity_subor.txt") != std::wstring::npos);
   CHECK(summary.find(L"...") == size_t{6});  // hned za "Read: "
@@ -1160,7 +1161,7 @@ void TestEditAndWriteSayWhatChanged() {
        "input": {"file_path": "src/y.cpp", "content": "a\nb\nc"}}
     ]}
   })");
-  transcript.Append(proto::Classify(calls));
+  transcript.Append(proto::TranslateRecord(calls));
   const std::vector<model::Block>& blocks = transcript.blocks();
   CHECK_EQ(blocks.size(), size_t{2});
 
@@ -1187,7 +1188,7 @@ void TestEditAndWriteSayWhatChanged() {
        "content": "File created successfully at: src/y.cpp"}
     ]}
   })J");
-  transcript.Append(proto::Classify(results));
+  transcript.Append(proto::TranslateRecord(results));
   CHECK_EQ(blocks.size(), size_t{4});
   CHECK_EQ(blocks[1].summary, std::wstring(L"zapísané"));
   CHECK_EQ(blocks[1].body, std::wstring(L"zapísané"));
@@ -1204,7 +1205,7 @@ void TestEditAndWriteSayWhatChanged() {
        "input": {"command": "echo ahoj"}}
     ]}
   })");
-  other.Append(proto::Classify(bash));
+  other.Append(proto::TranslateRecord(bash));
   CHECK_EQ(other.blocks()[0].summary, std::wstring(L"Bash: echo ahoj"));
   CHECK_EQ(other.blocks()[0].body, std::wstring(L"command: echo ahoj"));
 }
@@ -1232,14 +1233,17 @@ void TestPermissionTextMatchesTranscript() {
   call["message"]["content"].push_back(use);
 
   model::Transcript transcript;
-  transcript.Append(proto::Classify(call));
+  transcript.Append(proto::TranslateRecord(call));
   CHECK_EQ(transcript.blocks().size(), size_t{1});
-  CHECK_EQ(model::RenderToolCall("Bash", input), transcript.blocks()[0].body);
+  // Volanie tak, ako ho dostane dialog: zo ziadosti o povolenie, nie z bloku.
+  const agent::ToolCall asked =
+      proto::ToolCallFromInput("Bash", "toolu_C", input);
+  CHECK_EQ(model::RenderToolCall(asked), transcript.blocks()[0].body);
 
   // A hlavne: zlomy riadkov su zlomy riadkov.  MessageBox pred tymto krokom
   // ukazoval input.dump(2), kde je viacriadkova commit sprava jeden riadok
   // s "\n" v nom -- nahlas "spatna lomka en" a po riadkoch sa neda prejst.
-  const std::wstring shown = model::RenderToolCall("Bash", input);
+  const std::wstring shown = model::RenderToolCall(asked);
   CHECK(shown.find(L"command: git commit") != std::wstring::npos);
   CHECK(shown.find(L"prva veta\n\ndruhy odstavec") != std::wstring::npos);
   CHECK(shown.find(L"\\n") == std::wstring::npos);
@@ -1256,7 +1260,7 @@ void TestFailedToolResultReadsLikeAnError() {
        "input": {"file_path": "src/x.cpp", "old_string": "a", "new_string": "b"}}
     ]}
   })");
-  transcript.Append(proto::Classify(call));
+  transcript.Append(proto::TranslateRecord(call));
 
   proto::Json failed = proto::Json::parse(R"({
     "type": "user",
@@ -1265,7 +1269,7 @@ void TestFailedToolResultReadsLikeAnError() {
        "content": "<tool_use_error>String to replace not found in file.\nString: a\nb</tool_use_error>"}
     ]}
   })");
-  transcript.Append(proto::Classify(failed));
+  transcript.Append(proto::TranslateRecord(failed));
   const model::Block& result = transcript.blocks()[1];
   CHECK(result.isError);
   // Chybny vysledok NEDOSTANE slovo "zapisane" -- ten nastroj nezapisal nic.
@@ -1286,7 +1290,7 @@ void TestFailedToolResultReadsLikeAnError() {
        "content": "<tool_use_error>File has not been read yet.</tool_use_error>"}
     ]}
   })");
-  transcript.Append(proto::Classify(noField));
+  transcript.Append(proto::TranslateRecord(noField));
   const model::Block& second = transcript.blocks().back();
   CHECK(second.isError);
   CHECK_EQ(second.summary, std::wstring(L"chyba: File has not been read yet."));
@@ -1304,7 +1308,7 @@ void TestEmptyBlocksAreDropped() {
       {"type": "text", "text": "toto zostava"}
     ]}
   })");
-  transcript.Append(proto::Classify(assistant));
+  transcript.Append(proto::TranslateRecord(assistant));
   CHECK_EQ(transcript.blocks().size(), size_t{1});
 
   // Prazdny vysledok nastroja je naopak odpoved a zostava.
@@ -1314,7 +1318,7 @@ void TestEmptyBlocksAreDropped() {
       {"type": "tool_result", "tool_use_id": "toolu_1", "content": ""}
     ]}
   })");
-  transcript.Append(proto::Classify(result));
+  transcript.Append(proto::TranslateRecord(result));
   CHECK_EQ(transcript.blocks().size(), size_t{2});
 
   std::string problem;
@@ -1336,7 +1340,7 @@ void TestSpeakerPrefix() {
        "input": {"file_path": "a.txt"}}
     ]}
   })");
-  transcript.Append(proto::Classify(assistant));
+  transcript.Append(proto::TranslateRecord(assistant));
 
   CHECK_EQ(transcript.Text().substr(0, 5), std::wstring(L"you: "));
   CHECK_EQ(transcript.blocks()[0].body, std::wstring(L"otazka"));
@@ -1372,7 +1376,7 @@ void TestSummariesAreOneLine() {
        "input": {"command": "prvy riadok\ndruhy riadok\ntreti"}}
     ]}
   })");
-  transcript.Append(proto::Classify(assistant));
+  transcript.Append(proto::TranslateRecord(assistant));
   for (const model::Block& block : transcript.blocks()) {
     CHECK(block.summary.find(L'\n') == std::wstring::npos);
   }
@@ -1497,7 +1501,7 @@ void TestQuestionsReadAsText() {
        ]}}
     ]}
   })J");
-  transcript.Append(proto::Classify(call));
+  transcript.Append(proto::TranslateRecord(call));
   const std::vector<model::Block>& blocks = transcript.blocks();
   CHECK_EQ(blocks.size(), size_t{1});
 
@@ -1653,8 +1657,7 @@ void TestHistoryRestore() {
 
   model::Transcript transcript;
   const model::HistoryCounts counts =
-      model::RestoreHistory(records, &transcript);
-  CHECK_EQ(counts.records, size_t{8});
+      model::RestoreHistory(proto::TranslateHistory(records), &transcript);
   CHECK_EQ(counts.prompts, size_t{1});
   CHECK_EQ(counts.blocks, size_t{6});
 
@@ -1894,8 +1897,7 @@ void TestFixtureDisk(const std::string& dir) {
 
   model::Transcript transcript;
   const model::HistoryCounts counts =
-      model::RestoreHistory(records, &transcript);
-  CHECK_EQ(counts.records, records.size());
+      model::RestoreHistory(proto::TranslateHistory(records), &transcript);
   // Prave tolko, kolko je promptov v TURNS (tools/make_fixtures.py).  Disk
   // pise do `user` zaznamov aj vysledky nastrojov a vlastne hlasky CLI, takze
   // toto cislo je kontrola, ze HumanPromptText ich odlisil na skutocnom
@@ -2038,7 +2040,7 @@ void SoakOverCorpus(const std::string& root) {
     }
     model::Transcript restored;
     const model::HistoryCounts counts =
-        model::RestoreHistory(shared, &restored);
+        model::RestoreHistory(proto::TranslateHistory(shared), &restored);
     ++restoredFiles;
     restoredBlocks += counts.blocks;
     restoredPrompts += counts.prompts;

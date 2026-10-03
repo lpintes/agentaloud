@@ -10,6 +10,7 @@
 #include "model/utf.h"
 #include "proto/ask.h"
 #include "proto/sessions.h"
+#include "proto/translate.h"
 #include "ui/ask_dialog.h"
 #include "ui/command_dialog.h"
 #include "ui/keys_dialog.h"
@@ -427,7 +428,7 @@ bool SessionPane::Start(const proto::Session::Options& options) {
     // each of them would go through EM_REPLACESEL and the range check.
     const size_t before = model_.Text().size();
     const model::HistoryCounts counts =
-        model::RestoreHistory(history, &model_);
+        model::RestoreHistory(proto::TranslateHistory(history), &model_);
     // The model that answered last before the session was closed is the best
     // thing known until this process says otherwise.  Not modelAnswered_: the
     // resume may have been launched with another --model, and the first
@@ -504,7 +505,10 @@ void SessionPane::OnDrain() {
     // told from what was there.  An id and not a count: a tool result is
     // inserted behind its call, so the new blocks are not the tail.
     const size_t idBefore = model_.nextBlockId();
-    for (const model::Edit& edit : model_.Append(event)) Apply(edit);
+    for (const model::Edit& edit :
+         model_.Append(proto::TranslateRecord(event.raw))) {
+      Apply(edit);
+    }
     // User as well as Assistant: a tool result comes back on a user record,
     // and it is half of what the turn is doing.  What each kind of block is
     // worth saying is AnnounceProgress's business -- our own prompt is a User

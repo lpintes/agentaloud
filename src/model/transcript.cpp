@@ -141,12 +141,6 @@ std::wstring Widen(const std::string& text) {
   return EscapeControls(NormalizeNewlines(StripEscapes(Utf16FromUtf8(text))));
 }
 
-std::string StringField(const proto::Json& object, const char* name) {
-  auto found = object.find(name);
-  if (found == object.end() || !found->is_string()) return {};
-  return found->get<std::string>();
-}
-
 size_t CountLines(const std::wstring& text) {
   if (text.empty()) return 0;
   size_t lines = 1;
@@ -220,144 +214,108 @@ std::wstring ShortenPath(const std::wstring& path, const std::wstring& root) {
   return path;
 }
 
-// The questions of an AskUserQuestion call, as text.  Its arguments are an
-// array of objects, so both the summary line and the body would otherwise fall
-// through to a JSON dump -- and this is the one tool whose call the reader has
-// to be able to go back and re-read, because it is a question that was put to
-// them.  See proto/ask.h for the shape and ui/ask_dialog.h for the answering.
+// The questions of a call that puts them to the reader, as text.  Without
+// this the summary and the body would be the field dump of an array of
+// objects -- and this is the one call the reader has to be able to go back
+// and re-read, because it is a question that was put to them.  See
+// ui/ask_dialog.h for the answering.
 //
 // `full` picks the body from the summary: the summary is one line and gets the
 // first question, the body gets every question with its options under it.
-std::wstring RenderQuestions(const proto::Json& input, bool full) {
-  auto questions = input.find("questions");
-  if (questions == input.end() || !questions->is_array() ||
-      questions->empty()) {
-    return {};
+std::wstring RenderQuestions(const std::vector<agent::Question>& questions,
+                             bool full) {
+  if (questions.empty()) return {};
+  if (!full) {
+    // "(+2 ďalšie)" and not the rest of them: this is the line heard when
+    // arrowing past the block, and the block itself is one keystroke away.
+    const std::wstring first = Widen(questions.front().text);
+    const size_t rest = questions.size() - 1;
+    return rest == 0 ? first
+                     : first + L" (+" + std::to_wstring(rest) + L" ďalšie)";
   }
   std::wstring text;
   size_t number = 0;
-  for (const proto::Json& item : *questions) {
-    if (!item.is_object()) continue;
-    const std::wstring question = Widen(StringField(item, "question"));
-    if (question.empty()) continue;
+  for (const agent::Question& question : questions) {
     ++number;
-    if (!full) {
-      // "(+2 ďalšie)" and not the rest of them: this is the line heard when
-      // arrowing past the block, and the block itself is one keystroke away.
-      const size_t rest = questions->size() - 1;
-      return rest == 0
-                 ? question
-                 : question + L" (+" + std::to_wstring(rest) + L" ďalšie)";
-    }
     if (!text.empty()) text += L'\n';
-    text += std::to_wstring(number) + L". " + question;
-    if (item.value("multiSelect", false)) text += L" (dá sa označiť viac)";
-    auto options = item.find("options");
-    if (options == item.end() || !options->is_array()) continue;
-    for (const proto::Json& option : *options) {
-      if (!option.is_object()) continue;
-      const std::wstring label = Widen(StringField(option, "label"));
-      if (label.empty()) continue;
-      const std::wstring description =
-          Widen(StringField(option, "description"));
+    text += std::to_wstring(number) + L". " + Widen(question.text);
+    if (question.multiSelect) text += L" (dá sa označiť viac)";
+    for (const agent::QuestionOption& option : question.options) {
       text += L'\n';
-      text += L"   " + label;
-      if (!description.empty()) text += L" — " + description;
+      text += L"   " + Widen(option.label);
+      if (!option.description.empty()) {
+        text += L" — " + Widen(option.description);
+      }
     }
   }
   return text;
 }
 
-// The field that says what a tool call actually does.  Falling back to the
-// whole input would put a diff into a summary line.
-std::wstring PrimaryInput(const std::string& toolName, const proto::Json& input,
-                          const std::wstring& root) {
-  static const struct {
-    const char* tool;
-    const char* field;
-    bool isPath;
-  } kPrimary[] = {
-      {"Bash", "command", false},      {"PowerShell", "command", false},
-      {"Read", "file_path", true},     {"Edit", "file_path", true},
-      {"Write", "file_path", true},    {"NotebookEdit", "notebook_path", true},
-      {"Glob", "pattern", false},      {"Grep", "pattern", false},
-      {"WebFetch", "url", false},      {"Skill", "skill", false},
-  };
-  for (const auto& entry : kPrimary) {
-    if (toolName == entry.tool) {
-      const std::string value = StringField(input, entry.field);
-      if (value.empty()) continue;
-      const std::wstring wide = Widen(value);
-      return entry.isPath ? ShortenPath(wide, root) : wide;
-    }
-  }
-  if (toolName == "AskUserQuestion") {
-    const std::wstring asked = RenderQuestions(input, false);
+// What the call actually does, for the one-line summary.  Which argument
+// that is was decided by the adapter, which knows the tool; what is left here
+// is how to say it.
+std::wstring PrimaryText(const agent::ToolCall& call,
+                         const std::wstring& root) {
+  if (call.kind == agent::ToolKind::Question) {
+    const std::wstring asked = RenderQuestions(call.questions, false);
     if (!asked.empty()) return asked;
   }
-  const std::string description = StringField(input, "description");
-  if (!description.empty()) return Widen(description);
-  return Widen(input.dump());
+  const std::wstring primary = Widen(call.primary);
+  return call.primaryIsPath ? ShortenPath(primary, root) : primary;
 }
 
-std::wstring RenderFields(const proto::Json& input) {
-  if (!input.is_object()) return Widen(input.dump(2));
+std::wstring RenderFields(const std::vector<agent::ToolField>& fields) {
   std::wstring body;
-  for (auto it = input.begin(); it != input.end(); ++it) {
+  for (const agent::ToolField& field : fields) {
     if (!body.empty()) body.push_back(L'\n');
-    body += Widen(it.key());
-    body += L": ";
-    body += it.value().is_string() ? Widen(it.value().get<std::string>())
-                                   : Widen(it.value().dump());
+    // A nameless field is an input that was not an object at all; it is
+    // shown as it came.
+    if (!field.name.empty()) body += Widen(field.name) + L": ";
+    body += Widen(field.value);
   }
   return body;
 }
 
-// What a tool call will actually do, for the two tools where the field dump
-// was the only place in the whole transcript that said what changed -- and
-// said it as JSON.  "old_string: ... / new_string: ..." is a record of the
+}  // namespace
+
+// What a tool call will actually do, for the calls where the field dump was
+// the only place in the whole transcript that said what changed -- and said
+// it as JSON.  "old_string: ... / new_string: ..." is a record of the
 // arguments; a reader wants the two texts, one after the other, under a word
 // that says which is which.
 //
-// No colours and no diff markers.  A '+' and a '-' at the start of every line
-// is read out as a character per line, and picking the changed lines apart
-// would mean writing a diff -- the whole old and the whole new is what the
-// call actually contained, and it is the truth.
+// No colours and no diff markers of our own.  A '+' and a '-' at the start of
+// every line is read out as a character per line, and picking the changed
+// lines apart would mean writing a diff -- the whole old and the whole new is
+// what the call actually contained, and it is the truth.  A CLI that sends
+// only a diff gets its diff shown, because then that is the truth.
 //
-// Anything else falls through to the field dump, which for Bash or Grep is
-// exactly right: a command IS its arguments.  This list stays short on
-// purpose -- it is knowledge about tools, and the place for that is next to
-// kPrimary, not spread over the file.
+// Anything else falls through to the field dump, which for a shell command or
+// a grep is exactly right: a command IS its arguments.
 //
 // It is out of the anonymous namespace because the permission dialog shows the
 // call before it runs and the transcript shows it after -- and those two have
 // to be the same text, or the reader allows one thing and then reads another.
-}  // namespace
-
-std::wstring RenderToolCall(const std::string& toolName,
-                            const proto::Json& input) {
-  if (!input.is_object()) return Widen(input.dump(2));
-  if (toolName == "Edit") {
-    const std::string before = StringField(input, "old_string");
-    const std::string after = StringField(input, "new_string");
-    if (!before.empty() || !after.empty()) {
-      std::wstring body = L"pôvodné:\n" + Widen(before) + L"\nnové:\n" +
-                          Widen(after);
-      if (input.value("replace_all", false)) body += L"\nvšetky výskyty";
-      return body;
+std::wstring RenderToolCall(const agent::ToolCall& call) {
+  if (call.kind == agent::ToolKind::EditFile && !call.replacements.empty()) {
+    std::wstring body;
+    for (const agent::TextReplacement& replacement : call.replacements) {
+      if (!body.empty()) body += L'\n';
+      body += L"pôvodné:\n" + Widen(replacement.before) + L"\nnové:\n" +
+              Widen(replacement.after);
+      if (replacement.everywhere) body += L"\nvšetky výskyty";
     }
+    return body;
   }
-  if (toolName == "Write") {
-    auto content = input.find("content");
-    if (content != input.end() && content->is_string()) {
-      return L"obsah:\n" + Widen(content->get<std::string>());
-    }
+  if (call.kind == agent::ToolKind::CreateFile && call.newContent) {
+    return L"obsah:\n" + Widen(*call.newContent);
   }
-  if (toolName == "AskUserQuestion") {
-    const std::wstring asked = RenderQuestions(input, true);
+  if (!call.diff.empty()) return L"zmena:\n" + Widen(call.diff);
+  if (call.kind == agent::ToolKind::Question) {
+    const std::wstring asked = RenderQuestions(call.questions, true);
     if (!asked.empty()) return asked;
   }
-  return RenderFields(input);
+  return RenderFields(call.fields);
 }
 
 namespace {
@@ -365,68 +323,16 @@ namespace {
 // The size of what a call is about to do, said in the summary so that it does
 // not have to be unfolded to be judged.  "Edit: transcript.cpp" and "Edit:
 // transcript.cpp, 3 riadky na 40 riadkov" are two different pieces of news.
-std::wstring InputDetail(const std::string& toolName,
-                         const proto::Json& input) {
-  if (!input.is_object()) return {};
-  if (toolName == "Edit") {
-    const std::wstring before = Widen(StringField(input, "old_string"));
-    const std::wstring after = Widen(StringField(input, "new_string"));
-    if (before.empty() && after.empty()) return {};
-    return Count(CountLines(before)) + L" na " + Count(CountLines(after));
+std::wstring InputDetail(const agent::ToolCall& call) {
+  if (call.kind == agent::ToolKind::EditFile && !call.replacements.empty()) {
+    const agent::TextReplacement& first = call.replacements.front();
+    return Count(CountLines(Widen(first.before))) + L" na " +
+           Count(CountLines(Widen(first.after)));
   }
-  if (toolName == "Write") {
-    auto content = input.find("content");
-    if (content == input.end() || !content->is_string()) return {};
-    return Count(CountLines(Widen(content->get<std::string>())));
+  if (call.kind == agent::ToolKind::CreateFile && call.newContent) {
+    return Count(CountLines(Widen(*call.newContent)));
   }
   return {};
-}
-
-// The wrapper the CLI puts around a failed tool's message.  It is protocol,
-// not text for a reader: spoken, "menšie ako tool podčiarkovník use..." is
-// noise in front of the one sentence that says what went wrong.  Taken off
-// here for the same reason StripEscapes takes off the terminal's own noise.
-//
-// It is also the second witness that this is an error.  is_error does come on
-// the wire -- tests/fixtures/basic.jsonl has it -- so the field is read first
-// and this only fills in behind it.  Reading the tag is not guessing: nothing
-// else in the corpus is wrapped in it.
-bool UnwrapToolError(std::wstring& text) {
-  static const std::wstring open = L"<tool_use_error>";
-  static const std::wstring close = L"</tool_use_error>";
-  if (text.size() < open.size() + close.size()) return false;
-  if (text.compare(0, open.size(), open) != 0) return false;
-  if (text.compare(text.size() - close.size(), close.size(), close) != 0) {
-    return false;
-  }
-  text = text.substr(open.size(), text.size() - open.size() - close.size());
-  return true;
-}
-
-// tool_result content is a string on the simple path and an array of blocks
-// when the tool returned an image or several parts.
-std::wstring RenderToolResult(const proto::Json& block) {
-  auto content = block.find("content");
-  if (content == block.end()) return {};
-  if (content->is_string()) return Widen(content->get<std::string>());
-  if (!content->is_array()) return Widen(content->dump());
-
-  std::wstring body;
-  for (const proto::Json& part : *content) {
-    if (!part.is_object()) continue;
-    const std::string type = StringField(part, "type");
-    if (!body.empty()) body.push_back(L'\n');
-    if (type == "text") {
-      body += Widen(StringField(part, "text"));
-    } else if (type == "image") {
-      // Nothing useful can be done with it in a RichEdit; the view offers to
-      // open it instead.  See claude-gui-lkk.5.
-      body += L"[obrázok]";
-    } else {
-      body += Widen(part.dump());
-    }
-  }
-  return body;
 }
 
 Block MakeThinking(const std::wstring& text) {
@@ -446,54 +352,51 @@ Block MakeAssistantText(const std::wstring& text) {
   return block;
 }
 
-Block MakeToolUse(const proto::Json& blockJson, const std::wstring& root) {
-  const std::string name = StringField(blockJson, "name");
-  auto input = blockJson.find("input");
-  const proto::Json empty = proto::Json::object();
-  const proto::Json& arguments = input != blockJson.end() ? *input : empty;
-
+Block MakeToolUse(const agent::ToolCall& call, const std::wstring& root) {
   Block block;
   block.kind = BlockKind::ToolUse;
-  block.toolUseId = StringField(blockJson, "id");
-  block.toolName = Widen(name);
-  block.body = RenderToolCall(name, arguments);
-  block.summary = Widen(name) + L": " +
-                  OneLine(PrimaryInput(name, arguments, root), kSummaryLimit);
-  const std::wstring detail = InputDetail(name, arguments);
+  block.toolUseId = call.id;
+  block.toolName = Widen(call.name);
+  block.toolKind = call.kind;
+  block.body = RenderToolCall(call);
+  block.summary = block.toolName + L": " +
+                  OneLine(PrimaryText(call, root), kSummaryLimit);
+  const std::wstring detail = InputDetail(call);
   if (!detail.empty()) block.summary += L", " + detail;
   block.collapsed = true;
   return block;
 }
 
-// The tools whose successful result says nothing the call did not already
+// The calls whose successful result says nothing the call did not already
 // say.  Their answer is one word, and it is the word the reader is waiting
 // for: it happened.  Everything else -- the path, the size -- stands in the
 // summary of the call, one line above.
-const wchar_t* DoneWord(const std::wstring& toolName) {
-  if (toolName == L"Edit" || toolName == L"NotebookEdit") return L"zapísané";
-  if (toolName == L"Write") return L"vytvorené";
+const wchar_t* DoneWord(agent::ToolKind kind) {
+  if (kind == agent::ToolKind::EditFile) return L"zapísané";
+  if (kind == agent::ToolKind::CreateFile) return L"vytvorené";
   return nullptr;
 }
 
-Block MakeToolResult(const proto::Json& blockJson,
-                     const std::wstring& toolName) {
+// `call` is the block the result is filed behind, or nullptr when the call is
+// not in the transcript; the result is then rendered as any tool's would be.
+Block MakeToolResult(const agent::ToolResult& result, const Block* call) {
   Block block;
   block.kind = BlockKind::ToolResult;
-  block.toolUseId = StringField(blockJson, "tool_use_id");
-  block.toolName = toolName;
-  block.body = RenderToolResult(blockJson);
-  // The field first, the wrapper only behind it -- see UnwrapToolError.  The
-  // wrapper comes off either way: it is protocol, and a successful result
-  // never carries it.
-  const bool wrapped = UnwrapToolError(block.body);
-  block.isError = blockJson.value("is_error", false) || wrapped;
+  block.toolUseId = result.callId;
+  if (call != nullptr) {
+    block.toolName = call->toolName;
+    block.toolKind = call->toolKind;
+  }
+  block.body = Widen(result.text);
+  block.isError = result.isError;
   block.collapsed = true;
 
   // "The file ... has been updated successfully. (file state is current in
   // your context ...)" -- one line, but longer than kInlineResultLimit, so it
   // used to collapse into "výstup (1 riadok)": a line of transcript and a
   // sentence of speech that said nothing at all, after every single edit.
-  const wchar_t* done = block.isError ? nullptr : DoneWord(toolName);
+  const wchar_t* done =
+      block.isError || call == nullptr ? nullptr : DoneWord(block.toolKind);
   if (done != nullptr) {
     block.body = done;
     block.summary = done;
@@ -648,10 +551,10 @@ std::optional<size_t> Transcript::PlaceForResult(
   return std::nullopt;
 }
 
-std::wstring Transcript::ToolNameFor(const std::string& toolUseId) const {
+const Block* Transcript::CallFor(const std::string& toolUseId) const {
   const std::optional<size_t> place = PlaceForResult(toolUseId);
-  if (!place.has_value()) return {};
-  return blocks_[*place - 1].toolName;
+  if (!place.has_value()) return nullptr;
+  return &blocks_[*place - 1];
 }
 
 std::optional<size_t> Transcript::IndexOfId(size_t id) const {
@@ -661,19 +564,21 @@ std::optional<size_t> Transcript::IndexOfId(size_t id) const {
   return std::nullopt;
 }
 
-Edit Transcript::AppendUserPrompt(const std::wstring& text) {
+namespace {
+
+// The prompt, whether it comes out of the edit box or out of a replayed
+// history.  The edit box hands back "\r\n"; it needs the same normalising as
+// anything off the stream -- and the same writing out of control characters,
+// because text pasted into that box came from somewhere with rules of its own.
+Block MakeUserPrompt(const std::wstring& text) {
   Block block;
   block.kind = BlockKind::UserPrompt;
-  // The prompt comes straight out of a multiline edit control, which hands
-  // back "\r\n"; it needs the same normalising as anything off the stream --
-  // and the same throwing away of control characters, because text pasted into
-  // that box came from somewhere with rules of its own.
   block.body = EscapeControls(NormalizeNewlines(text));
   block.summary = OneLine(block.body, kSummaryLimit);
-  return AppendBlocks({std::move(block)});
+  return block;
 }
 
-Edit Transcript::AppendInterrupted() {
+Block MakeInterrupted() {
   Block block;
   block.kind = BlockKind::Interrupted;
   block.body = L"Prerušené používateľom.";
@@ -684,99 +589,78 @@ Edit Transcript::AppendInterrupted() {
   // every place the work did not go through, and a turn stopped by hand is
   // one of those -- the reader is looking for where things stopped.
   block.isError = true;
-  return AppendBlocks({std::move(block)});
+  return block;
 }
 
-void Transcript::NoteUnknown(const proto::Event& event) {
+}  // namespace
+
+Edit Transcript::AppendUserPrompt(const std::wstring& text) {
+  return AppendBlocks({MakeUserPrompt(text)});
+}
+
+Edit Transcript::AppendInterrupted() {
+  return AppendBlocks({MakeInterrupted()});
+}
+
+void Transcript::NoteUnknown(const std::string& type) {
   ++unknownCount_;
-  const std::string type = event.raw.value("type", std::string("<no type>"));
   for (const std::string& seen : unknownTypes_) {
     if (seen == type) return;
   }
   unknownTypes_.push_back(type);
 }
 
-std::vector<Edit> Transcript::Append(const proto::Event& event) {
+std::vector<Edit> Transcript::Append(const std::vector<agent::Event>& events) {
   std::vector<Block> made;
 
-  switch (event.kind) {
-    case proto::EventKind::Assistant: {
-      auto message = event.raw.find("message");
-      if (message == event.raw.end()) break;
-      auto content = message->find("content");
-      if (content == message->end() || !content->is_array()) break;
-      for (const proto::Json& item : *content) {
-        if (!item.is_object()) continue;
-        const std::string type = StringField(item, "type");
-        // Empty text and empty thinking blocks do arrive -- a message can
-        // carry a block that never got any content.  They are not worth a
-        // line each; "premýšľanie (0 riadkov)" is noise between the things
-        // the reader came for.  An empty tool_result is different and stays:
-        // that a command printed nothing is an answer.
-        if (type == "thinking") {
-          const std::wstring thinking = Widen(StringField(item, "thinking"));
-          if (!thinking.empty()) made.push_back(MakeThinking(thinking));
-        } else if (type == "text") {
-          const std::wstring text = Widen(StringField(item, "text"));
-          if (!text.empty()) made.push_back(MakeAssistantText(text));
-        } else if (type == "tool_use") {
-          made.push_back(MakeToolUse(item, projectRoot_));
-        }
-      }
-      break;
-    }
-    case proto::EventKind::User: {
-      // Only tool results.  Our own prompts are added by AppendUserPrompt, and
-      // the CLI's synthetic nudges ("your previous response had no visible
-      // output") are machinery the user did not write and should not read.
-      auto message = event.raw.find("message");
-      if (message == event.raw.end()) break;
-      auto content = message->find("content");
-      if (content == message->end() || !content->is_array()) break;
-      for (const proto::Json& item : *content) {
-        if (!item.is_object()) continue;
-        if (StringField(item, "type") == "tool_result") {
-          made.push_back(
-              MakeToolResult(item, ToolNameFor(StringField(item,
-                                                           "tool_use_id"))));
-        }
-      }
-      break;
-    }
-    case proto::EventKind::SystemPermissionDenied: {
+  for (const agent::Event& event : events) {
+    // Empty text and empty thinking do arrive -- a message can carry a block
+    // that never got any content, and text can be nothing but escapes.  They
+    // are not worth a line each; "premýšľanie (0 riadkov)" is noise between
+    // the things the reader came for.  An empty tool result is different and
+    // stays: that a command printed nothing is an answer.
+    if (const auto* text = std::get_if<agent::AssistantText>(&event)) {
+      const std::wstring wide = Widen(text->text);
+      if (!wide.empty()) made.push_back(MakeAssistantText(wide));
+    } else if (const auto* thinking = std::get_if<agent::Thinking>(&event)) {
+      const std::wstring wide = Widen(thinking->text);
+      if (!wide.empty()) made.push_back(MakeThinking(wide));
+    } else if (const auto* started =
+                   std::get_if<agent::ToolCallStarted>(&event)) {
+      made.push_back(MakeToolUse(started->call, projectRoot_));
+    } else if (const auto* finished =
+                   std::get_if<agent::ToolCallFinished>(&event)) {
+      // The call is looked up among the blocks already placed.  A batch that
+      // carried a call and its own result would not find it, and the result
+      // would go to the end -- which is right behind the call anyway.
+      made.push_back(MakeToolResult(finished->result,
+                                    CallFor(finished->result.callId)));
+    } else if (const auto* denied = std::get_if<agent::ToolDenied>(&event)) {
       Block block;
       block.kind = BlockKind::PermissionDenied;
-      const std::wstring message = Widen(StringField(event.raw, "message"));
-      const std::wstring tool = Widen(StringField(event.raw, "tool_name"));
-      block.body = message.empty() ? L"Nástroj " + tool + L" bol zamietnutý."
-                                   : message;
+      const std::wstring message = Widen(denied->message);
+      block.body = message.empty()
+                       ? L"Nástroj " + Widen(denied->toolName) +
+                             L" bol zamietnutý."
+                       : message;
       block.summary = OneLine(block.body, kSummaryLimit);
       made.push_back(std::move(block));
-      break;
+    } else if (const auto* prompt = std::get_if<agent::UserPrompt>(&event)) {
+      made.push_back(MakeUserPrompt(Utf16FromUtf8(prompt->text)));
+    } else if (std::holds_alternative<agent::Interrupted>(event)) {
+      made.push_back(MakeInterrupted());
+    } else if (const auto* directory =
+                   std::get_if<agent::WorkingDirectory>(&event)) {
+      // Makes no block, but it is the project, and tool paths are shortened
+      // against it.
+      if (projectRoot_.empty()) projectRoot_ = Widen(directory->path);
+    } else if (const auto* unknown = std::get_if<agent::Unrecognised>(&event)) {
+      NoteUnknown(unknown->type);
     }
-    case proto::EventKind::Unknown:
-      NoteUnknown(event);
-      break;
-    // Makes no block either, but one field of it is worth keeping: cwd is the
-    // project, and tool paths are shortened against it.
-    case proto::EventKind::SystemInit:
-      if (projectRoot_.empty()) {
-        projectRoot_ = Widen(StringField(event.raw, "cwd"));
-      }
-      break;
-    // Deliberately not in the transcript: they belong in the status bar, which
-    // a screen reader reads on request and not on every change.  That is the
+    // Everything else is deliberately not in the transcript: the mode, the
+    // model, the usage and the limits belong in the status bar, which a
+    // screen reader reads on request and not on every change.  That is the
     // whole reason this application exists.
-    case proto::EventKind::SystemHook:
-    // Carries a token count and nothing else; it is a sign of life for the
-    // status bar and the speech, not a piece of the conversation.
-    case proto::EventKind::SystemThinkingTokens:
-    case proto::EventKind::SystemOther:
-    case proto::EventKind::RateLimit:
-    case proto::EventKind::Result:
-    case proto::EventKind::ControlRequest:
-    case proto::EventKind::ControlResponse:
-      break;
   }
 
   // A tool result goes behind the call it answers, not at the end.  Claude

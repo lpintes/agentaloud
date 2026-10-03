@@ -4,6 +4,7 @@
 
 #include "model/transcript.h"
 #include "model/utf.h"
+#include "proto/translate.h"
 #include "ui/resource.h"
 #include "win/dialog.h"
 
@@ -65,8 +66,8 @@ bool PermissionDialog::OnInit() {
   // The transcript's own rendering of the call, not a JSON dump: one field per
   // line, and the long ones as text.  Whatever is allowed here is what will be
   // read back in the transcript afterwards, character for character.
-  std::wstring arguments =
-      model::RenderToolCall(request_.toolName, request_.input);
+  std::wstring arguments = model::RenderToolCall(proto::ToolCallFromInput(
+      request_.toolName, request_.toolUseId, request_.input));
   if (arguments.empty()) arguments = L"bez argumentov";
   SetTextLines(IDC_PERM_INPUT, arguments);
 

@@ -98,7 +98,9 @@ struct ToolCall {
   std::vector<ToolField> fields;
   std::vector<TextReplacement> replacements;  // EditFile, as two texts
   std::string diff;                           // EditFile, as a unified diff
-  std::string newContent;                     // CreateFile
+  // CreateFile.  Optional because creating an empty file is a call worth
+  // telling apart from one whose content did not come.
+  std::optional<std::string> newContent;
   std::vector<Question> questions;            // Question
 };
 
