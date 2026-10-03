@@ -12,7 +12,6 @@
 #include <vector>
 
 #include "proto/claude_backend.h"
-#include "proto/sessions.h"
 #include "ui/main_window.h"
 #include "win/console.h"
 #include "win/dialog.h"
@@ -33,14 +32,20 @@ namespace {
 // A terminal session has /model for that; a headless one is told once, at
 // startup, and never again.
 //
-// Everything else the CLI is to be told goes into extraArgs, but only by name:
-// "--resume" is spelled out here rather than forwarded generically, because
-// "--foo bar" cannot be told apart from "--foo" followed by the project.
+// Nothing is forwarded to the CLI generically: "--foo bar" cannot be told
+// apart from "--foo" followed by the project.  Each option is read by name
+// and handed to the backend as what it means, not as the CLI's spelling of it.
 struct Arguments {
   std::wstring project;
   std::wstring permissionMode;
   std::wstring model;
-  std::vector<std::wstring> extraArgs;
+  // --resume was given, with what followed it.  The id may be empty: a bare
+  // --resume at the end of the line is passed on as it is (invariant 14).
+  bool resume = false;
+  std::wstring resumeId;
+  // -c: carry on the newest conversation of the project.  Which one that is,
+  // is the backend's question -- see proto::ClaudeBackend::Start.
+  bool continueLatest = false;
   // --help was asked for, so nothing else on the line matters and no window is
   // to be opened.  A separate flag rather than an empty project, because an
   // empty project means "ask which folder" and that is a dialog -- the one
@@ -129,36 +134,8 @@ std::wstring Expand(const std::wstring& path) {
   return full;
 }
 
-// `-c` means "carry on the last conversation in this folder".  Which one that
-// is gets decided here and turned into a plain --resume, rather than passed to
-// the CLI as --continue: the CLI answers that question out of
-// ~/.claude/history.jsonl, where only interactively typed prompts are written,
-// so for a folder used from both a terminal and ClaudeLens it would carry on
-// the terminal's conversation and call it ours.  See proto/sessions.h.
-//
-// It says nothing about which one it picked.  The restored transcript is the
-// answer: the first prompt of that conversation is its first block, and
-// Ctrl+Home leads to it.  A sentence in front of it would be the application
-// answering a question nobody asked -- resuming is a deliberate act.
-void ContinueLatest(Arguments* arguments) {
-  // `-c --resume <id>` is not a contradiction to argue about: the one that
-  // names a conversation wins, because it was typed by someone who knew which
-  // one they wanted.  Two --resume on one command line would be the CLI's
-  // problem to report, and it reports it on a stderr this process has not got.
-  if (proto::ResumesConversation(arguments->extraArgs)) return;
-  proto::SessionSummary latest;
-  // Nothing to carry on is not an error and not a reason to refuse: a folder
-  // nobody has worked in yet gets a new session, which is what was wanted, and
-  // it is left looking exactly like one -- an empty project behaving like an
-  // empty project.
-  if (!proto::LatestSession(arguments->project, &latest)) return;
-  arguments->extraArgs.push_back(L"--resume");
-  arguments->extraArgs.push_back(latest.id);
-}
-
 Arguments ReadArguments() {
   Arguments arguments;
-  bool continueLatest = false;
   int argc = 0;
   wchar_t** argv = CommandLineToArgvW(GetCommandLineW(), &argc);
   if (argv) {
@@ -191,8 +168,8 @@ Arguments ReadArguments() {
       // and a copy of it here would be a copy that goes stale.
       } else if (argument == L"--model") {
         arguments.model = argv[++i];
-      // Carry on an earlier conversation.  Passed straight through, value and
-      // all, exactly like the two above -- so `ClaudeLens --resume <id> .`
+      // Carry on an earlier conversation.  Taken with its value wherever it
+      // stands, exactly like the two above -- so `ClaudeLens --resume <id> .`
       // works and `ClaudeLens . --resume <id>` works too.
       //
       // The value is not checked against the shape of a UUID, because the CLI
@@ -204,13 +181,12 @@ Arguments ReadArguments() {
       // --print, it refuses with that message and ends the turn with a
       // `result` carrying is_error.
       } else if (argument == L"--resume" || argument == L"-r") {
-        arguments.extraArgs.push_back(argument);
-        if (i + 1 < argc) arguments.extraArgs.push_back(argv[++i]);
-      // Not forwarded and not remembered as itself: it is a question about
-      // this folder, and the folder may still be several arguments away, so
-      // the answer waits until the whole line has been read.
+        arguments.resume = true;
+        if (i + 1 < argc) arguments.resumeId = argv[++i];
+      // Not answered here: it is a question about this folder, and which
+      // conversation in it counts as the latest is the backend's to know.
       } else if (argument == L"--continue" || argument == L"-c") {
-        continueLatest = true;
+        arguments.continueLatest = true;
       // Read wherever it stands and nothing after it is looked at: `ClaudeLens
       // . --help` is a request for help, not a session in this folder.
       } else if (argument == L"--help" || argument == L"-h") {
@@ -240,10 +216,9 @@ Arguments ReadArguments() {
   if (arguments.project.empty()) {
     arguments.project = win::PickFolder(nullptr, L"Vyberte priečinok projektu");
   }
+  // Expanded, because the folder is also what the list of conversations is
+  // keyed by for -c, and "." is not a key.
   arguments.project = Expand(arguments.project);
-  // After the expansion, because the folder is what the list of conversations
-  // is keyed by and "." is not a key.
-  if (continueLatest && !arguments.project.empty()) ContinueLatest(&arguments);
   return arguments;
 }
 
@@ -323,9 +298,15 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   options.mode.assign(arguments.permissionMode.begin(),
                       arguments.permissionMode.end());
   options.model = arguments.model;
-  // --resume travels here, value and all, until the port takes it over
-  // (claude-gui-lkk.44.4, step d).
-  options.extraArgs = arguments.extraArgs;
+  // `-c --resume <id>` is not a contradiction to argue about: the one that
+  // names a conversation wins, because it was typed by someone who knew which
+  // one they wanted.
+  if (arguments.resume) {
+    options.resume = agent::StartOptions::Resume::ById;
+    options.resumeId = arguments.resumeId;
+  } else if (arguments.continueLatest) {
+    options.resume = agent::StartOptions::Resume::Latest;
+  }
 
   // The one place that knows which CLI is behind the window.
   ui::MainWindow window;

@@ -51,8 +51,29 @@ bool ClaudeBackend::Start(const agent::StartOptions& options,
   session.permissionMode = Ascii(options.mode);
   session.extraArgs = options.extraArgs;
   if (options.resume == agent::StartOptions::Resume::ById) {
+    // An empty id is a bare --resume, passed on bare: under --print the CLI
+    // refuses it with a message of its own rather than opening a picker
+    // (invariant 14), and saying that is its job, not ours.
     session.extraArgs.push_back(L"--resume");
-    session.extraArgs.push_back(options.resumeId);
+    if (!options.resumeId.empty()) session.extraArgs.push_back(options.resumeId);
+  } else if (options.resume == agent::StartOptions::Resume::Latest) {
+    // Decided here and turned into a plain --resume, rather than passed to the
+    // CLI as --continue: the CLI answers "which conversation was last" out of
+    // ~/.claude/history.jsonl, where only interactively typed prompts are
+    // written, so for a folder used from both a terminal and ClaudeLens it
+    // would carry on the terminal's conversation and call it ours (invariant
+    // 15).
+    //
+    // Nothing to carry on is not an error and not a reason to refuse: a folder
+    // nobody has worked in yet gets a new session, which is what was wanted,
+    // and it is left looking exactly like one.  Nor is it said which one was
+    // picked: the restored transcript is the answer, and Ctrl+Home leads to
+    // its first prompt.
+    SessionSummary latest;
+    if (LatestSession(options.projectDir, &latest)) {
+      session.extraArgs.push_back(L"--resume");
+      session.extraArgs.push_back(latest.id);
+    }
   }
 
   // What usage is read for until the stream names a model: the one asked for,

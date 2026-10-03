@@ -762,9 +762,11 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     `extraArgs` (`--resume`, `-r`, `--continue`, `-c`, vlastné `--session-id`).
     Odmerané 6. 9. 2026, `tools/probe_session_id.py`.
 
-    Obnovuje sa `--resume <id|titul>` a appka ho prepúšťa z príkazového riadku
-    (`main.cpp::ReadArguments`) do `extraArgs` aj s hodnotou, presne tak ako
-    `--model`. Hodnota sa nekontroluje proti tvaru UUID: CLI tam berie aj
+    Obnovuje sa `--resume <id|titul>`. `main.cpp::ReadArguments` ho prečíta aj
+    s hodnotou a odovzdá ako `agent::StartOptions::Resume::ById`; na `--resume`
+    pre CLI ho späť prepíše až adaptér (`proto::ClaudeBackend::Start`), lebo
+    pravopis voľby patrí CLI, nie appke. Hodnota sa nekontroluje proti tvaru
+    UUID: CLI tam berie aj
     titul session. Holé `--resume` pod `--print` **neotvorí picker** — odmietne
     sa hláškou „--resume requires a valid session ID or session title when used
     with --print" a ťah skončí `result`om s `is_error` (odmerané 6. 9. 2026).
@@ -798,8 +800,10 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     by pokračoval v poslednom **terminálovom** rozhovore a tváril sa, že je náš.
     Zoznam si preto robí `proto::sessions` zo súborov v
     `~/.claude/projects/<kľúč>/*.jsonl` — tie headless session píše rovnako ako
-    ktorékoľvek iné — a `main.cpp::ContinueLatest` z toho urobí obyčajné
-    `--resume <id>`. Kľúč adresára je cesta projektu, v ktorej sa každý znak
+    ktorékoľvek iné — a `proto::ClaudeBackend::Start` z toho pri
+    `Resume::Latest` urobí obyčajné `--resume <id>`. Je to v adaptéri, nie
+    v `main.cpp`, lebo kde CLI drží rozhovory, je vedomosť o Claude; Codex sa
+    na to isté pýta vlastným volaním. Kľúč adresára je cesta projektu, v ktorej sa každý znak
     mimo `[A-Za-z0-9]` zmenil na pomlčku (odtiaľ to dvojité `--` za písmenom
     disku).
 

@@ -144,6 +144,12 @@ struct StartOptions {
   Resume resume = Resume::None;
   // For ById: the conversation to carry on.  Claude also takes a session
   // title here, which is why this is not checked for the shape of an id.
+  // Empty means --resume was given with nothing after it; the adapter passes
+  // that on to its CLI rather than guessing.
+  //
+  // Latest is "the newest conversation of this project" (-c), and which one
+  // that is, is the adapter's question: only it knows where its CLI keeps
+  // them.  None found means a new conversation, without a word.
   std::wstring resumeId;
   // Passed to the CLI as they are.  Spikes and experiments only: an argument
   // here means the same thing to exactly one adapter.
