@@ -783,6 +783,12 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     „spätná lomka en" — a `MessageBox` sa nedá prejsť po riadkoch ani po
     slovách. Taká správa sa neprečítala, iba odklikla.
 
+    Volanie, ktoré mení súbor, začína riadkom **„súbor: <celá cesta>"**.
+    Zhrnutie v prepise cestu má (skrátenú), ale dialóg zhrnutie nemá vôbec, a
+    tak sa „obsah: …" pýtalo na zápis bez toho, aby povedalo kam. Našlo sa to
+    naostro na `apply_patch` Codexu (4. 10. 2026) a platilo to rovnako pre
+    Claudov `Write` aj `Edit`.
+
     Meno nástroja je v **titulku** dialógu, nie v poli, a fokus štartuje
     v argumentoch. NVDA číta pri otvorení najprv titulok a potom zameraný
     prvok, takže „povolenie: Bash" a samotný príkaz prídu ako jedno ohlásenie

@@ -1423,10 +1423,13 @@ void TestEditAndWriteSayWhatChanged() {
   CHECK_EQ(blocks[1].summary, std::wstring(L"Write: src/y.cpp, 3 riadky"));
 
   // Telo je zmena, nie dump JSON poli.
+  // Cesta je v nom cela -- dialog povolenia zhrnutie nema a bez nej by sa
+  // pytal na zapis bez toho, aby povedal kam.
   CHECK_EQ(blocks[0].body,
-           std::wstring(L"pôvodné:\nstary\nnové:\nnovy\nriadok"));
+           std::wstring(L"súbor: src/x.cpp\npôvodné:\nstary\nnové:\nnovy\n"
+                        L"riadok"));
   CHECK(blocks[0].body.find(L"old_string") == std::wstring::npos);
-  CHECK_EQ(blocks[1].body, std::wstring(L"obsah:\na\nb\nc"));
+  CHECK_EQ(blocks[1].body, std::wstring(L"súbor: src/y.cpp\nobsah:\na\nb\nc"));
 
   // Uspesny vysledok je jedno slovo, ktore nezopakuje cestu, a nie je co
   // rozbalovat -- povodna veta CLI bola dlhsia nez kInlineResultLimit, takze
@@ -2512,7 +2515,7 @@ void TestCodexFixtureMulti(const std::string& dir) {
   const auto results = EventsOf<agent::ToolCallFinished>(replay.events);
   CHECK_EQ(results.size(), size_t{3});
   CHECK(!results[0].result.isError);
-  CHECK(results[0].result.text.find("prvy\r\ndruhy") != std::string::npos);
+  CHECK_EQ(results[0].result.text, std::string("prvy\r\ndruhy"));
   CHECK(results[1].result.isError);  // fatal: not a git repository
   CHECK(results[2].result.isError);  // whoami, zamietnute
   CHECK_EQ(results[2].result.text, std::string("zamietnuté"));
@@ -2569,6 +2572,15 @@ void TestCodexFixtureEdit(const std::string& dir) {
   }
   CHECK(paired);
   CheckCallsHaveResults(replay.transcript);
+  // Jeden riadok s koncovym zlomom je jeden riadok, nie dva.
+  bool oneLine = false;
+  for (const model::Block& block : replay.transcript.blocks()) {
+    if (block.kind == model::BlockKind::ToolUse) {
+      oneLine = block.summary.ends_with(L"caj.txt, 1 riadok");
+      CHECK(block.body.find(L"súbor: ") == 0);
+    }
+  }
+  CHECK(oneLine);
   // Vytvoreny subor ma za sebou jedno slovo, nie prazdny vystup.
   bool done = false;
   for (const model::Block& block : replay.transcript.blocks()) {
@@ -2633,8 +2645,38 @@ void TestCodexFixtureInterrupt(const std::string& dir) {
   // Za koncom tahu este chodi vystup prikazu, ktory nikdy neskoncil.  Do
   // prepisu z neho nesmie nic pribudnut.
   CHECK(std::holds_alternative<agent::TurnEnded>(replay.events.back()));
-  // Prikaz bezal, ked prisiel koniec -- vysledok nema a mat nebude.
+  // Prikaz bezal, ked prisiel koniec -- vo fixture vysledok nema.
   CheckCallsHaveResults(replay.transcript, 1);
+
+  // Naozivo (4. 10. 2026) vsak prerusenie prikaz nezabilo, dobehol a jeho
+  // item/completed prislo po konci tahu.  Polozka je skopirovana z fixtury,
+  // len s dokoncenym stavom.  Volanie sa nesmie objavit druhykrat -- vysledok
+  // patri za to povodne.
+  proto::Json running;
+  for (const proto::Json& message : replay.messages) {
+    if (message.value("method", std::string()) == "item/started" &&
+        message["params"]["item"].value("type", std::string()) ==
+            "commandExecution") {
+      running = message;
+    }
+  }
+  CHECK(!running.is_null());
+  if (running.is_null()) return;
+  proto::Json late = running;
+  late["method"] = "item/completed";
+  late["params"]["item"]["status"] = "completed";
+  late["params"]["item"]["aggregatedOutput"] = "koniec\r\n";
+  late["params"]["item"]["exitCode"] = 0;
+  const std::vector<agent::Event> after = replay.translator.Translate(late);
+  CHECK_EQ(after.size(), size_t{1});
+  CHECK(EventsOf<agent::ToolCallStarted>(after).empty());
+  replay.transcript.Append(after);
+  CheckCallsHaveResults(replay.transcript);
+  // Koncovy zlom riadku, ktory Codex nechava, z vystupu zmizne.
+  const auto finished = EventsOf<agent::ToolCallFinished>(after);
+  if (!finished.empty()) {
+    CHECK_EQ(finished[0].result.text, std::string("koniec"));
+  }
 }
 
 void TestCodexFixtureReasoning(const std::string& dir) {

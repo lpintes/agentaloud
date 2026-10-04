@@ -141,12 +141,16 @@ std::wstring Widen(const std::string& text) {
   return EscapeControls(NormalizeNewlines(StripEscapes(Utf16FromUtf8(text))));
 }
 
+// A break at the very end closes the last line rather than opening another:
+// a file written as "Čaj je lepší než káva.\n" is one line, and counting it as
+// two said "2 riadky" about it -- found live on Codex, true of Claude's Write.
 size_t CountLines(const std::wstring& text) {
   if (text.empty()) return 0;
   size_t lines = 1;
   for (wchar_t character : text) {
     if (character == L'\n') ++lines;
   }
+  if (text.back() == L'\n') --lines;
   return lines;
 }
 
@@ -297,6 +301,12 @@ std::wstring RenderFields(const std::vector<agent::ToolField>& fields) {
 // call before it runs and the transcript shows it after -- and those two have
 // to be the same text, or the reader allows one thing and then reads another.
 std::wstring RenderToolCall(const agent::ToolCall& call) {
+  // Which file, whole, in front of what happens to it.  The summary line has
+  // the path too, but shortened, and the permission dialog has no summary at
+  // all: "obsah: ..." alone asked to allow a write without saying where to --
+  // found on Codex's apply_patch and true of Claude's Write and Edit as well.
+  const std::wstring file =
+      call.primaryIsPath ? L"súbor: " + Widen(call.primary) + L'\n' : L"";
   if (call.kind == agent::ToolKind::EditFile && !call.replacements.empty()) {
     std::wstring body;
     for (const agent::TextReplacement& replacement : call.replacements) {
@@ -305,12 +315,12 @@ std::wstring RenderToolCall(const agent::ToolCall& call) {
               Widen(replacement.after);
       if (replacement.everywhere) body += L"\nvšetky výskyty";
     }
-    return body;
+    return file + body;
   }
   if (call.kind == agent::ToolKind::CreateFile && call.newContent) {
-    return L"obsah:\n" + Widen(*call.newContent);
+    return file + L"obsah:\n" + Widen(*call.newContent);
   }
-  if (!call.diff.empty()) return L"zmena:\n" + Widen(call.diff);
+  if (!call.diff.empty()) return file + L"zmena:\n" + Widen(call.diff);
   if (call.kind == agent::ToolKind::Question) {
     const std::wstring asked = RenderQuestions(call.questions, true);
     if (!asked.empty()) return asked;

@@ -383,6 +383,15 @@ agent::ToolResult ToolResultFromItem(const Json& item) {
 
   if (type == "commandExecution") {
     result.text = StringField(item, "aggregatedOutput");
+    // The break a command prints after its last line.  Claude's CLI takes it
+    // off and Codex does not, so "ahoj\r\n" came out as two lines, the second
+    // empty, and a one-line output stopped being shown whole (live, 4. 10.).
+    if (!result.text.empty() && result.text.back() == '\n') {
+      result.text.pop_back();
+      if (!result.text.empty() && result.text.back() == '\r') {
+        result.text.pop_back();
+      }
+    }
     const Json& exitCode = Field(item, "exitCode");
     result.isError = status == "failed" || status == "declined" ||
                      (exitCode.is_number() && exitCode.get<long long>() != 0);
@@ -535,11 +544,13 @@ std::vector<agent::Event> Translator::Translate(const Json& message) {
           agent::Unrecognised{"item/" + StringField(item, "type")});
     }
   } else if (method == "turn/completed") {
-    // A command running when the turn was interrupted never gets its
-    // item/completed, and its output keeps coming for about a second after
-    // this (measured).  It is forgotten here so that a later approval cannot
-    // pair with it.
-    running_.clear();
+    // A call still running is NOT forgotten here.  Interrupting the turn does
+    // not kill the command (Codex 0.160.0): a ping ran on to its end and its
+    // item/completed arrived half a minute after this, and with the call
+    // forgotten it was announced a second time at the end of the transcript
+    // (live, 4. 10. 2026).  An item id is never reused, so keeping it cannot
+    // pair a later approval with the wrong call; a command that never
+    // finishes costs one entry.
     agent::TurnEnded ended;
     const std::string status = StringField(Field(params, "turn"), "status");
     if (status == "interrupted") {
