@@ -33,6 +33,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <map>
 #include <set>
 #include <string>
@@ -48,6 +49,7 @@
 #include "proto/jsonl.h"
 #include "proto/claude/sessions.h"
 #include "proto/claude/translate.h"
+#include "proto/codex/translate.h"
 #include "arguments.h"
 
 namespace {
@@ -2333,6 +2335,335 @@ void SoakOverCorpus(const std::string& root) {
 
 }  // namespace
 
+// ------------------------------------------------------------- Codex
+
+void TestCodexModes() {
+  TEST("codex: rezimy su predvolby nad approval x sandbox x plan");
+  using namespace proto::codex;
+  const agent::Capabilities capabilities = CodexCapabilities();
+  // Kazda predvolba sa da nastavit a z nastavenia sa precita spat ako ona.
+  // Tvar sandboxPolicy je ten, ktory vracia thread/settings/updated
+  // (odmerane, c:/b/codex-probe/logs/noturn.log).
+  for (const char* mode : {kModeAuto, kModeReadOnly, kModeFullAccess}) {
+    ModeSettings settings;
+    CHECK(SettingsForMode(mode, &settings));
+    CHECK(settings.permissions);
+    CHECK_EQ(ModeFromSettings(settings.approvalPolicy, settings.sandboxPolicy,
+                              settings.collaboration),
+             std::string(mode));
+    CHECK(agent::FindMode(capabilities, mode) != nullptr);
+  }
+  ModeSettings plan;
+  CHECK(SettingsForMode(kModePlan, &plan));
+  CHECK(!plan.permissions);
+  CHECK_EQ(plan.collaboration, std::string("plan"));
+  // Plan prebije ostatne dve osi: je to sposob prace, nie povolenie.
+  CHECK_EQ(ModeFromSettings("never", {{"type", "dangerFullAccess"}}, "plan"),
+           std::string(kModePlan));
+  // Sondy bezali v untrusted + read-only, co ziadna predvolba nie je.
+  CHECK_EQ(ModeFromSettings("untrusted", {{"type", "readOnly"}}, "default"),
+           std::string(kModeCustom));
+  ModeSettings custom;
+  CHECK(!SettingsForMode(kModeCustom, &custom));
+  CHECK(agent::FindMode(capabilities, kModeCustom) != nullptr);
+
+  // Shift+Tab: normalny -> planovanie -> len citanie -> normalny.  Plny
+  // pristup v cykle nie je a z neho sa ide na druhy rezim cyklu.
+  CHECK_EQ(agent::NextMode(capabilities, kModeAuto), std::string(kModePlan));
+  CHECK_EQ(agent::NextMode(capabilities, kModePlan),
+           std::string(kModeReadOnly));
+  CHECK_EQ(agent::NextMode(capabilities, kModeReadOnly),
+           std::string(kModeAuto));
+  CHECK_EQ(agent::NextMode(capabilities, kModeFullAccess),
+           std::string(kModePlan));
+}
+
+// Prehra fixturu Codexu cez jeden prekladac a po kazdej sprave skontroluje
+// invarianty prepisu.  `onMessage` dostane kazdu spravu este pred prekladom
+// -- teda vtedy, ked sa adapter na serverovu poziadavku pozera.
+struct CodexReplay {
+  std::vector<proto::Json> messages;
+  std::vector<agent::Event> events;
+  model::Transcript transcript;
+  proto::codex::Translator translator;
+};
+
+bool ReplayCodex(const std::string& path, CodexReplay* replay,
+                 const std::function<void(const proto::Json&,
+                                          const proto::codex::Translator&)>&
+                     onMessage = nullptr) {
+  bool ok = false;
+  replay->messages = ReadJsonl(path, &ok);
+  if (!ok) {
+    Fail(__FILE__, __LINE__,
+         "chyba " + path + " -- spusti tools/make_codex_fixtures.py");
+    return false;
+  }
+  for (const proto::Json& message : replay->messages) {
+    if (onMessage) onMessage(message, replay->translator);
+    std::vector<agent::Event> batch = replay->translator.Translate(message);
+    replay->events.insert(replay->events.end(), batch.begin(), batch.end());
+    replay->transcript.Append(batch);
+    std::string problem;
+    if (!replay->transcript.CheckInvariants(&problem)) {
+      Fail(__FILE__, __LINE__, "invariant: " + problem);
+      return false;
+    }
+  }
+  if (replay->transcript.unknownCount() != 0) {
+    std::string types;
+    for (const std::string& type : replay->transcript.unknownTypes()) {
+      types += " " + type;
+    }
+    Fail(__FILE__, __LINE__, path + ": nezname spravy:" + types);
+  }
+  return true;
+}
+
+template <typename T>
+std::vector<T> EventsOf(const std::vector<agent::Event>& events) {
+  std::vector<T> out;
+  for (const agent::Event& event : events) {
+    if (const T* found = std::get_if<T>(&event)) out.push_back(*found);
+  }
+  return out;
+}
+
+// Kazde volanie v prepise ma svoj vysledok -- okrem tych, ktore su v `open`.
+void CheckCallsHaveResults(const model::Transcript& transcript,
+                           size_t open = 0) {
+  std::set<std::string> used;
+  std::set<std::string> resulted;
+  for (const model::Block& block : transcript.blocks()) {
+    if (block.kind == model::BlockKind::ToolUse) used.insert(block.toolUseId);
+    if (block.kind == model::BlockKind::ToolResult) {
+      resulted.insert(block.toolUseId);
+    }
+  }
+  CHECK(!used.empty());
+  CHECK_EQ(used.size(), resulted.size() + open);
+  for (const std::string& id : resulted) CHECK(used.count(id) == 1);
+}
+
+void TestCodexFixtureMulti(const std::string& dir) {
+  TEST("codex fixtura multi: prikazy, chyba, zamietnutie, medzitext");
+  CodexReplay replay;
+  size_t approvals = 0;
+  if (!ReplayCodex(dir + "/codex-multi.jsonl", &replay,
+                   [&](const proto::Json& message,
+                       const proto::codex::Translator& translator) {
+                     if (proto::codex::KindOf(message) !=
+                         proto::codex::MessageKind::ServerRequest) {
+                       return;
+                     }
+                     ++approvals;
+                     // Povolenie na prikaz menuje polozku; volanie z nej
+                     // poskladal item/started, ktory prisiel tesne pred nim.
+                     agent::ToolCall call;
+                     CHECK(translator.FindCall(
+                         message["params"]["itemId"].get<std::string>(),
+                         &call));
+                     CHECK(call.kind == agent::ToolKind::Shell);
+                   })) {
+    return;
+  }
+  CHECK_EQ(approvals, size_t{3});
+
+  // Citatelny prikaz, nie obal pwsh -Command '...'.
+  const auto calls = EventsOf<agent::ToolCallStarted>(replay.events);
+  CHECK_EQ(calls.size(), size_t{3});
+  CHECK_EQ(calls[1].call.primary, std::string("git log"));
+  CHECK_EQ(calls[1].call.name, std::string("shell"));
+
+  const auto results = EventsOf<agent::ToolCallFinished>(replay.events);
+  CHECK_EQ(results.size(), size_t{3});
+  CHECK(!results[0].result.isError);
+  CHECK(results[0].result.text.find("prvy\r\ndruhy") != std::string::npos);
+  CHECK(results[1].result.isError);  // fatal: not a git repository
+  CHECK(results[2].result.isError);  // whoami, zamietnute
+  CHECK_EQ(results[2].result.text, std::string("zamietnuté"));
+
+  // Oba druhy textu asistenta: medzitext aj odpoved, v poradi prichodu.
+  CHECK(EventsOf<agent::AssistantText>(replay.events).size() >= 2);
+  CheckCallsHaveResults(replay.transcript);
+
+  // Model a kontext, ktore panel ukazuje.
+  const auto models = EventsOf<agent::ModelChanged>(replay.events);
+  CHECK_EQ(models.size(), size_t{1});
+  if (!models.empty()) CHECK_EQ(models[0].model, std::string("gpt-6-luna"));
+  const auto context = EventsOf<agent::ContextUsed>(replay.events);
+  CHECK(!context.empty());
+  if (!context.empty()) CHECK_EQ(context.back().window, 258400LL);
+  const auto limits = EventsOf<agent::RateLimitChanged>(replay.events);
+  CHECK(!limits.empty());
+  if (!limits.empty()) {
+    CHECK_EQ(limits.back().windows.size(), size_t{1});
+    CHECK_EQ(limits.back().windows[0].minutes, 43200);
+  }
+  const auto ends = EventsOf<agent::TurnEnded>(replay.events);
+  CHECK_EQ(ends.size(), size_t{1});
+  if (!ends.empty()) {
+    CHECK(ends[0].outcome == agent::TurnOutcome::Completed);
+  }
+}
+
+void TestCodexFixtureEdit(const std::string& dir) {
+  TEST("codex fixtura edit: povolenie suboru bez diffu sa sparuje s polozkou");
+  CodexReplay replay;
+  bool paired = false;
+  if (!ReplayCodex(dir + "/codex-edit.jsonl", &replay,
+                   [&](const proto::Json& message,
+                       const proto::codex::Translator& translator) {
+                     if (message.value("method", std::string()) !=
+                         "item/fileChange/requestApproval") {
+                       return;
+                     }
+                     // Ziadost obsah nenesie -- len itemId.
+                     CHECK(!message["params"].contains("changes"));
+                     agent::ToolCall call;
+                     paired = translator.FindCall(
+                         message["params"]["itemId"].get<std::string>(), &call);
+                     CHECK(call.kind == agent::ToolKind::CreateFile);
+                     CHECK(call.newContent.has_value());
+                     if (call.newContent) {
+                       CHECK_EQ(*call.newContent,
+                                std::string("Čaj je lepší než káva.\n"));
+                     }
+                     CHECK(call.primaryIsPath);
+                   })) {
+    return;
+  }
+  CHECK(paired);
+  CheckCallsHaveResults(replay.transcript);
+  // Vytvoreny subor ma za sebou jedno slovo, nie prazdny vystup.
+  bool done = false;
+  for (const model::Block& block : replay.transcript.blocks()) {
+    if (block.kind == model::BlockKind::ToolResult) {
+      done = block.summary == L"vytvorené";
+    }
+  }
+  CHECK(done);
+}
+
+void TestCodexFixtureAsk(const std::string& dir) {
+  TEST("codex fixtura ask: otazka je klucovana id, odpoved je pole");
+  CodexReplay replay;
+  std::vector<agent::Question> asked;
+  agent::ToolCall call;
+  if (!ReplayCodex(dir + "/codex-ask.jsonl", &replay,
+                   [&](const proto::Json& message,
+                       const proto::codex::Translator&) {
+                     if (message.value("method", std::string()) ==
+                         "item/tool/requestUserInput") {
+                       asked = proto::codex::ReadQuestions(message["params"]);
+                       call = proto::codex::QuestionCall(message["params"]);
+                     }
+                   })) {
+    return;
+  }
+  CHECK_EQ(asked.size(), size_t{1});
+  if (asked.empty()) return;
+  CHECK_EQ(asked[0].id, std::string("drink_preference"));
+  CHECK_EQ(asked[0].text, std::string("Pijem radšej čaj alebo kávu?"));
+  CHECK_EQ(asked[0].header, std::string("Nápoj"));
+  CHECK(asked[0].allowsOther);
+  CHECK_EQ(asked[0].options.size(), size_t{2});
+  CHECK(call.kind == agent::ToolKind::Question);
+  CHECK(!call.id.empty());
+
+  // Presne odpoved, s ktorou model pri sonde pokracoval.
+  agent::QuestionAnswer answer;
+  answer.chosen = {{"Čaj"}};
+  CHECK_EQ(proto::codex::MakeQuestionAnswer(asked, answer),
+           proto::Json::parse(
+               R"({"answers":{"drink_preference":{"answers":["Čaj"]}}})"));
+  const agent::ToolResult result =
+      proto::codex::QuestionResult(call.id, asked, answer);
+  CHECK(!result.isError);
+  CHECK(result.text.find("Čaj") != std::string::npos);
+  answer.declined = true;
+  CHECK_EQ(proto::codex::MakeQuestionAnswer(asked, answer),
+           proto::Json::parse(R"({"answers":{}})"));
+  CHECK(proto::codex::QuestionResult(call.id, asked, answer).isError);
+}
+
+void TestCodexFixtureInterrupt(const std::string& dir) {
+  TEST("codex fixtura interrupt: tah konci svojim turn/completed");
+  CodexReplay replay;
+  if (!ReplayCodex(dir + "/codex-interrupt.jsonl", &replay)) return;
+  const auto ends = EventsOf<agent::TurnEnded>(replay.events);
+  CHECK_EQ(ends.size(), size_t{1});
+  if (!ends.empty()) {
+    CHECK(ends[0].outcome == agent::TurnOutcome::Interrupted);
+  }
+  // Za koncom tahu este chodi vystup prikazu, ktory nikdy neskoncil.  Do
+  // prepisu z neho nesmie nic pribudnut.
+  CHECK(std::holds_alternative<agent::TurnEnded>(replay.events.back()));
+  // Prikaz bezal, ked prisiel koniec -- vysledok nema a mat nebude.
+  CheckCallsHaveResults(replay.transcript, 1);
+}
+
+void TestCodexFixtureReasoning(const std::string& dir) {
+  TEST("codex fixtura reasoning: suhrn premyslania je blok");
+  CodexReplay replay;
+  if (!ReplayCodex(dir + "/codex-reasoning.jsonl", &replay)) return;
+  CHECK_EQ(EventsOf<agent::ThinkingTick>(replay.events).size(), size_t{1});
+  const auto thinking = EventsOf<agent::Thinking>(replay.events);
+  CHECK_EQ(thinking.size(), size_t{1});
+  if (!thinking.empty()) {
+    CHECK(thinking[0].text.find("Vypočítavam") != std::string::npos);
+  }
+  CHECK(CountKinds(replay.transcript).count(model::BlockKind::Thinking) > 0);
+}
+
+void TestCodexFixtureResume(const std::string& dir) {
+  TEST("codex fixtura resume: historia prichadza v tvare streamu");
+  bool ok = false;
+  const auto messages = ReadJsonl(dir + "/codex-resume.jsonl", &ok);
+  if (!ok) {
+    Fail(__FILE__, __LINE__, "chyba codex-resume.jsonl");
+    return;
+  }
+  const proto::Json* resumed = nullptr;
+  for (const proto::Json& message : messages) {
+    if (proto::codex::KindOf(message) == proto::codex::MessageKind::Response &&
+        message.contains("result") && message["result"].contains("thread")) {
+      resumed = &message;
+    }
+  }
+  CHECK(resumed != nullptr);
+  if (resumed == nullptr) return;
+
+  const std::vector<agent::Event> history =
+      proto::codex::TranslateHistory((*resumed)["result"]);
+  model::Transcript transcript;
+  const model::HistoryCounts counts =
+      model::RestoreHistory(history, &transcript);
+  std::string problem;
+  CHECK(transcript.CheckInvariants(&problem));
+  CHECK_EQ(transcript.unknownCount(), size_t{0});
+  CHECK_EQ(counts.prompts, size_t{1});
+  const auto kinds = CountKinds(transcript);
+  // Zamietnuty prikaz sa do historie neuklada (odmerane), takze z troch
+  // zostali dva -- jeden uspesny, jeden zlyhany.
+  CHECK_EQ(kinds.at(model::BlockKind::ToolUse), size_t{2});
+  CHECK_EQ(kinds.at(model::BlockKind::ToolResult), size_t{2});
+  CHECK_EQ(kinds.at(model::BlockKind::AssistantText), size_t{2});
+  CheckCallsHaveResults(transcript);
+  // Prompt je prvy blok, ako po obnoveni Claude.
+  CHECK(transcript.blocks().front().kind == model::BlockKind::UserPrompt);
+  // Cesty sa skracuju voci projektu, a ten sa vie z odpovede.
+  CHECK(!EventsOf<agent::WorkingDirectory>(history).empty());
+  const auto models = EventsOf<agent::ModelChanged>(history);
+  CHECK(!models.empty());
+  // Rezim obnoveneho threadu: untrusted + workspaceWrite nie je predvolba.
+  const proto::Json& result = (*resumed)["result"];
+  CHECK_EQ(proto::codex::ModeFromSettings(
+               result["approvalPolicy"], result["sandbox"],
+               result["collaborationMode"].value("mode", std::string())),
+           std::string(proto::codex::kModeCustom));
+}
+
 int main(int argc, char** argv) {
   const std::string fixtures = argc > 1 ? argv[1] : "tests/fixtures";
 
@@ -2375,6 +2706,13 @@ int main(int argc, char** argv) {
   TestFixtureDenied(fixtures);
   TestFixtureThinking(fixtures);
   TestFixtureDisk(fixtures);
+  TestCodexModes();
+  TestCodexFixtureMulti(fixtures);
+  TestCodexFixtureEdit(fixtures);
+  TestCodexFixtureAsk(fixtures);
+  TestCodexFixtureInterrupt(fixtures);
+  TestCodexFixtureReasoning(fixtures);
+  TestCodexFixtureResume(fixtures);
 
   if (const char* corpus = std::getenv("CLAUDELENS_CORPUS")) {
     SoakOverCorpus(corpus);

@@ -103,7 +103,8 @@ AGENT_SRCS := src/agent/backend.cpp
 # proto/codex/); spolocne je len jsonl.
 PROTO_PURE_SRCS := src/proto/jsonl.cpp src/proto/claude/events.cpp \
                    src/proto/claude/control.cpp src/proto/claude/ask.cpp \
-                   src/proto/claude/sessions.cpp src/proto/claude/translate.cpp
+                   src/proto/claude/sessions.cpp src/proto/claude/translate.cpp \
+                   src/proto/codex/translate.cpp
 PROTO_SRCS := $(PROTO_PURE_SRCS) src/proto/claude/session.cpp \
               src/proto/claude/claude_backend.cpp
 
