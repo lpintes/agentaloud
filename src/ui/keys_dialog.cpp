@@ -1,7 +1,9 @@
 #include "ui/keys_dialog.h"
 
 #include <string>
+#include <vector>
 
+#include "model/utf.h"
 #include "ui/resource.h"
 #include "win/dialog.h"
 
@@ -30,23 +32,21 @@ namespace {
 // character and not the shift state -- that is what makes it work on any
 // layout -- so with Caps Lock on the two swap over; the name written here is
 // the one the key has the rest of the time.
-const wchar_t kKeys[] =
+const wchar_t kSending[] =
     L"Odosielanie a ťah:\n"
     L"Ctrl+Enter — odošle prompt. Len z poľa Prompt.\n"
     L"Esc — preruší bežiaci ťah. Z oboch polí.\n"
-    L"Tab — prepne medzi prepisom a promptom.\n"
-    L"Shift+Tab — mení režim povolení dokola, z oboch polí:\n"
-    L"  normálny — pýta sa na každú úpravu aj na príkazy shellu;\n"
-    L"  automatické úpravy — súbory mení sám, na príkazy sa stále pýta;\n"
-    L"  plánovanie — len skúma a navrhuje, súborov sa nedotkne;\n"
-    L"  auto — Claude sám rozhodne, čo je bezpečné.\n"
-    L"Režim bez akýchkoľvek povolení sa za behu zapnúť nedá, iba pri štarte.\n"
+    L"Tab — prepne medzi prepisom a promptom.\n";
+
+// The modes are the agent's and come from Capabilities; see ModesText.
+
+const wchar_t kMoving[] =
     L"\n"
     L"Pohyb po prepise:\n"
     L"T — ďalšie volanie nástroja, Shift+T — predchádzajúce.\n"
     L"R — ďalší výstup nástroja, Shift+R — predchádzajúci.\n"
     L"P — ďalší prompt, Shift+P — predchádzajúci.\n"
-    L"A — ďalšia odpoveď Clauda, Shift+A — predchádzajúca.\n"
+    L"A — ďalšia odpoveď, Shift+A — predchádzajúca.\n"
     L"K — ďalšie premýšľanie, Shift+K — predchádzajúce.\n"
     L"E — ďalšia chyba alebo zamietnuté volanie, Shift+E — predchádzajúce.\n"
     L"Shift znamená dozadu. Týchto šesť písmen platí len v prepise.\n"
@@ -62,24 +62,85 @@ const wchar_t kKeys[] =
     L"\n"
     L"Dialógy a schránka, z oboch polí:\n"
     L"F1 — tento zoznam.\n"
-    L"F2 — podrobnosti session: id, model, kontext, cena.\n"
-    L"F4 — zoznam slash príkazov. Vybraný vloží do promptu, neodošle.\n"
-    L"Ctrl+Shift+C — skopíruje id session do schránky.";
+    L"F2 — podrobnosti session: id, model, kontext, cena.\n";
+
+// Shift+Tab's lines, out of the agent's own list of modes in its own order.
+// A mode off the cycle is named too, once per label: a session can be
+// started in it, and a reader who meets it in the status bar should find it
+// here.  Claude's "manual" is "default" under another name and shares its
+// label, which is why it is per label and not per id.
+std::wstring ModesText(const agent::Capabilities& capabilities) {
+  std::wstring text;
+  std::vector<std::wstring> cycle;
+  std::vector<std::wstring> startOnly;
+  for (const agent::Mode& mode : capabilities.modes) {
+    const std::wstring label = model::Utf16FromUtf8(mode.label);
+    if (mode.inCycle) {
+      cycle.push_back(L"  " + label + L" — " +
+                      model::Utf16FromUtf8(mode.gloss));
+    } else {
+      startOnly.push_back(label);
+    }
+  }
+  if (cycle.empty()) {
+    return L"Shift+Tab — tento agent režimy za behu meniť nevie.\n";
+  }
+  text += L"Shift+Tab — mení režim povolení dokola, z oboch polí:\n";
+  for (size_t i = 0; i < cycle.size(); ++i) {
+    text += cycle[i] + (i + 1 < cycle.size() ? L";\n" : L".\n");
+  }
+  std::wstring rest;
+  for (const std::wstring& label : startOnly) {
+    bool known = false;
+    for (const agent::Mode& mode : capabilities.modes) {
+      if (mode.inCycle && model::Utf16FromUtf8(mode.label) == label) {
+        known = true;
+      }
+    }
+    if (known || rest.find(label) != std::wstring::npos) continue;
+    if (!rest.empty()) rest += L", ";
+    rest += label;
+  }
+  if (!rest.empty()) {
+    text += L"Len pri štarte, cez --permission-mode: " + rest + L".\n";
+  }
+  return text;
+}
 
 class KeysDialog : public win::Dialog {
+ public:
+  explicit KeysDialog(std::wstring text) : text_(std::move(text)) {}
+
  protected:
   bool OnInit() override {
-    SetTextLines(IDC_KEYS_TEXT, kKeys);
+    SetTextLines(IDC_KEYS_TEXT, text_.c_str());
     // The caret starts at the top of the box, which is where the dialog
     // manager leaves it, so the first arrow key reads the first heading.
     return false;  // the box is the first tab stop
   }
+
+ private:
+  std::wstring text_;
 };
 
 }  // namespace
 
-void ShowKeys(HWND owner) {
-  KeysDialog dialog;
+std::wstring KeysText(const agent::Capabilities& capabilities) {
+  std::wstring text = kSending;
+  text += ModesText(capabilities);
+  text += kMoving;
+  // Listed even when the agent has none, and saying so: a key missing from
+  // this list does not exist (invariant 19), and F4 still answers.
+  text += capabilities.slashCommands
+              ? L"F4 — zoznam slash príkazov. Vybraný vloží do promptu, "
+                L"neodošle.\n"
+              : L"F4 — zoznam slash príkazov; tento agent žiadny nemá.\n";
+  text += L"Ctrl+Shift+C — skopíruje id session do schránky.";
+  return text;
+}
+
+void ShowKeys(HWND owner, const agent::Capabilities& capabilities) {
+  KeysDialog dialog(KeysText(capabilities));
   dialog.ShowModal(owner, IDD_KEYS);
 }
 

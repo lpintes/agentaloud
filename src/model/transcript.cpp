@@ -442,12 +442,18 @@ Block MakeToolResult(const agent::ToolResult& result, const Block* call) {
 // is exactly what a turn of alternating sentences and tools sounded like.
 // Speech asks for it by the same call the transcript does -- one place decides
 // what a speaker is called.
-const wchar_t* SpeakerPrefix(BlockKind kind) {
+std::wstring Transcript::SpeakerPrefix(BlockKind kind) const {
   switch (kind) {
     case BlockKind::UserPrompt: return L"you: ";
-    case BlockKind::AssistantText: return L"claude: ";
+    case BlockKind::AssistantText: return agentName_ + L": ";
     default: return L"";
   }
+}
+
+bool Transcript::SetAgentName(const std::wstring& name) {
+  if (!blocks_.empty()) return false;
+  agentName_ = name;
+  return true;
 }
 
 bool IsMechanism(BlockKind kind) {

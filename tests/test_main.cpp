@@ -1583,7 +1583,11 @@ void TestSpeakerPrefix() {
   // nema z coho poznat, kde jeden koncil.  Prefix je len vo vykresleni --
   // body zostava cisty, lebo z neho cita rec.
   model::Transcript transcript;
+  // Meno dava backend (Capabilities::agentName), model ho sam nevie.
+  CHECK(transcript.SetAgentName(L"claude"));
   transcript.AppendUserPrompt(L"otazka");
+  // Po prvom bloku uz nie: prefix je v texte a mapa rozsahov by nesedela.
+  CHECK(!transcript.SetAgentName(L"codex"));
   proto::Json assistant = proto::Json::parse(R"({
     "type": "assistant",
     "message": {"content": [
@@ -1616,6 +1620,14 @@ void TestSpeakerPrefix() {
   transcript.SetCollapsed(0, true);
   CHECK(transcript.CheckInvariants(&problem));
   CHECK_EQ(transcript.Text().substr(0, 5), std::wstring(L"you: "));
+
+  // Codex sa v prepise aj v reci vola svojim menom, nie "claude".
+  model::Transcript codex;
+  CHECK(codex.SetAgentName(L"codex"));
+  codex.Append({agent::AssistantText{"ahoj"}});
+  CHECK_EQ(codex.Text(), std::wstring(L"codex: ahoj\n"));
+  CHECK_EQ(codex.SpeakerPrefix(model::BlockKind::AssistantText),
+           std::wstring(L"codex: "));
 }
 
 void TestSummariesAreOneLine() {

@@ -47,13 +47,6 @@ bool IsMechanism(BlockKind kind);
 
 const wchar_t* KindLabel(BlockKind kind);
 
-// Who said it, written in front of the line: "claude: " and "you: ", empty for
-// everything else.  Not part of the block's text -- the transcript puts it in
-// when it renders, and speech puts it in when it announces, so a copy of the
-// body stays free of it and the two never say a different name for the same
-// speaker.
-const wchar_t* SpeakerPrefix(BlockKind kind);
-
 // A tool call's arguments, written to be read rather than parsed: one field
 // per line, the long ones (a command, a file's new contents, the two halves of
 // an edit) as text of their own rather than as JSON.  Escapes are stripped and
@@ -115,6 +108,20 @@ class Transcript {
   // text should appear the moment it is sent, and --replay-user-messages would
   // put it a round trip away.
   Edit AppendUserPrompt(const std::wstring& text);
+
+  // The agent's name as a speaker -- agent::Capabilities::agentName, "claude"
+  // or "codex".  Set once, before the first block: the prefix is part of the
+  // rendered text, so changing it under existing blocks would move every
+  // range after them without an edit to say so.  False, and nothing changed,
+  // when blocks are already there.
+  bool SetAgentName(const std::wstring& name);
+
+  // Who said it, written in front of the line: "<agent>: " and "you: ", empty
+  // for everything else.  Not part of the block's text -- the transcript puts
+  // it in when it renders, and speech puts it in when it announces, so a copy
+  // of the body stays free of it and the two never say a different name for
+  // the same speaker.
+  std::wstring SpeakerPrefix(BlockKind kind) const;
 
   // A one-line mark where a turn was cut short.  Written by us rather than
   // read off the stream: the CLI does put a user record saying "[Request
@@ -211,6 +218,9 @@ class Transcript {
   // part of a path worth hearing is the end.  Empty until the first init,
   // which is harmless: paths are then shortened from the left instead.
   std::wstring projectRoot_;
+  // Neutral until the pane names the agent: model/ does not know which CLI
+  // runs, and the tests that do not care get a word that names none.
+  std::wstring agentName_ = L"agent";
 };
 
 }  // namespace model

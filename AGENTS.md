@@ -335,6 +335,15 @@ ucrt64, nie mingw64 — UCRT je systémové CRT novších Windowsov a odpadá
 `msvcrt` a jeho zaobchádzanie s UTF-8. Prekladač sa volá absolútnou cestou;
 globálnemu PATH sa never (viď poznámku o 32/64-bit v globálnom `CLAUDE.md`).
 
+**Codex (`--backend codex`) musí byť z natívneho inštalátora**
+(`powershell -c "irm https://chatgpt.com/codex/install.ps1 | iex"`), nie z npm.
+Appka spúšťa `codex app-server` rovnako ako `claude` — `CreateProcessW` si
+`codex.exe` nájde po PATH — a npm tam dáva len shimy (`.cmd`, `.ps1`, shell
+skript), ktoré `CreateProcessW` nespustí. Inštalátor dá
+`%LOCALAPPDATA%\Programs\OpenAI\Codex\bin` na začiatok používateľského PATH,
+ale **starú npm inštaláciu v `scoop\apps\nodejs` nespozná** ako konflikt.
+Overenie: `where.exe codex` musí na prvom mieste ukázať ten priečinok.
+
 ## Architecture Overview
 
 Štyri vrstvy a port medzi nimi. Každá vidí len tú pod sebou a **iba `ui/`
@@ -481,8 +490,15 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    „Nástroj 1." Rečou je všetko jeden hlas: bez mena sa veta asistenta nedá
    odlíšiť od zhrnutia nástroja, a práve to bolo na pôvodnej sťažnosti to
    druhé. Prefix nie je v `Block::body`, aby kópia textu zostala čistá; dáva ho
-   `model::SpeakerPrefix`, ten istý, ktorým ho píše prepis, nech sa reč
-   a prepis nikdy nerozídu v tom, ako sa hovoriaci volá.
+   `model::Transcript::SpeakerPrefix`, ten istý, ktorým ho píše prepis, nech sa
+   reč a prepis nikdy nerozídu v tom, ako sa hovoriaci volá.
+
+   Meno je **backendu**, nie modelu: `Capabilities::agentName` („claude",
+   „codex") a panel ho prepisu dá cez `SetAgentName` ešte pred `Start`, teda
+   pred obnovenou históriou. Potom sa meniť nesmie — prefix je v texte každej
+   odpovede a zmena by posunula rozsahy bez úpravy, ktorá by o tom vedela.
+   Kým ho nikto nedal, je to neutrálne „agent", lebo `model/` nevie, ktoré
+   CLI beží.
 
    Koniec ťahu preto musí povedať, že je koniec — „hotovo"
    (`ui::SessionPane::SignalTurnEnd`). Kým odpoveď chodila až na konci, koniec
@@ -1059,9 +1075,15 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
 19. **Klávesa, ktorú F1 nevymenúva, neexistuje.** Kláves pribúda a nie sú
     v žiadnej tabuľke — sedia v dvoch procedúrach okna (`PromptProc`,
     `TranscriptProc`), časť ako `WM_KEYDOWN`, časť ako `WM_CHAR`, a nedajú sa
-    z kódu vymenovať ani generovaním, ani testom. Zoznam v `kKeys`
+    z kódu vymenovať ani generovaním, ani testom. Zoznam v `KeysText`
     (`ui/keys_dialog.cpp`) preto drží pravdivý jediná vec, a je to pravidlo,
     nie stroj: **kláves nie je hotový, kým nie je v tom zozname.**
+
+    Čo sa medzi agentmi líši, sa do zoznamu **neopisuje, ale skladá
+    z `Capabilities`**: riadky Shift+Tabu sú režimy backendu v jeho poradí
+    s jeho popisom, a F4 povie, že agent príkazy nemá, namiesto toho, aby
+    zmizlo — klávesa, ktorá nič nerobí, stále odpovedá (invariant 6). Pevný
+    zoznam režimov Claude by pri Codexe sľuboval režimy, ktoré neexistujú.
 
     Zlyháva to ticho a horšie než chýbajúci zoznam: podľa zoznamu, ktorý
     klame, sa prestane hľadať. Nový kláves, ktorý v ňom nie je, teda pre

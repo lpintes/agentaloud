@@ -341,6 +341,10 @@ void SessionPane::Apply(const model::Edit& edit) {
 bool SessionPane::Start(std::unique_ptr<agent::Backend> backend,
                         const agent::StartOptions& options) {
   backend_ = std::move(backend);
+  // Before anything can make a block, a restored history included: the name
+  // is part of every answer's rendered text.
+  model_.SetAgentName(
+      model::Utf16FromUtf8(backend_->capabilities().agentName));
   // The folder name in the bar, the whole path in the title.  The bar is read
   // out in one breath along with three other fields, and a path of eight
   // components there buries everything after it; the title is announced when
@@ -729,7 +733,7 @@ void SessionPane::AnnounceProgress(size_t firstNewId) {
     // which of them the model actually said.  Empty for the mechanism kinds --
     // a tool summary already names itself.
     if (speech_.available()) {
-      speech_.Say(model::SpeakerPrefix(block.kind) + *said, false);
+      speech_.Say(model_.SpeakerPrefix(block.kind) + *said, false);
     }
   }
 }
@@ -1199,7 +1203,7 @@ void SessionPane::RefreshFacts() {
 void SessionPane::ShowKeys() {
   // Nothing announced here, for the same reason as ShowDetails: the dialog
   // announces itself, and a sentence of ours would arrive on top of it.
-  ui::ShowKeys(host_);
+  ui::ShowKeys(host_, backend_->capabilities());
 }
 
 void SessionPane::ShowDetails() {

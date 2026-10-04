@@ -15,14 +15,27 @@
 // the keys live in two window procedures and not in a table -- so the rule is
 // the human one: a new key is not finished until it is in this list.
 
+//
+// What differs between agents -- the modes Shift+Tab steps through, whether
+// F4 has anything to list -- is written from agent::Capabilities, so that the
+// list cannot promise one CLI's modes while another runs.
+
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
+#include <string>
+
+#include "agent/backend.h"
+
 namespace ui {
+
+// The text of the list for this agent.  Apart from the dialog so that it can
+// be read without a window.
+std::wstring KeysText(const agent::Capabilities& capabilities);
 
 // Modal, and says nothing of its own: a dialog is the one thing NVDA announces
 // by itself, so the key does answer.  Same reasoning as ShowDetails.
-void ShowKeys(HWND owner);
+void ShowKeys(HWND owner, const agent::Capabilities& capabilities);
 
 }  // namespace ui
 
