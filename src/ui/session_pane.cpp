@@ -4,6 +4,7 @@
 #include <mmsystem.h>
 #include <richedit.h>
 
+#include <algorithm>
 #include <ctime>
 
 #include "model/history.h"
@@ -526,9 +527,7 @@ void SessionPane::OnDrain() {
         details_.haveUsage = true;
       } else if (const auto* asked =
                      std::get_if<agent::QuestionByPrompt>(&event)) {
-        questionsByPrompt_.insert(questionsByPrompt_.end(),
-                                  asked->questions.begin(),
-                                  asked->questions.end());
+        questionsByPrompt_.push_back(*asked);
       } else if (std::holds_alternative<agent::TurnEnded>(event)) {
         OnTurnEnded();
       } else if (const auto* limit =
@@ -1086,22 +1085,13 @@ void SessionPane::Send() {
   SetWindowTextW(prompt_, L"");
 }
 
-void SessionPane::OnQuestionByPrompt() {
-  std::vector<agent::Question> questions;
-  questions.swap(questionsByPrompt_);
-  // A prompt typed in the meantime came first; the question is then
-  // answered, or not, by that.
-  if (questions.empty() || busy_) return;
+namespace {
 
-  SignalWaiting();
-  std::vector<std::vector<std::string>> chosen;
-  // Dismissed: nothing is sent.  The question stands in the transcript and
-  // the prompt box is where an answer of another kind is typed.
-  if (!AskQuestions(host_, questions, &chosen)) return;
-
-  // One question is answered with the answer alone, as a person would type
-  // it; several with each question in front, so the model can tell which
-  // answer is which.
+// One question is answered with the answer alone, as a person would type it;
+// several with each question in front, so the model can tell which answer is
+// which.
+std::string AnswerText(const std::vector<agent::Question>& questions,
+                       const std::vector<std::vector<std::string>>& chosen) {
   std::string answer;
   for (size_t i = 0; i < questions.size() && i < chosen.size(); ++i) {
     std::string picked;
@@ -1116,6 +1106,58 @@ void SessionPane::OnQuestionByPrompt() {
       answer += questions[i].text + " " + picked;
     }
   }
+  return answer;
+}
+
+}  // namespace
+
+void SessionPane::OnQuestionByPrompt() {
+  std::vector<agent::QuestionByPrompt> asked;
+  asked.swap(questionsByPrompt_);
+  // A prompt typed in the meantime came first; the question is then
+  // answered, or not, by that.
+  if (asked.empty() || busy_) return;
+
+  // One dialog for all of them, in the order they were asked.
+  std::vector<agent::Question> questions;
+  for (const agent::QuestionByPrompt& item : asked) {
+    questions.insert(questions.end(), item.questions.begin(),
+                     item.questions.end());
+  }
+
+  SignalWaiting();
+  std::vector<std::vector<std::string>> chosen;
+  const bool answered = AskQuestions(host_, questions, &chosen);
+
+  // The outcome behind each call, the same as the blocking question gets
+  // from its adapter -- what was chosen, or "bez odpovede".  Without it a
+  // dismissed question read exactly like one still waiting
+  // (claude-gui-lkk.44.11).
+  std::vector<agent::Event> results;
+  size_t next = 0;
+  for (const agent::QuestionByPrompt& item : asked) {
+    agent::ToolResult result;
+    result.callId = item.callId;
+    if (answered) {
+      const auto first = chosen.begin() + static_cast<ptrdiff_t>(
+                                              std::min(next, chosen.size()));
+      const auto last =
+          chosen.begin() + static_cast<ptrdiff_t>(std::min(
+                               next + item.questions.size(), chosen.size()));
+      result.text = AnswerText(item.questions, {first, last});
+    } else {
+      result.text = "bez odpovede";
+      result.isError = true;
+    }
+    next += item.questions.size();
+    results.push_back(agent::ToolCallFinished{std::move(result)});
+  }
+  for (const model::Edit& edit : model_.Append(results)) Apply(edit);
+
+  // Dismissed: nothing is sent.  The prompt box is where an answer of another
+  // kind is typed.
+  if (!answered) return;
+  const std::string answer = AnswerText(questions, chosen);
   if (!answer.empty()) SendText(model::Utf16FromUtf8(answer));
 }
 

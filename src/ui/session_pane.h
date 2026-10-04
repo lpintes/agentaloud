@@ -267,7 +267,7 @@ class SessionPane {
   bool busy_ = false;
   // The questions of the turn now running that wait for the next prompt.
   // Offered when the turn ends, unless the reader stopped it.
-  std::vector<agent::Question> questionsByPrompt_;
+  std::vector<agent::QuestionByPrompt> questionsByPrompt_;
   // Set by Esc, cleared by the Result that follows it and by the next prompt.
   // Its whole job is to keep that one Result quiet -- see OnDrain.
   bool interrupted_ = false;

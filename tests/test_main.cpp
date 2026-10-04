@@ -2655,6 +2655,24 @@ void TestCodexFixtureAsk(const std::string& dir) {
   }
   const auto byPrompt = EventsOf<agent::QuestionByPrompt>(events);
   CHECK_EQ(byPrompt.size(), size_t{1});
+  // Nesie id volania, aby panel vedel vysledok (odpoved alebo "bez
+  // odpovede") zaradit za neho -- claude-gui-lkk.44.11.
+  if (!byPrompt.empty() && !posed.empty()) {
+    CHECK_EQ(byPrompt[0].callId, std::string("call_e6Z"));
+    CHECK_EQ(byPrompt[0].callId, posed[0].call.id);
+    model::Transcript transcript;
+    transcript.Append(events);
+    agent::ToolResult dismissed;
+    dismissed.callId = byPrompt[0].callId;
+    dismissed.text = "bez odpovede";
+    dismissed.isError = true;
+    transcript.Append({agent::ToolCallFinished{dismissed}});
+    std::string problem;
+    CHECK(transcript.CheckInvariants(&problem));
+    CHECK_EQ(transcript.blocks().size(), size_t{2});
+    CHECK(transcript.blocks()[1].kind == model::BlockKind::ToolResult);
+    CHECK_EQ(transcript.blocks()[1].summary, std::wstring(L"chyba: bez odpovede"));
+  }
   if (!byPrompt.empty() && !byPrompt[0].questions.empty()) {
     const agent::Question& question = byPrompt[0].questions[0];
     CHECK_EQ(question.text, std::string("Čaj alebo káva?"));

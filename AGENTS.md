@@ -784,7 +784,13 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     spracovala ďalšie dávky uprostred jednej) a ponúkne **ten istý dialóg**;
     vybraté ide von cez `SendText`, teda ako prompt vo všetkom — v prepise
     „you: Čaj", v stavovom riadku aj v reči. Zrušený dialóg nepošle nič a
-    otázka zostane v prepise. Ťah prerušený Esc dialóg nedostane. Upravený
+    otázka zostane v prepise. Ťah prerušený Esc dialóg nedostane.
+
+    Za volanie async otázky pripíše **panel** výsledok — vybratú odpoveď,
+    alebo „bez odpovede" ako chybu —, presne ako ho blokujúcej otázke dáva
+    adaptér. Preto `QuestionByPrompt` nesie id volania. Bez toho vyzerala
+    zrušená otázka rovnako ako otázka, ktorá ešte čaká, a zistilo sa to
+    overením naostro (claude-gui-lkk.44.11). Upravený
     katalóg bez async (`-c model_catalog_json=…`) by sync zaručil, ale je to
     snímka, ktorá s ďalšou verziou Codexu ticho zastará — zamietnuté.
 

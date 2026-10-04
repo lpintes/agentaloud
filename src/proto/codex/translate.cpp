@@ -258,7 +258,8 @@ bool TranslateMessageItem(const Json& item, std::vector<agent::Event>* out,
       // as a bulleted list ("Čaj alebo káva?\n- Čaj\n- Káva", measured), so
       // it is shown as the question block alone and not twice.
       agent::ToolCall call;
-      call.id = StringField(item, "id");
+      const std::string id = StringField(item, "id");
+      call.id = id;
       call.name = "request_user_input_async";
       call.kind = agent::ToolKind::Question;
       call.questions = questions;
@@ -266,7 +267,9 @@ bool TranslateMessageItem(const Json& item, std::vector<agent::Event>* out,
         call.fields.push_back({"title", question.text});
       }
       out->push_back(agent::ToolCallStarted{std::move(call)});
-      if (live) out->push_back(agent::QuestionByPrompt{std::move(questions)});
+      if (live) {
+        out->push_back(agent::QuestionByPrompt{id, std::move(questions)});
+      }
       return true;
     }
   }

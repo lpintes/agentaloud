@@ -165,7 +165,15 @@ struct ToolDenied {
 // The call is in the transcript already, as a ToolCallStarted beside this;
 // what this adds is that the pane offers the same dialog once the turn is
 // over, and sends what was chosen as a prompt.
-struct QuestionByPrompt { std::vector<Question> questions; };
+//
+// The pane files the outcome behind the call, as the blocking question gets
+// one from its adapter: what was chosen, or "bez odpovede".  Without it a
+// dismissed question looked exactly like one still waiting (reported from
+// use, claude-gui-lkk.44.11).
+struct QuestionByPrompt {
+  std::string callId;
+  std::vector<Question> questions;
+};
 
 // Only in a replayed history.  A live prompt goes into the transcript the
 // moment it is sent, and a live interruption is marked by the pane itself.
