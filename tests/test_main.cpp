@@ -2631,6 +2631,44 @@ void TestCodexFixtureAsk(const std::string& dir) {
   CHECK_EQ(proto::codex::MakeQuestionAnswer(asked, answer),
            proto::Json::parse(R"({"answers":{}})"));
   CHECK(proto::codex::QuestionResult(call.id, asked, answer).isError);
+
+  // request_user_input_async: model si ho pri overeni naostro (4. 10. 2026)
+  // vybral namiesto blokujuceho.  Stream z toho nie je zachyteny, takze toto
+  // NIE JE fixtura: tvar polozky je zo schemy (ThreadItem agentMessage,
+  // AsyncUserInputQuestion) a text a otazka doslovne z rolloutu tej session.
+  proto::Json async = proto::Json::parse(R"({
+    "method": "item/completed",
+    "params": {"item": {"type": "agentMessage", "id": "call_e6Z",
+      "text": "Čaj alebo káva?\n- Čaj\n- Káva", "phase": "final_answer",
+      "memoryCitation": null, "delivery": "async",
+      "questions": [{"title": "Čaj alebo káva?", "options": ["Čaj", "Káva"]}]},
+      "threadId": "t", "turnId": "u"}})");
+  proto::codex::Translator translator;
+  const std::vector<agent::Event> events = translator.Translate(async);
+  // Blok otazky, nie text s odrazkami -- ten by ju zopakoval.
+  CHECK(EventsOf<agent::AssistantText>(events).empty());
+  const auto posed = EventsOf<agent::ToolCallStarted>(events);
+  CHECK_EQ(posed.size(), size_t{1});
+  if (!posed.empty()) {
+    CHECK(posed[0].call.kind == agent::ToolKind::Question);
+    CHECK_EQ(posed[0].call.questions.size(), size_t{1});
+  }
+  const auto byPrompt = EventsOf<agent::QuestionByPrompt>(events);
+  CHECK_EQ(byPrompt.size(), size_t{1});
+  if (!byPrompt.empty() && !byPrompt[0].questions.empty()) {
+    const agent::Question& question = byPrompt[0].questions[0];
+    CHECK_EQ(question.text, std::string("Čaj alebo káva?"));
+    CHECK_EQ(question.options.size(), size_t{2});
+    CHECK(question.allowsOther);
+  }
+  // V historii sa otazka uz neponuka znova, len sa ukaze.
+  proto::Json resumed = {
+      {"thread", {{"turns", proto::Json::array({{{"status", "completed"},
+                    {"items", proto::Json::array({async["params"]["item"]})}}})}}}};
+  const std::vector<agent::Event> history =
+      proto::codex::TranslateHistory(resumed);
+  CHECK_EQ(EventsOf<agent::ToolCallStarted>(history).size(), size_t{1});
+  CHECK(EventsOf<agent::QuestionByPrompt>(history).empty());
 }
 
 void TestCodexFixtureInterrupt(const std::string& dir) {

@@ -158,6 +158,15 @@ struct ToolDenied {
   std::string message;
 };
 
+// A question the agent put without waiting for the answer: its turn goes on,
+// or ends, and the answer is the reader's next prompt.  Codex's
+// request_user_input_async does this, and the model picks it over the
+// blocking request_user_input as it sees fit (measured, claude-gui-lkk.44.5).
+// The call is in the transcript already, as a ToolCallStarted beside this;
+// what this adds is that the pane offers the same dialog once the turn is
+// over, and sends what was chosen as a prompt.
+struct QuestionByPrompt { std::vector<Question> questions; };
+
 // Only in a replayed history.  A live prompt goes into the transcript the
 // moment it is sent, and a live interruption is marked by the pane itself.
 struct UserPrompt { std::string text; };
@@ -217,7 +226,7 @@ struct Unrecognised { std::string type; };
 
 using Event = std::variant<AssistantText, Thinking, ThinkingTick,
                            ToolCallStarted, ToolCallFinished, ToolDenied,
-                           UserPrompt, Interrupted, WorkingDirectory,
+                           QuestionByPrompt, UserPrompt, Interrupted, WorkingDirectory,
                            ModelChanged, ModeChanged, ContextUsed,
                            UsageChanged, RateLimitChanged, Ready, TurnEnded,
                            Unrecognised>;

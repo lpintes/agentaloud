@@ -120,6 +120,10 @@ LRESULT MainWindow::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
       if (pane_) pane_->OnHistoryPosted();
       return 0;
 
+    case kMsgQuestionByPrompt:
+      if (pane_) pane_->OnQuestionByPrompt();
+      return 0;
+
     case WM_CLOSE:
       // Let the pane's backend shut the child down in the right order -- the
       // turn first, the pipe after.  Destroying the window first would take

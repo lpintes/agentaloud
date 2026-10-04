@@ -524,6 +524,11 @@ void SessionPane::OnDrain() {
         // each report is the whole answer.
         details_.usage = usage->usage;
         details_.haveUsage = true;
+      } else if (const auto* asked =
+                     std::get_if<agent::QuestionByPrompt>(&event)) {
+        questionsByPrompt_.insert(questionsByPrompt_.end(),
+                                  asked->questions.begin(),
+                                  asked->questions.end());
       } else if (std::holds_alternative<agent::TurnEnded>(event)) {
         OnTurnEnded();
       } else if (const auto* limit =
@@ -550,6 +555,16 @@ void SessionPane::OnTurnEnded() {
   // there once wiped out the "pracujem" that Send had just written, so the bar
   // stayed blank for the whole turn.
   SetStatus(L"");
+  // A turn that ended on a question waiting for the next prompt ends in the
+  // dialog for it, and the dialog is what is heard -- its caption and the
+  // question.  "hotovo" first would be cut off by the focus moving to it
+  // (invariant 6, nothing is said behind a dialog).  A turn the reader
+  // stopped does not get one: Esc means they are done with it.
+  if (!questionsByPrompt_.empty() && !interrupted_) {
+    PostMessageW(host_, kMsgQuestionByPrompt, 0, 0);
+    return;
+  }
+  questionsByPrompt_.clear();
   // A turn the reader stopped by hand ends differently from one that
   // finished, and the difference has to be audible: "prerušujem" answers the
   // key, this answers the turn, and without it a turn that stopped sounds like
@@ -1067,7 +1082,44 @@ void SessionPane::Send() {
     Announce(L"prázdny prompt");
     return;
   }
+  SendText(text);
+  SetWindowTextW(prompt_, L"");
+}
 
+void SessionPane::OnQuestionByPrompt() {
+  std::vector<agent::Question> questions;
+  questions.swap(questionsByPrompt_);
+  // A prompt typed in the meantime came first; the question is then
+  // answered, or not, by that.
+  if (questions.empty() || busy_) return;
+
+  SignalWaiting();
+  std::vector<std::vector<std::string>> chosen;
+  // Dismissed: nothing is sent.  The question stands in the transcript and
+  // the prompt box is where an answer of another kind is typed.
+  if (!AskQuestions(host_, questions, &chosen)) return;
+
+  // One question is answered with the answer alone, as a person would type
+  // it; several with each question in front, so the model can tell which
+  // answer is which.
+  std::string answer;
+  for (size_t i = 0; i < questions.size() && i < chosen.size(); ++i) {
+    std::string picked;
+    for (const std::string& label : chosen[i]) {
+      if (!picked.empty()) picked += ", ";
+      picked += label;
+    }
+    if (questions.size() == 1) {
+      answer = picked;
+    } else {
+      if (!answer.empty()) answer += "\n";
+      answer += questions[i].text + " " + picked;
+    }
+  }
+  if (!answer.empty()) SendText(model::Utf16FromUtf8(answer));
+}
+
+void SessionPane::SendText(const std::wstring& text) {
   // Sending moves the caret past the new prompt, so that the answer arrives
   // directly under it -- otherwise you walk through your own prompt to reach
   // the reply.  But it must not do that to somebody who is in the middle of
@@ -1082,7 +1134,6 @@ void SessionPane::Send() {
   }
 
   backend_->SendPrompt(model::Utf8FromUtf16(text));
-  SetWindowTextW(prompt_, L"");
   interrupted_ = false;
   thinkingSaid_ = false;
   spokeThisTurn_ = false;

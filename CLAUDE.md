@@ -699,6 +699,27 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     CLI zahadzuje a dialóg necháva zaparkovaný. Prihlásiť sa o druh je vlastný
     krok, nie oprava tohto (claude-gui-lkk.25).
 
+    **Codex sa pýta dvoma spôsobmi a vyberá si model, nie appka.** Model
+    gpt-6-luna dostane vždy oba nástroje — blokujúci `request_user_input`
+    (serverová požiadavka, odpoveď kľúčovaná **id** otázky, vždy pole) aj
+    `request_user_input_async`, ktorý pridáva katalóg modelov
+    (`experimental_supported_tools`). Odmerané 4. 10. 2026 presmerovaním Codexu
+    na lokálny server, ktorý požiadavky na model len zapisoval: ponuka bola
+    rovnaká pri každej kombinácii plánu, effortu a prvého ťahu. Pri overení
+    appky zvolil model dvakrát async, pri sonde šesťkrát sync.
+
+    Async otázka pricestuje ako obyčajná správa asistenta s `delivery:"async"`
+    a poľom `questions` a ťah pokračuje alebo skončí; **odpoveď je ďalší
+    prompt**. Adaptér z nej robí ten istý blok otázky a navyše
+    `agent::QuestionByPrompt`. Panel ju podrží do konca ťahu, potom pošle
+    `kMsgQuestionByPrompt` (nie priamo z drainu — modálna slučka by v ňom
+    spracovala ďalšie dávky uprostred jednej) a ponúkne **ten istý dialóg**;
+    vybraté ide von cez `SendText`, teda ako prompt vo všetkom — v prepise
+    „you: Čaj", v stavovom riadku aj v reči. Zrušený dialóg nepošle nič a
+    otázka zostane v prepise. Ťah prerušený Esc dialóg nedostane. Upravený
+    katalóg bez async (`-c model_catalog_json=…`) by sync zaručil, ale je to
+    snímka, ktorá s ďalšou verziou Codexu ticho zastará — zamietnuté.
+
 13. **Čo dialóg ukáže pred spustením nástroja, to prepis drží po ňom — a je to
     ten istý text.** Povolenie sa pýta na volanie, ktoré o chvíľu ukáže prepis
     znova. Keby to boli dve rôzne vykreslenia, čitateľ povolí jedno a prečíta

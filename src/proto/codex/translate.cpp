@@ -219,10 +219,57 @@ std::string ReasoningText(const Json& item) {
   return text;
 }
 
-// What an item that is not a tool call says, the same live and replayed.
-// False when the item is not one this knows.
-bool TranslateMessageItem(const Json& item, std::vector<agent::Event>* out) {
+// The questions of request_user_input_async, which ride on an agentMessage:
+// {title, options: [label, ...] | null}.  No id and no description; the
+// answer goes back as a prompt, so the title is all the filing there is.
+std::vector<agent::Question> AsyncQuestions(const Json& item) {
+  std::vector<agent::Question> questions;
+  const Json& list = Field(item, "questions");
+  if (!list.is_array()) return questions;
+  for (const Json& entry : list) {
+    agent::Question question;
+    question.text = StringField(entry, "title");
+    if (question.text.empty()) continue;
+    question.id = question.text;
+    question.allowsOther = true;  // the answer is a prompt; anything goes
+    const Json& options = Field(entry, "options");
+    if (options.is_array()) {
+      for (const Json& option : options) {
+        if (option.is_string() && !option.get<std::string>().empty()) {
+          question.options.push_back({option.get<std::string>(), ""});
+        }
+      }
+    }
+    questions.push_back(std::move(question));
+  }
+  return questions;
+}
+
+// What an item that is not a tool call says.  False when the item is not one
+// this knows.  `live` is false for a replayed history, where a question was
+// answered long ago -- or not -- and offering it again would be wrong.
+bool TranslateMessageItem(const Json& item, std::vector<agent::Event>* out,
+                          bool live) {
   const std::string type = StringField(item, "type");
+  if (type == "agentMessage" && StringField(item, "delivery") == "async") {
+    std::vector<agent::Question> questions = AsyncQuestions(item);
+    if (!questions.empty()) {
+      // The text of such a message is the question again with the options
+      // as a bulleted list ("Čaj alebo káva?\n- Čaj\n- Káva", measured), so
+      // it is shown as the question block alone and not twice.
+      agent::ToolCall call;
+      call.id = StringField(item, "id");
+      call.name = "request_user_input_async";
+      call.kind = agent::ToolKind::Question;
+      call.questions = questions;
+      for (const agent::Question& question : questions) {
+        call.fields.push_back({"title", question.text});
+      }
+      out->push_back(agent::ToolCallStarted{std::move(call)});
+      if (live) out->push_back(agent::QuestionByPrompt{std::move(questions)});
+      return true;
+    }
+  }
   if (type == "agentMessage" || type == "plan") {
     // Both phases.  "commentary" is the sentence between two commands and
     // "final_answer" the answer; heard in the order they came, they are what
@@ -539,7 +586,7 @@ std::vector<agent::Event> Translator::Translate(const Json& message) {
         running_.erase(found);
       }
       events.push_back(agent::ToolCallFinished{ToolResultFromItem(item)});
-    } else if (!TranslateMessageItem(item, &events)) {
+    } else if (!TranslateMessageItem(item, &events, true)) {
       events.push_back(
           agent::Unrecognised{"item/" + StringField(item, "type")});
     }
@@ -632,7 +679,7 @@ std::vector<agent::Event> TranslateHistory(const Json& resumeResult) {
           if (StringField(item, "status") != "inProgress") {
             events.push_back(agent::ToolCallFinished{ToolResultFromItem(item)});
           }
-        } else if (!TranslateMessageItem(item, &events)) {
+        } else if (!TranslateMessageItem(item, &events, false)) {
           events.push_back(
               agent::Unrecognised{"item/" + StringField(item, "type")});
         }

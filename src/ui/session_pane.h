@@ -47,6 +47,11 @@ constexpr UINT kMsgQuestion = WM_APP + 3;
 // A resumed conversation's history, when the backend hands it over on its
 // reader thread.  Posted; the history waits in the pane until it is drained.
 constexpr UINT kMsgHistory = WM_APP + 4;
+// A turn ended on a question that is answered by the next prompt
+// (agent::QuestionByPrompt).  Posted from the drain rather than handled in
+// it: the dialog runs a modal loop, and a drain inside a drain would apply
+// one batch in the middle of another.
+constexpr UINT kMsgQuestionByPrompt = WM_APP + 5;
 
 class SessionPane {
  public:
@@ -65,6 +70,7 @@ class SessionPane {
   LRESULT OnPermission(LPARAM pending);
   LRESULT OnQuestion(LPARAM pending);
   void OnHistoryPosted();
+  void OnQuestionByPrompt();
 
   void FocusPrompt() const;
   // Where the focus was when the window last lost it -- the prompt the first
@@ -77,6 +83,10 @@ class SessionPane {
   // flight, because a second prompt would queue behind the first with nothing
   // on screen to say so.
   void Send();
+  // What Send does once it has the text -- also the way an answer chosen in
+  // the dialog of a QuestionByPrompt goes out, so that it is a prompt in
+  // every respect: in the transcript, in the status bar and in speech.
+  void SendText(const std::wstring& text);
 
   // Enter in the transcript.  The smallest possible piece of step 5, brought
   // forward because without it the output of every tool is in the model and
@@ -255,6 +265,9 @@ class SessionPane {
   std::vector<agent::Event> history_;
 
   bool busy_ = false;
+  // The questions of the turn now running that wait for the next prompt.
+  // Offered when the turn ends, unless the reader stopped it.
+  std::vector<agent::Question> questionsByPrompt_;
   // Set by Esc, cleared by the Result that follows it and by the next prompt.
   // Its whole job is to keep that one Result quiet -- see OnDrain.
   bool interrupted_ = false;
