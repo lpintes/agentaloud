@@ -15,6 +15,7 @@
 // Generated from git describe into build/ -- see the Makefile.
 #include "claudelens_version.h"
 #include "proto/claude/claude_backend.h"
+#include "proto/codex/codex_backend.h"
 #include "ui/main_window.h"
 #include "win/console.h"
 #include "win/dialog.h"
@@ -24,13 +25,14 @@ namespace {
 // The CLIs there is an adapter for, in the order --help names them.  This
 // file is the one place that knows them: everything else holds an
 // agent::Backend and asks it what it can do (claude-gui-lkk.44).
-const std::vector<std::string> kBackends = {"claude"};
+const std::vector<std::string> kBackends = {"claude", "codex"};
 
 // From the git tag, so no copy of it can go stale (Makefile).  ASCII.
 const wchar_t kVersion[] = L"" CLAUDELENS_VERSION;
 
 std::unique_ptr<agent::Backend> MakeBackend(const std::string& name) {
   if (name == "claude") return std::make_unique<proto::ClaudeBackend>();
+  if (name == "codex") return std::make_unique<proto::codex::CodexBackend>();
   return nullptr;
 }
 

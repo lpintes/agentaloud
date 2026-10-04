@@ -2376,6 +2376,28 @@ void TestCodexModes() {
            std::string(kModeAuto));
   CHECK_EQ(agent::NextMode(capabilities, kModeFullAccess),
            std::string(kModePlan));
+
+  // Poradie sprav pri zmene: odpoved {} pride PRED thread/settings/updated
+  // (odmerane, noturn.log).  Dve rychle stlacenia nesmu cuvnut na hlasenie,
+  // ktore je starsie nez posledne stlacenie.
+  ModeTracker tracker;
+  tracker.Seed(kModeAuto);
+  tracker.Reported(kModeAuto);
+  tracker.Requested(kModePlan);
+  tracker.Requested(kModeReadOnly);
+  tracker.Answered(true);
+  tracker.Reported(kModePlan);  // hlasenie k prvemu stlaceniu
+  CHECK_EQ(tracker.current(), std::string(kModeReadOnly));
+  tracker.Answered(true);
+  tracker.Reported(kModeReadOnly);
+  CHECK_EQ(tracker.current(), std::string(kModeReadOnly));
+  // Odmietnutie vrati posledne slovo servera, nie rezim pred stlacenim.
+  tracker.Requested(kModeAuto);
+  tracker.Answered(false);
+  CHECK_EQ(tracker.current(), std::string(kModeReadOnly));
+  // Zmena, ktoru nikto nepytal (zaciatok tahu so starym nastavenim), plati.
+  tracker.Reported(kModeFullAccess);
+  CHECK_EQ(tracker.current(), std::string(kModeFullAccess));
 }
 
 // Prehra fixturu Codexu cez jeden prekladac a po kazdej sprave skontroluje

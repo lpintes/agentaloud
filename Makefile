@@ -106,7 +106,8 @@ PROTO_PURE_SRCS := src/proto/jsonl.cpp src/proto/claude/events.cpp \
                    src/proto/claude/sessions.cpp src/proto/claude/translate.cpp \
                    src/proto/codex/translate.cpp
 PROTO_SRCS := $(PROTO_PURE_SRCS) src/proto/claude/session.cpp \
-              src/proto/claude/claude_backend.cpp
+              src/proto/claude/claude_backend.cpp \
+              src/proto/codex/codex_backend.cpp
 
 # Prikazovy riadok appky: ciste pravidla bez windows.h, aby ich testy videli.
 APP_PURE_SRCS := src/arguments.cpp

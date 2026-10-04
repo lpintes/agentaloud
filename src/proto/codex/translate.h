@@ -85,6 +85,41 @@ struct ModeSettings {
 };
 bool SettingsForMode(const std::string& mode, ModeSettings* out);
 
+// Which mode the session is in, as far as anyone can say.  The same problem
+// as Claude's PermissionModeTracker, in a smaller shape: Shift+Tab moves the
+// mode ahead at once, so that a second fast press cycles from the new value,
+// and the server's own word -- thread/settings/updated, which comes after
+// every change and at the start of every turn -- is taken over only when no
+// change of ours is still unanswered; until then it may be older than the
+// last press.  A refusal falls back to the server's last word, not to the
+// mode before the press.
+//
+// The answer to thread/settings/update comes BEFORE the notification that
+// states the new settings (measured, noturn.log), so a change is settled by
+// the notification that follows its answer.
+class ModeTracker {
+ public:
+  void Seed(const std::string& mode) { current_ = mode; }
+  void Requested(const std::string& mode) {
+    ++pending_;
+    current_ = mode;
+  }
+  void Answered(bool accepted) {
+    if (pending_ > 0) --pending_;
+    if (!accepted && pending_ == 0 && !reported_.empty()) current_ = reported_;
+  }
+  void Reported(const std::string& mode) {
+    reported_ = mode;
+    if (pending_ == 0) current_ = mode;
+  }
+  const std::string& current() const { return current_; }
+
+ private:
+  std::string current_;
+  std::string reported_;
+  int pending_ = 0;
+};
+
 // ---- Items ----------------------------------------------------------------
 
 // Is this item a tool call -- something with a call and a result?  Messages,
