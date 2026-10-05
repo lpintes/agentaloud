@@ -269,8 +269,10 @@ Runner má `core.autocrlf=true`, a preto ho workflow pred checkoutom vypína:
 `transcript.cpp`, `test_main.cpp`) je v indexe CRLF a renormalizácia by ich
 prepísala celé.
 
-Repozitár je súkromný, takže aj vydania vidí len ten, kto má do neho
-prístup. Verejné vydanie zo súkromného repa GitHub nedovolí.
+Repozitár je od 5. 10. 2026 verejný, a na tom stojí updater: súbor
+z vydania súkromného repozitára sa bez prihlásenia stiahnuť nedá
+(invariant 23). Databáza beadov (Dolt) sa na GitHub neposiela — remote je
+odstránený a jedinou kópiou v gite je pasívny export `.beads/issues.jsonl`.
 
 
 ucrt64, nie mingw64 — UCRT je systémové CRT novších Windowsov a odpadá
@@ -1311,9 +1313,9 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     Manifest je `src/ui/app.manifest`, vložený cez `app.rc`. Každý ďalší
     program, ktorý linkuje `updater.o` (sonda, test), ho potrebuje tiež.
 
-    Súkromný repozitár vráti na `releases/latest` 404, čo appka berie ako „nie
-    je vydanie" a mlčí. Naostro sa to dá overiť až po zverejnení a dvoch
-    vydaniach.
+    Repozitár bez vydania — alebo súkromný — vráti na `releases/latest` 404,
+    čo appka berie ako „nie je vydanie" a mlčí. Naostro sa to dá overiť až
+    s dvoma vydaniami.
 
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa

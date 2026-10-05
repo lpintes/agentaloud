@@ -14,13 +14,10 @@ import subprocess
 import threading
 import time
 
-# Natívna binarka z npm balicka.  `codex` v PATH je shim (sh/cmd -> node ->
-# codex.js -> spawn tohto .exe); shim prida len CODEX_MANAGED_BY_NPM=1
-# a CODEX_MANAGED_PACKAGE_ROOT, co ovplyvni iba hlasky o aktualizacii.
-EXE = os.environ.get("CODEX_EXE") or (
-    "C:/Users/pintes/scoop/apps/nodejs/current/bin/node_modules/@openai/"
-    "codex/node_modules/@openai/codex-win32-x64/vendor/"
-    "x86_64-pc-windows-msvc/bin/codex.exe")
+# Natívny codex.exe z PATH, ten isty, ktory najde appka.  Musi byt z natívneho
+# instalatora, nie z npm: npm dava na PATH len shimy (viz CLAUDE.md).  Iny sa
+# da zadat premennou CODEX_EXE.
+EXE = os.environ.get("CODEX_EXE") or shutil.which("codex.exe") or "codex.exe"
 
 REPO = "C:/b/codex-probe/repo"
 LOGDIR = "C:/b/codex-probe/logs"

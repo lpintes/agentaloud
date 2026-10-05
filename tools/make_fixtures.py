@@ -2,8 +2,8 @@
 
 Fixtura je surovy stream z jednej realnej session, zbaveny volatilnych poli.
 Nie je to nahrada za realne data -- JE to realne data, len take, ktore sa
-smu zverejnit a ktore sa uz nikdy nezmenia.  Analogia je ROM z eureka-a4:
-raz zachyteny artefakt, nie nieco, co sa regeneruje pri kazdom behu.
+smu zverejnit a ktore sa uz nikdy nezmenia.  Je to raz zachyteny artefakt,
+nie nieco, co sa regeneruje pri kazdom behu.
 
 Skript teda NEBEZI v testoch.  Pusti sa rucne vtedy, ked sa zmeni format
 CLI, a diff vyslednej fixtury je prave ta informacia, ktoru chces vidiet.
