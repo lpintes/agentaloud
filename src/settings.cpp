@@ -34,13 +34,18 @@ void Settings::Complain(int line, const std::wstring& text) {
 Settings Settings::Parse(std::string_view text) {
   Settings settings;
   constexpr std::string_view kBom = "\xef\xbb\xbf";
-  if (text.substr(0, kBom.size()) == kBom) text.remove_prefix(kBom.size());
+  if (text.substr(0, kBom.size()) == kBom) {
+    text.remove_prefix(kBom.size());
+    settings.bom_ = true;
+  }
+  settings.finalNewline_ = text.empty() || text.back() == '\n';
   int number = 0;
   while (!text.empty()) {
     ++number;
     const size_t end = text.find('\n');
     const std::string_view raw = text.substr(0, end);
     text.remove_prefix(end == std::string_view::npos ? text.size() : end + 1);
+    settings.lines_.emplace_back(raw);
     const std::string_view line = Trim(raw);
     if (line.empty() || line.front() == '#') continue;
     const size_t equals = line.find('=');
@@ -72,6 +77,36 @@ std::string Settings::Get(const std::string& key) const {
   return found == entries_.end() ? std::string() : found->second.value;
 }
 
+void Settings::Set(const std::string& key, const std::string& value) {
+  // A file that ends its lines in CRLF gets a CRLF line; Notepad would cope
+  // either way, but a file of mixed endings is one nobody wrote.
+  const bool crlf = !lines_.empty() && !lines_.front().empty() &&
+                    lines_.front().back() == '\r';
+  std::string line = key + "=" + value + (crlf ? "\r" : "");
+  const auto found = entries_.find(key);
+  if (found != entries_.end()) {
+    lines_[static_cast<size_t>(found->second.line - 1)] = std::move(line);
+    found->second.value = value;
+    return;
+  }
+  // The last line had no newline; it gets one now, or the new line would be
+  // glued onto it.
+  finalNewline_ = true;
+  lines_.push_back(std::move(line));
+  entries_[key] = {value, static_cast<int>(lines_.size())};
+}
+
+std::string Settings::Serialize() const {
+  std::string text = bom_ ? "\xef\xbb\xbf" : "";
+  for (size_t i = 0; i < lines_.size(); ++i) {
+    text += lines_[i];
+    if (i + 1 < lines_.size() || finalNewline_) text += '\n';
+  }
+  return text;
+}
+
+bool Settings::CheckUpdates() const { return Get(kCheckUpdatesKey) != "0"; }
+
 void Settings::Check(const std::map<std::string, agent::Capabilities>& backends) {
   std::vector<std::string> names;
   for (const auto& [name, capabilities] : backends) names.push_back(name);
@@ -87,6 +122,16 @@ void Settings::Check(const std::map<std::string, agent::Capabilities>& backends)
       }
       continue;
     }
+    if (key == kCheckUpdatesKey) {
+      if (!empty && entry.value != "0" && entry.value != "1") {
+        Complain(entry.line, L"check-updates je 0 alebo 1, nie " +
+                                 Wide(entry.value));
+      }
+      continue;
+    }
+    // Written by the application and read by update::, which treats anything
+    // it cannot use as nothing -- no shape to check here.
+    if (key == kLastUpdateCheckKey || key == kSkippedVersionKey) continue;
     const size_t dot = key.find('.');
     const auto backend = dot == std::string::npos
                              ? backends.end()

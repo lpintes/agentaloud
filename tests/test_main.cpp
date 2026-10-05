@@ -53,6 +53,8 @@
 #include "proto/codex/translate.h"
 #include "arguments.h"
 #include "settings.h"
+#include "update.h"
+#include "version.h"
 
 namespace {
 
@@ -914,6 +916,134 @@ void TestSettings() {
   app::CheckBackend(&chosen, {"claude", "codex"});
   app::CheckMode(&chosen, backends["codex"]);
   CHECK(chosen.error.empty());
+}
+
+// Zapis do suboru nastaveni (invariant 22): co zapis nemeni, zostane bajt po
+// bajte, lebo subor pise aj clovek.
+void TestSettingsWrite() {
+  TEST("nastavenia: zapis meni len svoj riadok");
+  const std::string original =
+      "\xef\xbb\xbf# moje poznamky\r\nclaude.permission-mode=auto\r\n\r\n"
+      "last-update-check=2026-10-01\r\n";
+  app::Settings same = app::Settings::Parse(original);
+  CHECK_EQ(same.Serialize(), original);
+  // Bez posledneho noveho riadku aj prazdny subor.
+  CHECK_EQ(app::Settings::Parse("a=b").Serialize(), std::string("a=b"));
+  CHECK_EQ(app::Settings::Parse("").Serialize(), std::string());
+
+  app::Settings changed = app::Settings::Parse(original);
+  changed.Set("last-update-check", "2026-10-05");
+  changed.Set("skipped-version", "2026.10.2");
+  CHECK_EQ(changed.Serialize(),
+           std::string("\xef\xbb\xbf# moje poznamky\r\nclaude.permission-mode=auto\r\n"
+                       "\r\nlast-update-check=2026-10-05\r\n"
+                       "skipped-version=2026.10.2\r\n"));
+  CHECK_EQ(changed.Get("skipped-version"), std::string("2026.10.2"));
+  // Druhy zapis toho isteho kluca ide na jeho riadok, nie na koniec.
+  changed.Set("skipped-version", "2026.10.3");
+  const app::Settings reread = app::Settings::Parse(changed.Serialize());
+  CHECK_EQ(reread.Get("skipped-version"), std::string("2026.10.3"));
+  CHECK_EQ(reread.entries().size(), size_t{3});
+
+  // Posledny riadok bez noveho riadku sa s pridanym nezlepi.
+  app::Settings glued = app::Settings::Parse("a=b");
+  glued.Set("c", "d");
+  CHECK_EQ(glued.Serialize(), std::string("a=b\nc=d\n"));
+  app::Settings fresh = app::Settings::Parse("");
+  fresh.Set("check-updates", "0");
+  CHECK_EQ(fresh.Serialize(), std::string("check-updates=0\n"));
+
+  // Vypinac: zapnuty, kym subor vyslovne nepovie 0.
+  CHECK(app::Settings::Parse("").CheckUpdates());
+  CHECK(app::Settings::Parse("check-updates=1\n").CheckUpdates());
+  CHECK(!app::Settings::Parse("check-updates=0\n").CheckUpdates());
+  std::map<std::string, agent::Capabilities> backends;
+  backends["claude"] = proto::ClaudeCapabilities();
+  app::Settings updates = app::Settings::Parse(
+      "check-updates=1\nlast-update-check=hocico\nskipped-version=\n");
+  updates.Check(backends);
+  CHECK(updates.error().empty());
+  app::Settings yes = app::Settings::Parse("check-updates=ano\n");
+  yes.Check(backends);
+  CHECK(yes.error().find(L"ano") != std::wstring::npos);
+}
+
+// Pravidla aktualizacii bez siete (claude-gui-lkk.53).
+void TestUpdateRules() {
+  TEST("aktualizacie: verzia, znacka, sucet, ponuka, plan vymeny");
+  using version::Number;
+  // Ako cisla, nie ako text.
+  CHECK(*version::Parse(L"2026.9.5") < *version::Parse(L"2026.10.1"));
+  CHECK(version::Parse(L"v2026.10.1") == (Number{2026, 10, 1}));
+  CHECK(!version::Parse(L"2026.10.1-5-gabc1234"));
+  CHECK(!version::Parse(L"2026.10.1-dirty"));
+  CHECK(!version::Parse(L"0.0.0-6ce7657"));
+  CHECK(!version::Parse(L"2026.10"));
+  CHECK(!version::Parse(L"2026.10.123456"));
+  CHECK(!version::Parse(L""));
+
+  CHECK(update::TagFromLocation(
+            L"https://github.com/lpintes/agentaloud/releases/tag/v2026.10.2") ==
+        std::optional<std::wstring>(L"v2026.10.2"));
+  CHECK(!update::TagFromLocation(L"https://github.com/lpintes/agentaloud/releases"));
+  CHECK(!update::TagFromLocation(L"https://github.com/x/releases/tag/nightly"));
+
+  const std::string sums =
+      "0123456789ABCDEF0123456789abcdef0123456789abcdef0123456789abcdef  AgentAloud.zip\r\n"
+      "1111111111111111111111111111111111111111111111111111111111111111 *SHA.txt\n";
+  CHECK(update::HashFor(sums, "AgentAloud.zip") ==
+        std::optional<std::string>(
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"));
+  CHECK(update::HashFor(sums, "SHA.txt").has_value());
+  CHECK(!update::HashFor(sums, "AgentAloud-2026.10.1.zip"));
+
+  const Number current{2026, 10, 1};
+  CHECK(update::ShouldOffer(current, L"v2026.10.2", L""));
+  CHECK(!update::ShouldOffer(current, L"v2026.10.1", L""));
+  CHECK(!update::ShouldOffer(current, L"v2026.9.9", L""));
+  CHECK(!update::ShouldOffer(std::nullopt, L"v2026.10.2", L""));  // vyvojove
+  CHECK(!update::ShouldOffer(current, L"v2026.10.2", L"2026.10.2"));
+  CHECK(update::ShouldOffer(current, L"v2026.10.3", L"2026.10.2"));
+  CHECK(update::CheckDue(L"2026-10-04", L"2026-10-05"));
+  CHECK(update::CheckDue(L"", L"2026-10-05"));
+  CHECK(!update::CheckDue(L"2026-10-05", L"2026-10-05"));
+
+  // Plan: vrchny priecinok sa zreze, config/ sa vynecha.
+  using W = std::vector<std::wstring>;
+  const update::Plan plan = update::PlanReplace(
+      W{L"AgentAloud-2026.10.2/agentaloud.exe",
+        L"AgentAloud-2026.10.2\\nvdaControllerClient.dll",
+        L"AgentAloud-2026.10.2/Config/settings.txt",
+        L"AgentAloud-2026.10.2/prism/a.dll"},
+      L"agentaloud.exe");
+  CHECK(plan.error.empty());
+  CHECK_EQ(plan.files.size(), size_t{3});
+  if (plan.files.size() == 3) {
+    CHECK_EQ(plan.files[0].to, std::wstring(L"agentaloud.exe"));
+    CHECK_EQ(plan.files[1].to, std::wstring(L"nvdaControllerClient.dll"));
+    CHECK_EQ(plan.files[2].to, std::wstring(L"prism\\a.dll"));
+    CHECK_EQ(plan.files[2].from, std::wstring(L"AgentAloud-2026.10.2/prism/a.dll"));
+  }
+  // Bez vrchneho priecinka sa nic nezreze.
+  const update::Plan flat =
+      update::PlanReplace(W{L"agentaloud.exe", L"x/y.dll"}, L"agentaloud.exe");
+  CHECK(flat.error.empty());
+  CHECK_EQ(flat.files.size(), size_t{2});
+  // Cesta mimo priecinka appky odmietne cely balik.
+  CHECK(!update::PlanReplace(W{L"agentaloud.exe", L"../x.dll"}, L"agentaloud.exe")
+             .error.empty());
+  CHECK(!update::PlanReplace(W{L"agentaloud.exe", L"C:\\x.dll"}, L"agentaloud.exe")
+             .error.empty());
+  CHECK(!update::PlanReplace(W{L"agentaloud.exe", L"\\x.dll"}, L"agentaloud.exe")
+             .error.empty());
+  CHECK(!update::PlanReplace(W{L"agentaloud.exe:zlo"}, L"agentaloud.exe")
+             .error.empty());
+  // Bez EXE to nie je aktualizacia; EXE v podpriecinku sa neratá.
+  const update::Plan noExe =
+      update::PlanReplace(W{L"top/sub/agentaloud.exe", L"top/a.dll"}, L"agentaloud.exe");
+  CHECK(!noExe.error.empty());
+  CHECK(noExe.files.empty());
+  CHECK(!update::PlanReplace(W{}, L"agentaloud.exe").error.empty());
 }
 
 void TestPermissionModeSwitch() {
@@ -2896,6 +3026,8 @@ int main(int argc, char** argv) {
   TestPortModeCycleMatchesClaude();
   TestArguments();
   TestSettings();
+  TestSettingsWrite();
+  TestUpdateRules();
   TestPermissionModeReports();
   TestPermissionModeTracker();
   TestAnsweringModel();

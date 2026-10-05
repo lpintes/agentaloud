@@ -36,6 +36,7 @@
 #include <map>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "agent/backend.h"
 
@@ -68,9 +69,26 @@ class Settings {
   // Empty when there is nothing wrong.
   const std::wstring& error() const { return error_; }
 
+  // Sets `key` to `value`, in place: the line that holds the key now gets the
+  // new value and every other line -- comments, blank lines, their order --
+  // stays as it was, so a file written by hand survives being written by the
+  // application.  A key not yet in the file goes on a new line at the end.
+  // The caller saves Serialize().
+  void Set(const std::string& key, const std::string& value);
+
+  // The file again, with whatever Set changed.  Byte for byte what Parse got
+  // when nothing was set: the BOM, CRLF and a missing last newline included.
+  std::string Serialize() const;
+
+  // Whether the start-up checks GitHub for a newer release.  On unless the
+  // file says 0 -- a file from before the key existed must not quietly stop
+  // the updates.
+  bool CheckUpdates() const;
+
   // Checks every key against what the backends are and what each of them can
   // do: `backend` must name one of them, `<backend>.permission-mode` must be
-  // one of that backend's modes, and nothing else may be there.  Every
+  // one of that backend's modes, check-updates is 0 or 1, and nothing else
+  // may be there.  Every
   // backend's lines are checked, not just the chosen one's -- a typo in the
   // codex lines would otherwise wait to be found the day codex is used.
   // Sets error() and does nothing when there is one already.
@@ -81,6 +99,11 @@ class Settings {
 
   std::map<std::string, Entry> entries_;
   std::wstring error_;
+  // The file as it came, a line per element, without the '\n' but with any
+  // '\r' -- so Serialize gives back what was read.
+  std::vector<std::string> lines_;
+  bool bom_ = false;
+  bool finalNewline_ = true;
 };
 
 // The keys, in one place, so the help and the check cannot disagree about
@@ -88,6 +111,12 @@ class Settings {
 inline constexpr char kBackendKey[] = "backend";
 inline constexpr char kPermissionModeKey[] = "permission-mode";
 inline constexpr char kModelKey[] = "model";
+// Updates (claude-gui-lkk.53).  The last two are written by the application:
+// the day of the last check that got an answer, "YYYY-MM-DD", and the release
+// the reader answered "Preskočiť túto verziu" to, "2026.10.1".
+inline constexpr char kCheckUpdatesKey[] = "check-updates";
+inline constexpr char kLastUpdateCheckKey[] = "last-update-check";
+inline constexpr char kSkippedVersionKey[] = "skipped-version";
 
 // Fills in what the command line left empty: the command line wins, the file
 // comes next, and the built-in default -- which CheckBackend supplies -- last.

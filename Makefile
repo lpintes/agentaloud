@@ -109,9 +109,9 @@ PROTO_SRCS := $(PROTO_PURE_SRCS) src/proto/claude/session.cpp \
               src/proto/claude/claude_backend.cpp \
               src/proto/codex/codex_backend.cpp
 
-# Prikazovy riadok a subor nastaveni: ciste pravidla bez windows.h, aby ich
-# testy videli.
-APP_PURE_SRCS := src/arguments.cpp src/settings.cpp
+# Prikazovy riadok, subor nastaveni a pravidla aktualizacii: ciste, bez
+# windows.h a bez siete, aby ich testy videli.
+APP_PURE_SRCS := src/arguments.cpp src/settings.cpp src/version.cpp src/update.cpp
 
 # Transkript a jeho mapa rozsahov.  Nevie o windows.h, a prave preto sa da
 # testovat bez okna -- co je vacsina toho, preco maju tie testy cenu.
@@ -124,7 +124,7 @@ UI_SRCS := src/ui/session_pane.cpp src/ui/main_window.cpp src/ui/speech.cpp \
            src/ui/command_dialog.cpp src/ui/keys_dialog.cpp
 
 APP_SRCS := $(WIN_SRCS) $(AGENT_SRCS) $(PROTO_SRCS) $(MODEL_SRCS) $(UI_SRCS) \
-            $(APP_PURE_SRCS) src/main.cpp
+            $(APP_PURE_SRCS) src/version_current.cpp src/main.cpp
 APP_OBJS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(APP_SRCS))
 
 # Dialogove sablony.  Len appka: spike ani testy okno nemaju.
@@ -185,8 +185,9 @@ $(BUILD)/ui/app.res.o: src/ui/resource.h src/app_name.h $(VERSION_H)
 # `make clean all` by hlavicku zapisanu pri citani hned zmazal a `all` by ju
 # uz nemal odkial vziat.
 #
-# main.o sa na nu odkazuje rucne: -MMD ju pozna az po prvom preklade.
-$(BUILD)/main.o: $(VERSION_H)
+# main.o a version_current.o sa na nu odkazuju rucne: -MMD ju pozna az po
+# prvom preklade.
+$(BUILD)/main.o $(BUILD)/version_current.o: $(VERSION_H)
 $(VERSION_H): FORCE
 	@mkdir -p $(dir $@)
 	$(Q)printf '%s\n' \
