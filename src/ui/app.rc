@@ -22,6 +22,9 @@
 
 LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
 
+// Common Controls 6 -- see the comment inside the manifest.
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "src/ui/app.manifest"
+
 // What Explorer shows under Properties -> Details, and what a release checks
 // the file against before publishing it under a tag.  Slovak, Unicode.
 1 VERSIONINFO

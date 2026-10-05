@@ -1233,7 +1233,10 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     (claude-gui-lkk.53) —, ale vždy tak, že **riadky, ktoré zápis nemení,
     zostanú, ako boli**, vrátane poznámok a poradia: súbor sa dá písať aj
     ručne a zápis, ktorý by ho prepísal celý, by ticho zmazal, čo doň niekto
-    napísal. Dnes appka zatiaľ nezapisuje nič.
+    napísal. Robí to `Settings::Set` + `Serialize` (súbor bez zmeny vyjde
+    bajt po bajte, vrátane BOM a CRLF) a `win::WriteFileBytes` (najprv
+    `.tmp`, potom jedno premenovanie). Dnes appka zapisuje len stav
+    aktualizácií (invariant 23).
 
     Prednosť je **príkazový riadok > súbor > zabudovaná hodnota**
     (`app::ApplySettings` medzi `Parse` a `CheckBackend`) a režim aj model sa
@@ -1256,6 +1259,61 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     vedome; nastavenia podľa projektu sú claude-gui-lkk.56. A pozor pri
     meraní: s `--model haiku` sa `auto` ticho zmení na `default`, aj bez
     akýchkoľvek nastavení.
+
+23. **Aktualizuje sa celý balík, nie holé EXE, a nič sa nevymení, kým nie je
+    všetko overené.** Kto si balík stiahol raz a potom už len aktualizuje,
+    musí skončiť s tým istým priečinkom ako ten, kto ho stiahne dnes. Holé
+    EXE by nechalo vedľa seba DLL z prvého stiahnutia — a knižnica čítačky
+    v zlej verzii zlyhá ticho (claude-gui-lkk.53, rozhodnutie autora).
+
+    Kontrola je **pri štarte, pred výberom priečinka a pred session**
+    (`UpdateBeforeStart` v `main.cpp`): proces CLI ešte nebeží, takže
+    reštart nič nestráca a nikto sa nepýta na priečinok dvakrát. Raz denne
+    (`last-update-check`), so stropom 3 s aj na DNS, ktoré WinHTTP samo
+    neobmedzí; deň sa zapíše len vtedy, keď prišla odpoveď. `check-updates=0`
+    ju vypne. Ručná kontrola (`updater::FetchLatestAsked`) je hotová a čaká na
+    menu, ktoré príde po lokalizácii.
+
+    Poradie je pevné a každý krok môže zastaviť všetko ďalšie:
+    `releases/latest` (značka z presmerovania, bez API), stiahnutie
+    `AgentAloud.zip` a `SHA256SUMS.txt`, **súčet celého ZIP-u**, rozbalenie do
+    čerstvého `.update-new\` vedľa EXE, plán (`update::PlanReplace`: odreže
+    vrchný priečinok `AgentAloud-<verzia>/`, vynechá `config\`, celý balík
+    odmietne pri absolútnej ceste, `..`, `:` alebo bez EXE v koreni), a až
+    potom výmena: starý súbor do `.update-old\`, nový na jeho miesto. Bežiace
+    EXE aj načítaná DLL sa v rámci zväzku presunúť dajú, prepísať nie. Keď
+    zlyhá ktorýkoľvek presun, vrátia sa **všetky** — priečinok skončí, ako
+    bol. Oba pomocné priečinky zmaže ďalší štart (`RemoveLeftover`); prípona
+    `.old` zo starších návrhov by mohla zmazať cudzí súbor s tým menom.
+
+    **Rozbaľuje systémový `tar.exe` a pravidlá jeho použitia sú tri,**
+    všetky odmerané (sonda 5. 10. 2026, bsdtar 3.8.8):
+
+      • **Plnou cestou zo `GetSystemDirectoryW`**, nie z PATH — `tar` z msys
+        alebo Gitu je iný program.
+      • **Žiadna cesta na príkazovom riadku.** tar vidí len ANSI kódovú
+        stránku; cesta so znakmi mimo nej (azbuka na stredoeurópskom stroji)
+        sa zmení na `??` a zlyhá. Cieľ preto ide ako pracovný priečinok
+        procesu (`lpCurrentDirectory`, Unicode) a ZIP leží v ňom pod menom
+        `package.zip`.
+      • **Rozhoduje len návratový kód.** Orezaný ZIP nechal v cieli súbor
+        správnej veľkosti a zlého obsahu, s kódom 1. Preto čerstvý priečinok
+        zakaždým a nič z neho sa nepoužije, kým tar nepovedal 0.
+
+    Novú verziu treba spustiť, **kým je dialóg sťahovania otvorený**:
+    Windows pustí okno dopredu len procesu, ktorý mal fokus, a po zavretí
+    dialógu tento proces žiadne okno nemá. Preto `Finish` beží na vlákne
+    dialógu, nie sťahovania — a preto aj Zrušiť počas sťahovania nemôže
+    súťažiť s výmenou, ktorá už beží.
+
+    `TaskDialogIndirect` je len v Common Controls 6, a **bez manifestu sa
+    EXE, ktoré ho importuje, vôbec nenačíta** — z Prieskumníka bez slova.
+    Manifest je `src/ui/app.manifest`, vložený cez `app.rc`. Každý ďalší
+    program, ktorý linkuje `updater.o` (sonda, test), ho potrebuje tiež.
+
+    Súkromný repozitár vráti na `releases/latest` 404, čo appka berie ako „nie
+    je vydanie" a mlčí. Naostro sa to dá overiť až po zverejnení a dvoch
+    vydaniach.
 
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa

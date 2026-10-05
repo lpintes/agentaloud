@@ -63,7 +63,8 @@ CXXFLAGS := -std=c++20 -O2 $(WARN) -I. -Isrc -I$(BUILD) \
             -DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00 -DUNICODE -D_UNICODE
 # winmm je kvoli PlaySound: zvuk pre cakajuci modal sa neda dat cez
 # MessageBeep, oba jeho pouzitelne zvuky uz maju iny vyznam (invariant 11).
-LDLIBS   := -lole32 -lshell32 -lcomctl32 -luuid -lgdi32 -lwinmm
+# winhttp a bcrypt su aktualizacie: stiahnutie a SHA-256 (claude-gui-lkk.53).
+LDLIBS   := -lole32 -lshell32 -lcomctl32 -luuid -lgdi32 -lwinmm -lwinhttp -lbcrypt
 
 # Verzia.  Nie je napisana v ziadnom zdrojaku -- urcuje ju znacka v gite
 # (v2026.10.1, rok.mesiac.poradie), aby druha kopia nemala ako zastarat.
@@ -124,7 +125,7 @@ UI_SRCS := src/ui/session_pane.cpp src/ui/main_window.cpp src/ui/speech.cpp \
            src/ui/command_dialog.cpp src/ui/keys_dialog.cpp
 
 APP_SRCS := $(WIN_SRCS) $(AGENT_SRCS) $(PROTO_SRCS) $(MODEL_SRCS) $(UI_SRCS) \
-            $(APP_PURE_SRCS) src/version_current.cpp src/main.cpp
+            $(APP_PURE_SRCS) src/version_current.cpp src/updater.cpp src/main.cpp
 APP_OBJS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(APP_SRCS))
 
 # Dialogove sablony.  Len appka: spike ani testy okno nemaju.
@@ -176,7 +177,7 @@ $(BIN)/tests.exe: $(TEST_OBJS) | $(BIN)
 #
 # Zavislost na resource.h sa pise rucne: -MMD generuje gcc, nie windres, takze
 # zmena identifikatora by sa inak neprejavila az do `make clean`.
-$(BUILD)/ui/app.res.o: src/ui/resource.h src/app_name.h $(VERSION_H)
+$(BUILD)/ui/app.res.o: src/ui/resource.h src/ui/app.manifest src/app_name.h $(VERSION_H)
 
 # Hlavicka s verziou sa prepisuje pri kazdom behu, ale subor sa vymeni LEN
 # ked sa obsah zmenil.  Make po recepte cas suboru preveri znova, takze

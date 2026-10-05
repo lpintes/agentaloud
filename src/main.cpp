@@ -14,7 +14,11 @@
 
 #include "app_name.h"
 #include "arguments.h"
+#include "model/utf.h"
 #include "settings.h"
+#include "update.h"
+#include "updater.h"
+#include "version.h"
 // Generated from git describe into build/ -- see the Makefile.
 #include "app_version.h"
 #include "proto/claude/claude_backend.h"
@@ -92,6 +96,63 @@ app::Settings ReadSettings(const std::wstring& file) {
   return settings;
 }
 
+// A failed save is not said: the check runs before anything else on every
+// start, and a complaint about a file at that moment would be about something
+// the reader did not do.  What it costs is a check again tomorrow -- or a
+// skipped version offered once more.
+void SaveSettings(const std::wstring& file, const app::Settings& settings) {
+  std::wstring error;
+  if (!file.empty()) win::WriteFileBytes(file, settings.Serialize(), &error);
+}
+
+// The automatic update check (claude-gui-lkk.53).  Before the folder picker
+// and before the session, so taking an update is only swapping files and
+// starting again: no CLI runs yet, and the reader is not asked for a folder
+// twice.  True means the new version has been started and this process
+// should leave.
+//
+// The answer is remembered only when there was one.  A network that is down
+// or slow tries again at the next start rather than tomorrow -- the cap of
+// three seconds is what keeps that cheap.
+bool UpdateBeforeStart(app::Settings& settings, const std::wstring& file) {
+  if (!settings.CheckUpdates()) return false;
+  const std::wstring today = updater::Today();
+  const std::wstring last =
+      model::Utf16FromUtf8(settings.Get(app::kLastUpdateCheckKey));
+  if (!update::CheckDue(last, today)) return false;
+
+  const updater::Latest latest = updater::FetchLatestWithin(3000);
+  if (latest.kind == updater::Latest::Kind::kFailed) return false;
+  settings.Set(app::kLastUpdateCheckKey, model::Utf8FromUtf16(today));
+  SaveSettings(file, settings);
+
+  if (latest.kind != updater::Latest::Kind::kFound) return false;
+  const std::wstring skipped =
+      model::Utf16FromUtf8(settings.Get(app::kSkippedVersionKey));
+  if (!update::ShouldOffer(version::Parse(version::Current()), latest.tag,
+                           skipped)) {
+    return false;
+  }
+  switch (updater::AskToUpdate(nullptr, latest.tag, /*restartsItself=*/true)) {
+    case updater::Choice::kSkip: {
+      // Without the v: the key says a version, not a tag.
+      const std::wstring bare =
+          latest.tag.starts_with(L'v') ? latest.tag.substr(1) : latest.tag;
+      settings.Set(app::kSkippedVersionKey, model::Utf8FromUtf16(bare));
+      SaveSettings(file, settings);
+      return false;
+    }
+    case updater::Choice::kLater:
+      return false;
+    case updater::Choice::kUpdate:
+      // A failure has been said by the updater; the start then goes on with
+      // the version there is.
+      return updater::DownloadAndInstall(nullptr, latest.tag, true) ==
+             updater::Installed::kRestarted;
+  }
+  return false;
+}
+
 std::vector<std::wstring> CommandLineWords() {
   std::vector<std::wstring> words;
   int argc = 0;
@@ -140,7 +201,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   // typed.  A file with a bad line is not applied at all -- half a file is a
   // setting nobody wrote.
   const std::wstring settingsFile = SettingsFile();
-  const app::Settings settings = ReadSettings(settingsFile);
+  app::Settings settings = ReadSettings(settingsFile);
   if (settings.error().empty()) app::ApplySettings(&arguments, settings);
   app::CheckBackend(&arguments, kBackends);
   // Made now, before the folder picker: its capabilities are what the mode is
@@ -202,6 +263,13 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     }
     CoUninitialize();
     return 2;
+  }
+  // A previous update's folders go first, so they are gone whether or not this
+  // start checks; then the check, which may end this process.
+  updater::RemoveLeftover();
+  if (UpdateBeforeStart(settings, settingsFile)) {
+    CoUninitialize();
+    return 0;
   }
   // After the checks, or --help typed on its own -- or a refused option --
   // would be answered with a dialog asking which project.

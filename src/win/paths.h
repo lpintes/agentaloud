@@ -20,6 +20,13 @@ std::wstring RoamingAppData();
 // when it does not exist -- the caller decides whether that is a problem.
 bool ReadFileBytes(const std::wstring& path, std::string* out);
 
+// Writes the whole file or nothing: into "<path>.tmp" first, then over the
+// old one in a single rename, so a failure halfway -- a full disk, a crash --
+// cannot leave a file cut short where a whole one was.  The folder is created
+// when it is missing, one level only.  False and the reason otherwise.
+bool WriteFileBytes(const std::wstring& path, const std::string& bytes,
+                    std::wstring* error);
+
 }  // namespace win
 
 #endif
