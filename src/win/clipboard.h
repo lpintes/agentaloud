@@ -5,7 +5,7 @@
 // ownership rule that is easy to get wrong: after SetClipboardData the block
 // belongs to the clipboard and must NOT be freed here.
 //
-// Nothing in win/ knows about the emulator.
+// Nothing in win/ knows about AgentAloud.
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>

@@ -1,7 +1,7 @@
-# Zostavenie AgentAloud.  Vzor prevzaty z c:/b/eureka-a4/Makefile aj s jeho
-# poucenim: gcc -MMD vypise vedla kazdeho .o subor .d so zoznamom hlaviciek
-# a make podla neho prelozi presne to, co treba.  Zastaraly objekt tak
-# nevznikne a nemusi sa tomu predchadzat prekladom vsetkeho.
+# Zostavenie AgentAloud.  Zaklad je gcc -MMD: vypise vedla kazdeho .o subor
+# .d so zoznamom hlaviciek a make podla neho prelozi presne to, co treba.
+# Zastaraly objekt tak nevznikne a nemusi sa tomu predchadzat prekladom
+# vsetkeho.
 #
 # POZOR 1: make si shell vyberie podla PATH -- z cmd.exe je to cmd, z bashu
 # sh.exe.  Recepty preto nesmu pouzivat nic, co je len v jednom z nich:
@@ -86,7 +86,7 @@ VERSION_H := $(BUILD)/app_version.h
 
 # Nezavisle na AgentAloud, da sa vziat do ineho projektu tak ako je.
 WIN_SRCS   := src/win/window.cpp src/win/dialog.cpp src/win/process.cpp \
-              src/win/clipboard.cpp src/win/console.cpp
+              src/win/clipboard.cpp src/win/console.cpp src/win/paths.cpp
 # Port: co appka od coding agenta potrebuje, bez ohladu na to, ktore CLI to
 # je.  Len std typy, ziadny JSON a ziadne windows.h.
 AGENT_SRCS := src/agent/backend.cpp
@@ -109,8 +109,9 @@ PROTO_SRCS := $(PROTO_PURE_SRCS) src/proto/claude/session.cpp \
               src/proto/claude/claude_backend.cpp \
               src/proto/codex/codex_backend.cpp
 
-# Prikazovy riadok appky: ciste pravidla bez windows.h, aby ich testy videli.
-APP_PURE_SRCS := src/arguments.cpp
+# Prikazovy riadok a subor nastaveni: ciste pravidla bez windows.h, aby ich
+# testy videli.
+APP_PURE_SRCS := src/arguments.cpp src/settings.cpp
 
 # Transkript a jeho mapa rozsahov.  Nevie o windows.h, a prave preto sa da
 # testovat bez okna -- co je vacsina toho, preco maju tie testy cenu.

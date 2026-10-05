@@ -8,11 +8,13 @@
 #include <objbase.h>
 #include <shellapi.h>
 
+#include <map>
 #include <string>
 #include <vector>
 
 #include "app_name.h"
 #include "arguments.h"
+#include "settings.h"
 // Generated from git describe into build/ -- see the Makefile.
 #include "app_version.h"
 #include "proto/claude/claude_backend.h"
@@ -20,6 +22,7 @@
 #include "ui/main_window.h"
 #include "win/console.h"
 #include "win/dialog.h"
+#include "win/paths.h"
 
 namespace {
 
@@ -54,6 +57,39 @@ std::wstring Expand(const std::wstring& path) {
   if (written == 0 || written >= needed) return path;
   full.resize(written);
   return full;
+}
+
+// A `config` folder beside the .exe when there is one, %APPDATA%\AgentAloud
+// otherwise.  A folder and not a file, because portable mode has to be a
+// deliberate act: an unpacked archive can leave a stray file behind, and a
+// mode that switches itself on unnoticed is exactly the silent state this
+// project keeps getting caught by.  Never created here, for the same reason --
+// and nothing writes into it yet, so there is nothing to create it for.
+// Empty when the shell will not say where roaming data goes.
+std::wstring SettingsFile() {
+  const std::wstring portable = win::ExecutableDirectory() + L"\\config";
+  const DWORD attributes = GetFileAttributesW(portable.c_str());
+  if (attributes != INVALID_FILE_ATTRIBUTES &&
+      (attributes & FILE_ATTRIBUTE_DIRECTORY)) {
+    return portable + L"\\settings.txt";
+  }
+  const std::wstring roaming = win::RoamingAppData();
+  if (roaming.empty()) return {};
+  return roaming + L"\\" APP_NAME L"\\settings.txt";
+}
+
+// A file that is not there is no settings at all, which is how every first
+// run starts; a file that is there is checked against every backend.
+app::Settings ReadSettings(const std::wstring& file) {
+  std::string bytes;
+  if (file.empty() || !win::ReadFileBytes(file, &bytes)) return {};
+  app::Settings settings = app::Settings::Parse(bytes);
+  std::map<std::string, agent::Capabilities> backends;
+  for (const std::string& name : kBackends) {
+    backends[name] = MakeBackend(name)->capabilities();
+  }
+  settings.Check(backends);
+  return settings;
 }
 
 std::vector<std::wstring> CommandLineWords() {
@@ -99,6 +135,13 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   // --help must end without a window ever existing -- and Msftedit.dll below
   // is the first thing that would put one on screen if it failed.
   app::Arguments arguments = app::Parse(CommandLineWords());
+  // Between Parse and the checks: what the file says fills in only what the
+  // line left out, and then goes through the same checks as if it had been
+  // typed.  A file with a bad line is not applied at all -- half a file is a
+  // setting nobody wrote.
+  const std::wstring settingsFile = SettingsFile();
+  const app::Settings settings = ReadSettings(settingsFile);
+  if (settings.error().empty()) app::ApplySettings(&arguments, settings);
   app::CheckBackend(&arguments, kBackends);
   // Made now, before the folder picker: its capabilities are what the mode is
   // checked against, and a refused mode must not be answered with "which
@@ -113,8 +156,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     // which means Explorer or a shortcut.  AllocConsole would be worse -- the
     // window it makes dies with the process, so the text would appear and
     // vanish, which is the same as not printing it.
-    const std::wstring help = app::HelpText(
-        kVersion, kBackends, MakeBackend(app::kDefaultBackend)->capabilities());
+    const std::wstring help =
+        app::HelpText(kVersion, kBackends,
+                      MakeBackend(app::kDefaultBackend)->capabilities(),
+                      settingsFile);
     if (!win::WriteToParentConsole(help)) {
       MessageBoxW(nullptr, help.c_str(), L"" APP_NAME L" — nápoveda",
                   MB_OK | MB_ICONINFORMATION);
@@ -138,6 +183,20 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     const std::wstring text =
         L"" APP_NAME L": " + arguments.error + L".\n" +
         L"Zoznam volieb vypíše " APP_NAME L" --help.\n";
+    if (!win::WriteToParentConsole(text)) {
+      MessageBoxW(nullptr, text.c_str(), L"" APP_NAME, MB_OK | MB_ICONERROR);
+    }
+    CoUninitialize();
+    return 2;
+  }
+  // Refused, not skipped, and out the same way as a bad option: the file was
+  // written by hand for a reason, and a session started without it would be
+  // the wrong mode with nothing said about why.  The file is named in full --
+  // the reader has to open it, and %APPDATA% is not a place anyone finds by
+  // guessing.
+  if (!settings.error().empty()) {
+    const std::wstring text = L"" APP_NAME L": nastavenia " + settingsFile +
+                              L", " + settings.error() + L".\n";
     if (!win::WriteToParentConsole(text)) {
       MessageBoxW(nullptr, text.c_str(), L"" APP_NAME, MB_OK | MB_ICONERROR);
     }

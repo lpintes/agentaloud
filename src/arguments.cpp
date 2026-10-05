@@ -148,7 +148,8 @@ void CheckMode(Arguments* arguments, const agent::Capabilities& capabilities) {
 // to the ones it does not, because that is the failure nobody would guess.
 std::wstring HelpText(const std::wstring& version,
                       const std::vector<std::string>& backends,
-                      const agent::Capabilities& defaultBackend) {
+                      const agent::Capabilities& defaultBackend,
+                      const std::wstring& settingsFile) {
   std::wstring modes;
   for (const agent::Mode& mode : defaultBackend.modes) {
     modes += L"        " + Wide(mode.id) + L" — " + Wide(mode.label) + L"\n";
@@ -211,6 +212,20 @@ std::wstring HelpText(const std::wstring& version,
       L"ju chce poslať CLI, napíše ju za --.  Priečinok projektu je prvý\n"
       L"argument pred --, ktorý sa nezačína pomlčkou, takže priečinok\n"
       L"s pomlčkou na začiatku mena sa takto zadať nedá.\n"
+      L"\n"
+      L"Nastavenia:\n"
+      L"  " + (settingsFile.empty() ? std::wstring(L"(priečinok sa nedá zistiť)")
+                                    : settingsFile) + L"\n"
+      L"  Kým nie je dialóg nastavení, súbor sa píše ručne.  Riadok je\n"
+      L"  kľúč=hodnota, # začína poznámku:\n"
+      L"      backend=codex\n"
+      L"      claude.permission-mode=auto\n"
+      L"      claude.model=opus\n"
+      L"      codex.permission-mode=plan\n"
+      L"  Platí to, čo nepovie príkazový riadok.  Neznámy kľúč alebo režim\n"
+      L"  " APP_NAME L" odmietne a povie riadok, rovnako ako neznámu voľbu.\n"
+      L"  Priečinok config vedľa " APP_EXE L", keď existuje, sa použije\n"
+      L"  namiesto toho v %APPDATA%.\n"
       L"\n"
       L"Čo vie klávesnica, povie " APP_NAME L" sám: F1 vypíše všetky klávesy, F2\n"
       L"podrobnosti session a F4 otvorí zoznam slash príkazov.\n";

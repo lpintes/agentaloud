@@ -78,13 +78,15 @@ Arguments Parse(const std::vector<std::wstring>& words);
 void CheckBackend(Arguments* arguments, const std::vector<std::string>& known);
 void CheckMode(Arguments* arguments, const agent::Capabilities& capabilities);
 
-// The help, filled in from what is true: the version, the backends there are
-// and the modes of the default one.  The version comes in from main.cpp, the
+// The help, filled in from what is true: the version, the backends there are,
+// the modes of the default one and where the settings file is looked for --
+// %APPDATA% is not a place anyone finds by guessing.  The version comes in from main.cpp, the
 // one file that includes the header generated from git describe -- were it
 // included here, the tests would be relinked by every commit.
 std::wstring HelpText(const std::wstring& version,
                       const std::vector<std::string>& backends,
-                      const agent::Capabilities& defaultBackend);
+                      const agent::Capabilities& defaultBackend,
+                      const std::wstring& settingsFile);
 
 }  // namespace app
 

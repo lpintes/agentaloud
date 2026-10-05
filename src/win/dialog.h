@@ -13,7 +13,7 @@
 //   * The layout is in dialog units in the .rc, so no coordinate is computed
 //     here and the whole thing scales with the dialog font.
 //
-// Nothing in win/ knows about the emulator.
+// Nothing in win/ knows about AgentAloud.
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>

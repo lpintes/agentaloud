@@ -7,7 +7,7 @@
 // because the code that needs this most -- the keyboard -- wants the message,
 // not somebody's interpretation of it.
 //
-// Nothing in win/ knows about the emulator, so it can be lifted into another
+// Nothing in win/ knows about AgentAloud, so it can be lifted into another
 // project as it stands.
 
 #define WIN32_LEAN_AND_MEAN
@@ -56,10 +56,10 @@ class Window {
   std::unordered_map<int, std::function<void()>> commands_;
 };
 
-// GetMessage, not PeekMessage: nothing is paced by this loop any more.  The
-// emulator runs on its own thread precisely so that a dropped-down menu or a
-// modal dialog -- each of which spins its own message loop in here -- cannot
-// stop the machine and dry the sound out.
+// GetMessage, not PeekMessage: nothing is paced by this loop.  Whatever has to
+// keep going runs on its own thread, so that a dropped-down menu or a modal
+// dialog -- each of which spins its own message loop in here -- cannot stall
+// it.
 //
 // Two tables rather than one, asked about per message: `always` is in force
 // whatever the window is doing, `conditional` only while `conditionalActive`

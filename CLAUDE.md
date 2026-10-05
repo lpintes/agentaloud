@@ -293,7 +293,7 @@ pozná `HWND`.**
 
 | Vrstva | Obsah | Nesmie vedieť |
 |---|---|---|
-| `src/win/` | `window`, `dialog` (prevzaté z `c:/b/eureka-a4`), `process` | čo je na druhom konci rúr |
+| `src/win/` | `window`, `dialog`, `process`, `paths` | čo je na druhom konci rúr |
 | `src/agent/` | port: `events` (udalosti), `backend` (rozhranie, `Capabilities`) | ktoré CLI beží; JSON; `windows.h` |
 | `src/proto/` | `jsonl` (spoločné) a adaptér na CLI v podadresári: `claude/` (`session`, `translate`, `claude_backend` …) | ako sa transkript zobrazuje |
 | `src/model/` | `transcript`, `bookmarks`, `history` | že existuje RichEdit; **ktoré CLI beží** |
@@ -1217,6 +1217,45 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     modelu, ktorý beží. F2 k modelu pripíše „zvolený opusplan", keď zvolené
     meno v modeli nie je — je to jediné miesto, ktoré povie, že sa model mimo
     `plan` zmení.
+
+22. **Nastavenie mení len výslovný úkon, nie vedľajší účinok — a zlý riadok
+    sa odmietne.** `%APPDATA%\AgentAloud\settings.txt`, alebo `config\settings.txt`
+    vedľa `.exe`, keď ten priečinok existuje (prenosný režim; appka ho nikdy
+    nevytvára, lebo zapnúť sa má vedome). Kľúče sú anglické a ploché,
+    s backendom ako prefixom: `backend`, `claude.permission-mode`,
+    `codex.model`. Prefix nie je kozmetika — slová režimov sa medzi CLI líšia
+    a `auto` znamená u každého niečo iné (claude-gui-lkk.55).
+
+    **Shift+Tab sa neukladá.** Mení bežiacu session a nič viac. Režim
+    zapamätaný za čitateľovým chrbtom by preniesol jedno stlačenie navyše —
+    `plan` — do každej ďalšej session, ticho. Zapisovať sa do súboru bude —
+    dialóg nastavení (po lokalizácii, claude-gui-lkk.52) a stav aktualizácií
+    (claude-gui-lkk.53) —, ale vždy tak, že **riadky, ktoré zápis nemení,
+    zostanú, ako boli**, vrátane poznámok a poradia: súbor sa dá písať aj
+    ručne a zápis, ktorý by ho prepísal celý, by ticho zmazal, čo doň niekto
+    napísal. Dnes appka zatiaľ nezapisuje nič.
+
+    Prednosť je **príkazový riadok > súbor > zabudovaná hodnota**
+    (`app::ApplySettings` medzi `Parse` a `CheckBackend`) a režim aj model sa
+    berú pre backend, ktorý naozaj pobeží. Hodnota zo súboru potom prejde tými
+    istými kontrolami, ako keby bola napísaná.
+
+    **Zlý riadok sa nepreskočí, odmietne sa** — neznámy kľúč (aj s prázdnou
+    hodnotou), režim, ktorý backend toho riadku nepozná, kľúč dvakrát.
+    Preskočený preklep vyzerá presne ako nastavenie, ktoré nikto neurobil, a
+    čitateľ sa potom pýta, prečo session beží v zlom režime. Odmietnutie ide
+    tou istou cestou ako neznáma voľba (invariant 16): celá cesta k súboru,
+    číslo riadku, kód 2. Kontrolujú sa riadky **všetkých** backendov, nielen
+    zvoleného, inak by preklep v `codex.` čakal na deň, keď sa Codex použije.
+    Chýbajúci súbor nie je chyba — prvé spustenie žiadny nemá.
+
+    **`claude.permission-mode` prebije projektový `permissions.defaultMode`**
+    z `.claude/settings.json` aj `settings.local.json`, lebo appka ho posiela
+    ako `--permission-mode` a voľba vyhráva (odmerané
+    `tools/probe_mode_precedence.py`, CLI 2.1.288, 5. 10. 2026). Prijaté
+    vedome; nastavenia podľa projektu sú claude-gui-lkk.56. A pozor pri
+    meraní: s `--model haiku` sa `auto` ticho zmení na `default`, aj bez
+    akýchkoľvek nastavení.
 
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa

@@ -11,7 +11,7 @@
 // started from -- a redirection if there is one, otherwise the parent's
 // console -- and the process ends without ever creating a window.
 //
-// Nothing in win/ knows about the emulator.
+// Nothing in win/ knows about AgentAloud.
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>

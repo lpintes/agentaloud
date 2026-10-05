@@ -52,6 +52,7 @@
 #include "proto/claude/translate.h"
 #include "proto/codex/translate.h"
 #include "arguments.h"
+#include "settings.h"
 
 namespace {
 
@@ -825,13 +826,94 @@ void TestArguments() {
   CHECK(first.error.find(L"--bogus") != std::wstring::npos);
 
   // Napoveda hovori pravdu: kazdy rezim aj kazdy backend v nej je.
-  const std::wstring text = app::HelpText(L"2026.10.1", known, claude);
+  const std::wstring text =
+      app::HelpText(L"2026.10.1", known, claude, L"C:\\nastavenia\\settings.txt");
   CHECK(text.find(L"--backend") != std::wstring::npos);
+  // Kde sa subor nastaveni hlada, nikto neuhadne; napoveda to musi povedat.
+  CHECK(text.find(L"C:\\nastavenia\\settings.txt") != std::wstring::npos);
   CHECK(text.find(L"" APP_NAME L" 2026.10.1 ") == 0);
   CHECK(text.find(L"--version") != std::wstring::npos);
   for (const agent::Mode& mode : claude.modes) {
     CHECK(text.find(model::Utf16FromUtf8(mode.id)) != std::wstring::npos);
   }
+}
+
+// Subor nastaveni (claude-gui-lkk.55).  Zly riadok sa odmieta, nie preskakuje:
+// preskoceny preklep vyzera presne ako nastavenie, ktore nikto neurobil.
+void TestSettings() {
+  TEST("nastavenia: format, kontrola proti backendom a prednost");
+  using W = std::vector<std::wstring>;
+  std::map<std::string, agent::Capabilities> backends;
+  backends["claude"] = proto::ClaudeCapabilities();
+  backends["codex"] = proto::codex::CodexCapabilities();
+
+  // BOM z Notepadu, CRLF, poznamky, medzery okolo = a prazdna hodnota.
+  app::Settings good = app::Settings::Parse(
+      "\xef\xbb\xbf# moje\r\n\r\nbackend = claude\r\n"
+      "claude.permission-mode=auto\r\nclaude.model=\r\n"
+      "codex.model=gpt-6-luna \xc4\x8d\r\n");
+  good.Check(backends);
+  CHECK(good.error().empty());
+  CHECK_EQ(good.Get("backend"), std::string("claude"));
+  CHECK_EQ(good.Get("claude.permission-mode"), std::string("auto"));
+  CHECK_EQ(good.Get("claude.model"), std::string());
+  CHECK_EQ(good.Get("codex.model"), std::string("gpt-6-luna \xc4\x8d"));
+  CHECK_EQ(good.Get("chyba"), std::string());
+  CHECK_EQ(good.entries().at("claude.permission-mode").line, 4);
+
+  auto errorOf = [&backends](const char* text) {
+    app::Settings settings = app::Settings::Parse(text);
+    settings.Check(backends);
+    return settings.error();
+  };
+  // Preklep v kluci, aj ked je hodnota prazdna.
+  CHECK(errorOf("claude.permision-mode=auto\n").find(L"riadok 1") == 0);
+  CHECK(!errorOf("claude.permision-mode=\n").empty());
+  CHECK(!errorOf("gemini.model=x\n").empty());
+  CHECK(!errorOf("permission-mode=auto\n").empty());
+  CHECK(!errorOf("bez rovnasa\n").empty());
+  CHECK(!errorOf("=hodnota\n").empty());
+  // Rezim sa overuje proti backendu, ktoremu riadok patri -- aj ked bezi iny.
+  const std::wstring mode = errorOf("backend=claude\ncodex.permission-mode=acceptEdits\n");
+  CHECK(mode.find(L"riadok 2") == 0);
+  CHECK(mode.find(L"acceptEdits") != std::wstring::npos);
+  CHECK(errorOf("codex.permission-mode=plan\nclaude.permission-mode=plan\n").empty());
+  CHECK(errorOf("backend=gemini\n").find(L"claude") != std::wstring::npos);
+  // Dvakrat ten isty kluc: hlasi sa druhy riadok a meno prveho.
+  const std::wstring twice = errorOf("claude.model=a\n# x\nclaude.model=b\n");
+  CHECK(twice.find(L"riadok 3") == 0);
+  CHECK(twice.find(L"riadku 1") != std::wstring::npos);
+  // Prva chyba sa nepreplaca dalsou.
+  CHECK(errorOf("x\ny\n").find(L"riadok 1") == 0);
+
+  // Prednost: prikazovy riadok > subor > zabudovane.  Rezim a model sa beru
+  // pre backend, ktory naozaj pobezi, nech ho povedal ktokolvek.
+  const app::Settings file = app::Settings::Parse(
+      "claude.permission-mode=auto\nclaude.model=opus\n"
+      "codex.permission-mode=plan\n");
+  app::Arguments none = app::Parse(W{L"."});
+  app::ApplySettings(&none, file);
+  CHECK(none.backend.empty());  // predvoleny dopise CheckBackend
+  CHECK_EQ(none.permissionMode, std::wstring(L"auto"));
+  CHECK_EQ(none.model, std::wstring(L"opus"));
+  app::Arguments typed =
+      app::Parse(W{L"--permission-mode", L"plan", L"--model", L"haiku", L"."});
+  app::ApplySettings(&typed, file);
+  CHECK_EQ(typed.permissionMode, std::wstring(L"plan"));
+  CHECK_EQ(typed.model, std::wstring(L"haiku"));
+  app::Arguments codex = app::Parse(W{L"--backend", L"codex", L"."});
+  app::ApplySettings(&codex, file);
+  CHECK_EQ(codex.permissionMode, std::wstring(L"plan"));
+  CHECK(codex.model.empty());
+  app::Arguments chosen = app::Parse(W{L"."});
+  app::ApplySettings(&chosen,
+                     app::Settings::Parse("backend=codex\ncodex.permission-mode=plan\n"));
+  CHECK_EQ(chosen.backend, std::string("codex"));
+  CHECK_EQ(chosen.permissionMode, std::wstring(L"plan"));
+  // Rezim zo suboru prejde tou istou kontrolou ako napisany.
+  app::CheckBackend(&chosen, {"claude", "codex"});
+  app::CheckMode(&chosen, backends["codex"]);
+  CHECK(chosen.error.empty());
 }
 
 void TestPermissionModeSwitch() {
@@ -2813,6 +2895,7 @@ int main(int argc, char** argv) {
   TestPermissionModeSwitch();
   TestPortModeCycleMatchesClaude();
   TestArguments();
+  TestSettings();
   TestPermissionModeReports();
   TestPermissionModeTracker();
   TestAnsweringModel();
