@@ -254,8 +254,9 @@ beží pri každom pushi do main a pri PR: Windows, msys2 **UCRT64**, ten istý
 `./build.sh all` a `./build.sh check` ako lokálne, a varovanie prekladača je
 chyba. `vydanie.yml` dopočíta číslo `vRRRR.M.N`, zavolá `zostavenie.yml` so
 značkou, overí, že EXE nesie tú istú verziu, a až potom značku a vydanie
-zverejní. Balík: `agentaloud.exe`, `nvdaControllerClient.dll`, `LICENSE.txt`
-a licencia DLL ako `nvdaControllerClient-LICENSE.txt`.
+zverejní. Balík: `agentaloud.exe`, `nvdaControllerClient.dll`, `LICENSE.txt`,
+licencia DLL ako `nvdaControllerClient-LICENSE.txt` a `README.md` ako
+`README.txt` (dvojklik na `.md` sa na Windows pýta, čím ho otvoriť).
 
 **Verzia nie je napísaná nikde** — dáva ju `git describe` (Makefile →
 `build/app_version.h` → VERSIONINFO, `--version`, nápoveda). Mimo

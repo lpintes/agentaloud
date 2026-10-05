@@ -99,7 +99,9 @@ jobs:
 
       # Vyslovny zoznam suborov, nie "zabal bin\": tam lezia aj testy a spike.
       # Licencia DLL ide pod vlastnym menom -- vedla LICENSE.txt projektu by
-      # mali dve rovnake mena.
+      # mali dve rovnake mena.  README ide ako .txt: .md nema na Windows istu
+      # asociaciu, takze dvojklik by sa pytal, cim ho otvorit, kym .txt otvori
+      # Notepad.  Markdown je citatelny aj tak.
       - name: Balík
         shell: pwsh
         run: |
@@ -108,6 +110,7 @@ jobs:
           New-Item -ItemType Directory -Force $stage | Out-Null
           Copy-Item vydanie\agentaloud.exe, vydanie\nvdaControllerClient.dll, LICENSE.txt $stage
           Copy-Item vendor\nvda\LICENSE.txt "$stage\nvdaControllerClient-LICENSE.txt"
+          Copy-Item README.md "$stage\README.txt"
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           [IO.Compression.ZipFile]::CreateFromDirectory((Resolve-Path balik).Path,
               "$PWD\vydanie\$name.zip")
