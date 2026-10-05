@@ -14,6 +14,7 @@
 #define IDD_PERMISSION      102
 #define IDD_COMMANDS        103
 #define IDD_KEYS            104
+#define IDD_NEW_SESSION     105
 
 #define IDC_DETAILS_ID          1000
 #define IDC_DETAILS_MODEL       1001
@@ -79,5 +80,15 @@
 // and no state to keep.  See ui/keys_dialog.h.
 #define IDC_KEYS_TEXT           1090
 #define IDC_KEYS_TEXT_LABEL     1091
+
+// Nová session.  See ui/new_session_dialog.h.
+#define IDC_NEW_BACKEND         1100
+#define IDC_NEW_MODEL           1101
+#define IDC_NEW_PROJECT         1102
+#define IDC_NEW_BROWSE          1103
+
+#define IDC_NEW_BACKEND_LABEL   1110
+#define IDC_NEW_MODEL_LABEL     1111
+#define IDC_NEW_PROJECT_LABEL   1112
 
 #endif

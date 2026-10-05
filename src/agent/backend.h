@@ -61,6 +61,11 @@ struct Capabilities {
   bool resume = false;
   // A permission request can be answered "yes, and stop asking about this".
   bool allowForSession = false;
+  // Model names to offer before anything has started -- suggestions, not the
+  // list of what the CLI takes: a full model id is always accepted too, and
+  // an alias the CLI adds tomorrow must not be refused today.  Empty when the
+  // adapter knows none without asking a running process.
+  std::vector<std::string> models;
 };
 
 // The next mode in the cycle, or empty when `current` is empty -- the mode is

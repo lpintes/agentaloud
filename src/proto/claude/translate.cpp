@@ -415,6 +415,11 @@ agent::Capabilities ClaudeCapabilities() {
   capabilities.slashCommands = true;
   capabilities.resume = true;
   capabilities.allowForSession = false;
+  // The aliases --help names, plus opusplan.  Aliases rather than ids
+  // because they follow the newest model on their own; the list that is
+  // true for the account comes only with the initialize answer, which is
+  // too late for choosing what to start.
+  capabilities.models = {"sonnet", "opus", "haiku", "opusplan"};
   return capabilities;
 }
 

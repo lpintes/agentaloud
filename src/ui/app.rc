@@ -211,3 +211,32 @@ BEGIN
 
     DEFPUSHBUTTON   "&Zavrieť", IDCANCEL, 256, 256, 56, 14
 END
+
+// Nová session.  The model is an editable combo box, not a list: what the
+// adapter offers are suggestions, and a full model id has to be typable.
+// Its label says what empty means, because "editable, blank" read aloud
+// cannot be told apart from a field that was forgotten.
+//
+// Spustiť is the default button: the fields come filled in from the command
+// line and the settings file, so Enter on the first field is the common case.
+IDD_NEW_SESSION DIALOGEX 0, 0, 300, 88
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION APP_NAME " — nová session"
+FONT 9, "Segoe UI", 400, 0, 1
+BEGIN
+    LTEXT           "&Backend:", IDC_NEW_BACKEND_LABEL, 8, 10, 104, 8
+    COMBOBOX        IDC_NEW_BACKEND, 116, 8, 176, 60,
+                    CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+
+    LTEXT           "&Model (prázdny = predvolený):", IDC_NEW_MODEL_LABEL,
+                    8, 28, 104, 8
+    COMBOBOX        IDC_NEW_MODEL, 116, 26, 176, 80,
+                    CBS_DROPDOWN | CBS_AUTOHSCROLL | WS_VSCROLL | WS_TABSTOP
+
+    LTEXT           "&Priečinok:", IDC_NEW_PROJECT_LABEL, 8, 46, 104, 8
+    EDITTEXT        IDC_NEW_PROJECT, 116, 44, 120, 12, ES_AUTOHSCROLL
+    PUSHBUTTON      "&Vybrať…", IDC_NEW_BROWSE, 240, 43, 52, 14
+
+    DEFPUSHBUTTON   "&Spustiť", IDOK, 176, 66, 56, 14
+    PUSHBUTTON      "&Zrušiť", IDCANCEL, 236, 66, 56, 14
+END

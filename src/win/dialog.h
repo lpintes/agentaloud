@@ -67,8 +67,10 @@ class Dialog {
 
 // The shell's own folder picker.  Returns an empty string when cancelled,
 // which is an answer and not an error.  Requires COM to be initialised on the
-// calling thread.
-std::wstring PickFolder(HWND owner, const wchar_t* title);
+// calling thread.  `initial`, when it names a folder, is where the picker
+// opens; otherwise it opens wherever the shell last left it.
+std::wstring PickFolder(HWND owner, const wchar_t* title,
+                        const std::wstring& initial = {});
 
 // The same, but for choosing where something is to be *written*: the folder
 // named need not exist yet, and the caller creates it.  The picker above

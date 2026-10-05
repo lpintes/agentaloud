@@ -78,7 +78,8 @@ void Dialog::SetEnabled(int id, bool on) const {
   if (const HWND item = Item(id)) EnableWindow(item, on ? TRUE : FALSE);
 }
 
-std::wstring PickFolder(HWND owner, const wchar_t* title) {
+std::wstring PickFolder(HWND owner, const wchar_t* title,
+                        const std::wstring& initial) {
   IFileOpenDialog* dialog = nullptr;
   if (FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr,
                               CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog))))
@@ -88,6 +89,16 @@ std::wstring PickFolder(HWND owner, const wchar_t* title) {
   dialog->SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM |
                      FOS_PATHMUSTEXIST);
   dialog->SetTitle(title);
+  // SetFolder, not SetDefaultFolder: the default yields to the folder the
+  // shell remembers, and the path typed beside the button is the newer word.
+  if (!initial.empty()) {
+    IShellItem* folder = nullptr;
+    if (SUCCEEDED(SHCreateItemFromParsingName(initial.c_str(), nullptr,
+                                              IID_PPV_ARGS(&folder)))) {
+      dialog->SetFolder(folder);
+      folder->Release();
+    }
+  }
   std::wstring result;
   if (SUCCEEDED(dialog->Show(owner))) {
     IShellItem* item = nullptr;

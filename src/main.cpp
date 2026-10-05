@@ -24,6 +24,8 @@
 #include "proto/claude/claude_backend.h"
 #include "proto/codex/codex_backend.h"
 #include "ui/main_window.h"
+#include "ui/new_session_dialog.h"
+#include "ui/resource.h"
 #include "win/console.h"
 #include "win/dialog.h"
 #include "win/paths.h"
@@ -196,6 +198,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   // --help must end without a window ever existing -- and Msftedit.dll below
   // is the first thing that would put one on screen if it failed.
   app::Arguments arguments = app::Parse(CommandLineWords());
+  // Kept as typed: Nová session may choose another backend, and then the
+  // file's mode and model have to be read again for that one, under what the
+  // line said and not under what the file said for the first.
+  const app::Arguments typed = arguments;
   // Between Parse and the checks: what the file says fills in only what the
   // line left out, and then goes through the same checks as if it had been
   // typed.  A file with a bad line is not applied at all -- half a file is a
@@ -274,9 +280,43 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   // After the checks, or --help typed on its own -- or a refused option --
   // would be answered with a dialog asking which project.
   if (arguments.project.empty()) {
-    arguments.project = win::PickFolder(nullptr, L"Vyberte priečinok projektu");
+    ui::NewSession choice;
+    choice.backend = arguments.backend;
+    for (const std::string& name : kBackends) {
+      ui::NewSessionBackend entry;
+      entry.name = name;
+      entry.models = MakeBackend(name)->capabilities().models;
+      entry.model = !typed.model.empty()
+                        ? typed.model
+                        : model::Utf16FromUtf8(settings.Get(
+                              name + "." + app::kModelKey));
+      choice.backends.push_back(std::move(entry));
+    }
+    ui::NewSessionDialog dialog(&choice);
+    if (dialog.ShowModal(nullptr, IDD_NEW_SESSION) != IDOK) {
+      CoUninitialize();
+      return 0;  // cancelled, which is an answer
+    }
+    // The file read again for the backend chosen, then the model overwritten
+    // with the field: an emptied field means the CLI's default, and
+    // ApplySettings would fill it back in.
+    arguments.backend = choice.backend;
+    arguments.permissionMode = typed.permissionMode;
+    app::ApplySettings(&arguments, settings);
+    arguments.model = choice.model;
+    arguments.project = choice.project;
+    backend = MakeBackend(arguments.backend);
+    app::CheckMode(&arguments, backend->capabilities());
+    // Only a mode typed for one backend and refused by the other gets here.
+    // A dialog, because the console this was started from -- if any -- has
+    // been left behind by a dialog in between.
+    if (!arguments.error.empty()) {
+      const std::wstring text = L"" APP_NAME L": " + arguments.error + L".";
+      MessageBoxW(nullptr, text.c_str(), L"" APP_NAME, MB_OK | MB_ICONERROR);
+      CoUninitialize();
+      return 2;
+    }
   }
-  if (arguments.project.empty()) return 0;  // cancelled, which is an answer
   // Expanded, because the folder is also what the list of conversations is
   // keyed by for -c, and "." is not a key.
   arguments.project = Expand(arguments.project);
