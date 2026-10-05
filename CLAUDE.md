@@ -58,15 +58,25 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 <!-- END BEADS INTEGRATION -->
 
 
-## ClaudeLens
+## AgentAloud
 
-Natívne Win32 GUI v C++, ktoré nahrádza terminál ako rozhranie ku Claude Code.
-Primárne pre autora, sekundárne pre nevidiacich používateľov NVDA. Terminál je
-principiálne zlé rozhranie pre konverzáciu so štruktúrou — je to jeden plochý
-buffer bez sémantiky.
+Natívne Win32 GUI v C++, ktoré nahrádza terminál ako rozhranie ku coding
+agentom (dnes Claude Code a Codex). Primárne pre autora, sekundárne pre
+nevidiacich používateľov NVDA. Terminál je principiálne zlé rozhranie pre
+konverzáciu so štruktúrou — je to jeden plochý buffer bez sémantiky.
 
-**Aplikácia sa volá ClaudeLens, adresár repozitára je `claude-gui`, pracovná
-vetva `main`.** Nie je to nekonzistencia, ktorú treba opraviť.
+**Aplikácia sa volá AgentAloud (`agentaloud.exe`), repozitár na GitHube
+`lpintes/agentaloud`, lokálny adresár `claude-gui`, prefix beads
+`claude-gui-…`, pracovná vetva `main`.** Rozdiel adresára a prefixu od mena nie
+je nekonzistencia, ktorú treba opraviť — sú to interné identifikátory.
+
+Do októbra 2026 sa appka volala **ClaudeLens**; premenovaná pred zverejnením
+(claude-gui-lkk.51), lebo backendy sú dva a „Claude" je ochranná známka.
+Meno je v kóde **jedno**, `src/app_name.h` (`APP_NAME`, `APP_EXE`), a C++ aj
+`.rc` ho skladajú z makra. **Fixtúry a sondy v `tools/` ho nesú po starom**
+(`claudelens-fixture-0000`, `claudelens_probe`) — je to záznam toho, čo sa
+vtedy poslalo, a zástupná cesta scrubbera musí sedieť s už zapísanými
+fixtúrami. Neopravovať.
 
 **Nereplikujeme terminál.** Komunikuje sa cez headless režim, ktorý posiela
 štruktúrované JSONL. Terminál ten istý dátový model iba vykresľuje; my ho
@@ -85,7 +95,7 @@ claude-gui-lkk` (epic) a `bd ready`.
 ./build.sh V=1 app   # ukecany vystup: aj cele prikazy prekladaca
 ```
 
-`check` **neprekladá appku**, iba testy — `bin/claudelens.exe` po ňom zostane
+`check` **neprekladá appku**, iba testy — `bin/agentaloud.exe` po ňom zostane
 taký, aký bol. Zelené testy teda nie sú dôkaz, že beží nový kód: appka spustená
 po samotnom `check` je stará a odskúšaš zmenu, ktorá v nej nie je. Poznať to
 podľa toho, že `LINK` vypíše len `bin/tests.exe`. Pred manuálnym odskúšaním
@@ -118,7 +128,7 @@ premennou a beží ručne:
 
 ```bash
 ls ~/.claude/projects/*/*.jsonl | xargs -d'\n' cygpath -m > /tmp/corpus.txt
-CLAUDELENS_CORPUS=/tmp/corpus.txt ./bin/tests.exe
+AGENTALOUD_CORPUS=/tmp/corpus.txt ./bin/tests.exe
 ```
 
 `cygpath -m` nie je kozmetika. Bash dáva cesty ako `/c/users/...`, natívny
@@ -231,7 +241,7 @@ dialógu zablokuje volajúci shell, kým sa dialóg nezavrie; na otvorenie dial�
 teda `PostMessage`.
 
 Testovaciu inštanciu zatváraj **podľa PID**, nikdy `taskkill /IM` — používateľ
-má vlastnú ClaudeLens spustenú.
+má vlastnú AgentAloud (či staršiu ClaudeLens) spustenú.
 
 ### Vydanie
 
@@ -244,11 +254,11 @@ beží pri každom pushi do main a pri PR: Windows, msys2 **UCRT64**, ten istý
 `./build.sh all` a `./build.sh check` ako lokálne, a varovanie prekladača je
 chyba. `vydanie.yml` dopočíta číslo `vRRRR.M.N`, zavolá `zostavenie.yml` so
 značkou, overí, že EXE nesie tú istú verziu, a až potom značku a vydanie
-zverejní. Balík: `claudelens.exe`, `nvdaControllerClient.dll`, `LICENSE.txt`
+zverejní. Balík: `agentaloud.exe`, `nvdaControllerClient.dll`, `LICENSE.txt`
 a licencia DLL ako `nvdaControllerClient-LICENSE.txt`.
 
 **Verzia nie je napísaná nikde** — dáva ju `git describe` (Makefile →
-`build/claudelens_version.h` → VERSIONINFO, `--version`, nápoveda). Mimo
+`build/app_version.h` → VERSIONINFO, `--version`, nápoveda). Mimo
 značky je to `0.0.0-<hash>` alebo `<značka>-N-g<hash>`, s `-dirty` pri
 necommitnutých zmenách. Hlavička sa prepíše len pri zmene obsahu, takže
 preklad bez nového commitu neprekladá nič.
@@ -806,7 +816,7 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
 15. **`-c` sa CLI neposiela; najnovšiu session si appka vyberie sama.** CLI
     odpovedá na otázku „ktorý rozhovor bol v tomto adresári posledný" z
     `~/.claude/history.jsonl`, a tam sa zapisuje **iba interaktívne napísaný
-    prompt**. Žiadna session ClaudeLens tam teda nie je ani jedna a `claude -c`
+    prompt**. Žiadna session AgentAloud tam teda nie je ani jedna a `claude -c`
     by pokračoval v poslednom **terminálovom** rozhovore a tváril sa, že je náš.
     Zoznam si preto robí `proto::sessions` zo súborov v
     `~/.claude/projects/<kľúč>/*.jsonl` — tie headless session píše rovnako ako
@@ -857,7 +867,7 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     (`win::WriteToParentConsole`):
 
       • **Štandardný výstup, keď nejaký je.** Presmerovanie musí byť prvé,
-        inak by `ClaudeLens --help > help.txt` napísalo na obrazovku a nechalo
+        inak by `agentaloud --help > help.txt` napísalo na obrazovku a nechalo
         prázdny súbor. Odmerané: cmd.exe aj powershell.exe odovzdajú GUI
         procesu svoje konzolové handle, takže v bežnom prípade sa končí tu.
       • **Konzola rodiča** cez `AttachConsole(ATTACH_PARENT_PROCESS)`, a keď
@@ -1210,7 +1220,7 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
 
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa
-rozídu, titulok okna sa zmení na **„ClaudeLens — NESÚLAD MAPY ROZSAHOV"**. Ak
+rozídu, titulok okna sa zmení na **„AgentAloud — NESÚLAD MAPY ROZSAHOV"**. Ak
 to niekedy uvidíš, neladí invariant 3, 4 alebo 8 a navigácia bude zameriavať
 zle. Raz sa to už stalo (6. 9. 2026) a bol to `NUL` z binárky — hľadaj teda
 najprv znak, ktorý widget spočíta inak než model, a hľadaj ho v poslednom
@@ -1237,7 +1247,7 @@ sa nás na nič nespýta. Prepínač je z `--help` vypadnutý, ale CLI ho prijí
   zahodiť **dvakrát** — raz ako klávesu, raz ako znak. Zlyháva ticho: pri
   odoslaní sa pole vyčistí, takže vložený znak vidno až vtedy, keď sa prompt
   neodošle.
-- **Dialógy sú z resource šablóny.** Šablóny v `src/ui/claudelens.rc`,
+- **Dialógy sú z resource šablóny.** Šablóny v `src/ui/app.rc`,
   identifikátory v `src/ui/resource.h`, `win::Dialog::ShowModal` berie id
   šablóny. Prečo skutočný dialóg a nie okno, ktoré tak vyzerá, je vo
   `win/dialog.h`. Hodnoty sú v nich **read-only editačné polia, nie statické
@@ -1282,5 +1292,5 @@ Bod 2 a 3 sú tie, ktoré sa vynechávajú, a sú to práve tie, ktoré rozhoduj
 o tom, či sa dá pokračovať zajtra.
 
 `CLAUDE.md` a `AGENTS.md` sú nezávislé súbory s odlišnou hlavičkou od beads,
-ale od nadpisu `## ClaudeLens` nižšie musia byť **zhodné** — Codex číta ten
+ale od nadpisu `## AgentAloud` nižšie musia byť **zhodné** — Codex číta ten
 druhý. Pri zmene tejto časti zrkadli do oboch a over `diff`om.

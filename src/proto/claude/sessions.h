@@ -11,7 +11,7 @@
 //
 // Why we make the list ourselves rather than let `claude -c` do it: the CLI's
 // own idea of "the last conversation" comes from ~/.claude/history.jsonl, and
-// only an interactively typed prompt is written there.  Every ClaudeLens
+// only an interactively typed prompt is written there.  Every AgentAloud
 // session is headless, so none of ours is in it -- `claude -c` would carry on
 // the last conversation held in a TERMINAL and call it ours.  The .jsonl files
 // have no such gap: a headless session writes one exactly like any other.

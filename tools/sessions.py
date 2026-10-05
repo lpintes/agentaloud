@@ -1,6 +1,6 @@
 """Vypise session daneho projektu -- aj tie, ktore 'claude --resume' zamlci.
 
-Session spustena headless ('claude -p', teda aj kazda z ClaudeLens) sa na disk
+Session spustena headless ('claude -p', teda aj kazda z AgentAloud) sa na disk
 zapisuje ako ktorakolvek ina, ale nie je z terminalu dosiahnutelna:
 
   * picker '--resume' hlada podla TITULKU a titulok robia zaznamy 'ai-title',

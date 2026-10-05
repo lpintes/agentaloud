@@ -12,7 +12,7 @@
 // worse, because it cannot even be shortened: `claude -r 587fbc72` answers
 // "Provided value is not a UUID".
 //
-// Until ClaudeLens can pick a session itself (claude-gui-lkk.7.3) this dialog
+// Until AgentAloud can pick a session itself (claude-gui-lkk.7.3) this dialog
 // is the only way back into a session from the terminal: the CLI's own
 // --resume picker never offers ours, because it lists sessions by title and
 // titles are made by `ai-title` records that only the interactive TUI writes.

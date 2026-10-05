@@ -4,6 +4,7 @@
 
 #include <string>
 
+#include "app_name.h"
 #include "model/utf.h"
 #include "ui/resource.h"
 #include "win/dialog.h"
@@ -213,7 +214,7 @@ bool CommandDialog::OnOk() {
     MessageBoxW(hwnd_,
                 L"Filtru nezodpovedá žiadny príkaz. Vyprázdni filter, alebo "
                 L"dialóg zavri klávesou Esc.",
-                L"ClaudeLens — príkazy", MB_OK | MB_ICONINFORMATION);
+                L"" APP_NAME L" — príkazy", MB_OK | MB_ICONINFORMATION);
     SetFocus(Item(IDC_CMD_FILTER));
     return false;
   }

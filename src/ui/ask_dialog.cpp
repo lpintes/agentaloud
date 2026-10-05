@@ -1,5 +1,6 @@
 #include "ui/ask_dialog.h"
 
+#include "app_name.h"
 #include "model/utf.h"
 #include "ui/resource.h"
 #include "win/dialog.h"
@@ -71,7 +72,7 @@ bool AskDialog::OnInit() {
   // The title carries the header and the counter, because NVDA reads the title
   // when the dialog opens and nothing else it reads says how many of these are
   // still coming.
-  std::wstring caption = L"ClaudeLens — ";
+  std::wstring caption = L"" APP_NAME L" — ";
   caption += question_.header.empty() ? std::wstring(L"otázka")
                                       : model::Utf16FromUtf8(question_.header);
   if (total_ > 1) {
@@ -126,7 +127,7 @@ std::vector<int> AskDialog::Selected() const {
 }
 
 bool AskDialog::Refuse(const wchar_t* why, int focusId) const {
-  MessageBoxW(hwnd_, why, L"ClaudeLens — otázka", MB_OK | MB_ICONINFORMATION);
+  MessageBoxW(hwnd_, why, L"" APP_NAME L" — otázka", MB_OK | MB_ICONINFORMATION);
   SetFocus(Item(focusId));
   return false;
 }

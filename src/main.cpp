@@ -1,4 +1,4 @@
-// ClaudeLens.  See CLAUDE.md for the shape of the thing; this file only
+// AgentAloud.  See CLAUDE.md for the shape of the thing; this file only
 // starts it.
 
 #define WIN32_LEAN_AND_MEAN
@@ -11,9 +11,10 @@
 #include <string>
 #include <vector>
 
+#include "app_name.h"
 #include "arguments.h"
 // Generated from git describe into build/ -- see the Makefile.
-#include "claudelens_version.h"
+#include "app_version.h"
 #include "proto/claude/claude_backend.h"
 #include "proto/codex/codex_backend.h"
 #include "ui/main_window.h"
@@ -28,7 +29,7 @@ namespace {
 const std::vector<std::string> kBackends = {"claude", "codex"};
 
 // From the git tag, so no copy of it can go stale (Makefile).  ASCII.
-const wchar_t kVersion[] = L"" CLAUDELENS_VERSION;
+const wchar_t kVersion[] = L"" APP_VERSION;
 
 std::unique_ptr<agent::Backend> MakeBackend(const std::string& name) {
   if (name == "claude") return std::make_unique<proto::ClaudeBackend>();
@@ -115,16 +116,16 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     const std::wstring help = app::HelpText(
         kVersion, kBackends, MakeBackend(app::kDefaultBackend)->capabilities());
     if (!win::WriteToParentConsole(help)) {
-      MessageBoxW(nullptr, help.c_str(), L"ClaudeLens — nápoveda",
+      MessageBoxW(nullptr, help.c_str(), L"" APP_NAME L" — nápoveda",
                   MB_OK | MB_ICONINFORMATION);
     }
     CoUninitialize();
     return 0;
   }
   if (arguments.version) {
-    const std::wstring text = std::wstring(L"ClaudeLens ") + kVersion + L"\n";
+    const std::wstring text = std::wstring(L"" APP_NAME L" ") + kVersion + L"\n";
     if (!win::WriteToParentConsole(text)) {
-      MessageBoxW(nullptr, text.c_str(), L"ClaudeLens", MB_OK | MB_ICONINFORMATION);
+      MessageBoxW(nullptr, text.c_str(), L"" APP_NAME, MB_OK | MB_ICONINFORMATION);
     }
     CoUninitialize();
     return 0;
@@ -135,10 +136,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     // here -- a complaint that scrolls the offending line off the screen is a
     // complaint nobody reads -- but where to get it is.
     const std::wstring text =
-        L"ClaudeLens: " + arguments.error + L".\n" +
-        L"Zoznam volieb vypíše ClaudeLens --help.\n";
+        L"" APP_NAME L": " + arguments.error + L".\n" +
+        L"Zoznam volieb vypíše " APP_NAME L" --help.\n";
     if (!win::WriteToParentConsole(text)) {
-      MessageBoxW(nullptr, text.c_str(), L"ClaudeLens", MB_OK | MB_ICONERROR);
+      MessageBoxW(nullptr, text.c_str(), L"" APP_NAME, MB_OK | MB_ICONERROR);
     }
     CoUninitialize();
     return 2;
@@ -157,7 +158,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   // until it is loaded.  Deliberately not freed: the class must outlive every
   // window that uses it, and that is the whole run.
   if (!LoadLibraryW(L"Msftedit.dll")) {
-    MessageBoxW(nullptr, L"Nepodarilo sa načítať Msftedit.dll.", L"ClaudeLens",
+    MessageBoxW(nullptr, L"Nepodarilo sa načítať Msftedit.dll.", L"" APP_NAME,
                 MB_OK | MB_ICONERROR);
     return 1;
   }
@@ -181,7 +182,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
 
   ui::MainWindow window;
   if (!window.Open(instance, std::move(backend), options)) {
-    MessageBoxW(nullptr, L"Nepodarilo sa spustiť session.", L"ClaudeLens",
+    MessageBoxW(nullptr, L"Nepodarilo sa spustiť session.", L"" APP_NAME,
                 MB_OK | MB_ICONERROR);
     return 1;
   }

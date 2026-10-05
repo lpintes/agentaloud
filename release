@@ -132,7 +132,7 @@ main() {
   say ''
   say "Vydané: $(gh release view --json tagName --jq .tagName)"
   say "Stránka: $(gh release view --json url --jq .url)"
-  say 'Trvalý odkaz na balík: https://github.com/lpintes/claude-lens/releases/latest/download/ClaudeLens.zip'
+  say 'Trvalý odkaz na balík: https://github.com/lpintes/agentaloud/releases/latest/download/AgentAloud.zip'
   tone '[Console]::Beep(660,150); [Console]::Beep(880,250)'
 }
 

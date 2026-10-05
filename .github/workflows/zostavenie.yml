@@ -8,7 +8,7 @@
 #
 # Testy bezia vsetky, ktore bezia aj lokalne: `./build.sh check`.  Soak nad
 # korpusom nie -- ten potrebuje sukromne prepisy a zapina sa premennou
-# CLAUDELENS_CORPUS, ktora tu nastavena nie je.
+# AGENTALOUD_CORPUS, ktora tu nastavena nie je.
 
 name: Zostavenie
 
@@ -105,9 +105,9 @@ jobs:
       - name: Uloženie artefaktu
         uses: actions/upload-artifact@v6
         with:
-          name: ClaudeLens
+          name: AgentAloud
           path: |
-            bin/claudelens.exe
+            bin/agentaloud.exe
             bin/nvdaControllerClient.dll
           if-no-files-found: error
           retention-days: 30

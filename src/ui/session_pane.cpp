@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <ctime>
 
+#include "app_name.h"
 #include "model/history.h"
 #include "model/utf.h"
 #include "ui/ask_dialog.h"
@@ -335,7 +336,7 @@ void SessionPane::Apply(const model::Edit& edit) {
   // wrong place and nothing else would say so.  Loud, in the title, because a
   // quiet log is a thing nobody reads.
   if (TextLength(transcript_) != static_cast<int>(model_.Text().size())) {
-    SetWindowTextW(host_, L"ClaudeLens — NESÚLAD MAPY ROZSAHOV");
+    SetWindowTextW(host_, L"" APP_NAME L" — NESÚLAD MAPY ROZSAHOV");
   }
 }
 
@@ -368,7 +369,7 @@ bool SessionPane::Start(std::unique_ptr<agent::Backend> backend,
   details_.model = options.model;
   details_.requestedModel = options.model;
   if (statusBar_) statusBar_->Set(StatusBar::kProject, L"projekt " + project_);
-  SetWindowTextW(host_, (L"ClaudeLens — " + path).c_str());
+  SetWindowTextW(host_, (L"" APP_NAME L" — " + path).c_str());
 
   agent::Backend::Callbacks callbacks;
   callbacks.onEvents = [this](std::vector<agent::Event> batch) {

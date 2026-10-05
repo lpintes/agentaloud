@@ -1,5 +1,6 @@
 #include "arguments.h"
 
+#include "app_name.h"
 #include "model/utf.h"
 
 namespace app {
@@ -33,7 +34,7 @@ Arguments Parse(const std::vector<std::wstring>& words) {
     const std::wstring& word = words[i];
     // Everything after it belongs to the CLI, as it is.  Not read, not
     // checked, not taken for the project: this is the one door through which
-    // an option ClaudeLens does not know reaches the CLI -- --chrome,
+    // an option AgentAloud does not know reaches the CLI -- --chrome,
     // --add-dir -- and it is a door because the alternative, guessing which
     // words after an unknown option are its values, is how a value used to
     // become the project folder.
@@ -66,7 +67,7 @@ Arguments Parse(const std::vector<std::wstring>& words) {
     } else if (word == L"--model") {
       arguments.model = words[++i];
     // Carry on an earlier conversation.  Taken with its value wherever it
-    // stands -- so `ClaudeLens --resume <id> .` works and `ClaudeLens .
+    // stands -- so `AgentAloud --resume <id> .` works and `AgentAloud .
     // --resume <id>` works too.
     //
     // The value is not checked against the shape of a UUID, because the CLI
@@ -85,7 +86,7 @@ Arguments Parse(const std::vector<std::wstring>& words) {
     // conversation in it counts as the latest is the backend's to know.
     } else if (word == L"--continue" || word == L"-c") {
       arguments.continueLatest = true;
-    // Read wherever it stands and nothing after it is looked at: `ClaudeLens .
+    // Read wherever it stands and nothing after it is looked at: `AgentAloud .
     // --help` is a request for help, not a session in this folder.
     } else if (word == L"--help" || word == L"-h") {
       arguments.help = true;
@@ -153,21 +154,21 @@ std::wstring HelpText(const std::wstring& version,
     modes += L"        " + Wide(mode.id) + L" — " + Wide(mode.label) + L"\n";
   }
   return
-      L"ClaudeLens " + version +
-      L" — okno namiesto terminálu pre Claude Code a podobné CLI.\n"
+      L"" APP_NAME L" " + version +
+      L" — okno namiesto terminálu pre coding agentov (Claude Code, Codex).\n"
       L"\n"
       L"Použitie:\n"
-      L"  ClaudeLens [voľby] [priečinok] [-- parametre CLI]\n"
+      L"  " APP_NAME L" [voľby] [priečinok] [-- parametre CLI]\n"
       L"\n"
       L"  priečinok\n"
       L"      Pracovný adresár session: rozhoduje o tom, ktoré CLAUDE.md\n"
       L"      a ktorý git repozitár platia a čoho sa smú dotknúť nástroje.\n"
-      L"      Keď sa neuvedie, ClaudeLens sa naň spýta dialógom.\n"
+      L"      Keď sa neuvedie, " APP_NAME L" sa naň spýta dialógom.\n"
       L"\n"
       L"  -- parametre CLI\n"
       L"      Všetko za samostatným -- ide do CLI bez zmeny a bez kontroly,\n"
-      L"      napríklad: ClaudeLens C:\\projekt -- --chrome --add-dir D:\\iny\n"
-      L"      Či CLI parameter v headless režime prijme, ClaudeLens nevie;\n"
+      L"      napríklad: " APP_NAME L" C:\\projekt -- --chrome --add-dir D:\\iny\n"
+      L"      Či CLI parameter v headless režime prijme, " APP_NAME L" nevie;\n"
       L"      parametre CLI vypíše jeho vlastné --help.\n"
       L"\n"
       L"Voľby:\n"
@@ -178,7 +179,7 @@ std::wstring HelpText(const std::wstring& version,
       L"  --permission-mode <režim>\n"
       L"      Režim povolení v pravopise CLI.  Pre " +
       Wide(defaultBackend.agentName) + L":\n" + modes +
-      L"      Iný backend má vlastné režimy; neznámy režim ClaudeLens\n"
+      L"      Iný backend má vlastné režimy; neznámy režim " APP_NAME L"\n"
       L"      odmietne a vymenuje platné.  Bez voľby platí to, čo má\n"
       L"      nastavené CLI.\n"
       L"\n"
@@ -194,7 +195,7 @@ std::wstring HelpText(const std::wstring& version,
       L"\n"
       L"  --continue, -c\n"
       L"      Pokračuje v poslednom rozhovore tohto priečinka.  Ktorý to je,\n"
-      L"      vyberá ClaudeLens sám zo súborov v ~/.claude/projects — nie\n"
+      L"      vyberá " APP_NAME L" sám zo súborov v ~/.claude/projects — nie\n"
       L"      CLI, ktoré o headless session nevie.  Priečinok bez jediného\n"
       L"      rozhovoru začne novú session.  Spolu s --resume vyhráva\n"
       L"      --resume.\n"
@@ -203,15 +204,15 @@ std::wstring HelpText(const std::wstring& version,
       L"      Tento text.\n"
       L"\n"
       L"  --version\n"
-      L"      Iba verziu ClaudeLens.\n"
+      L"      Iba verziu " APP_NAME L".\n"
       L"\n"
-      L"Voľba pred --, ktorú ClaudeLens nepozná — napríklad --fork-session —\n"
+      L"Voľba pred --, ktorú " APP_NAME L" nepozná — napríklad --fork-session —\n"
       L"sa neprepošle a ani sa z nej nestane cesta: povie to a skončí.  Kto\n"
       L"ju chce poslať CLI, napíše ju za --.  Priečinok projektu je prvý\n"
       L"argument pred --, ktorý sa nezačína pomlčkou, takže priečinok\n"
       L"s pomlčkou na začiatku mena sa takto zadať nedá.\n"
       L"\n"
-      L"Čo vie klávesnica, povie ClaudeLens sám: F1 vypíše všetky klávesy, F2\n"
+      L"Čo vie klávesnica, povie " APP_NAME L" sám: F1 vypíše všetky klávesy, F2\n"
       L"podrobnosti session a F4 otvorí zoznam slash príkazov.\n";
 }
 

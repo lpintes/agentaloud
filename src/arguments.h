@@ -1,7 +1,7 @@
 #ifndef ARGUMENTS_H
 #define ARGUMENTS_H
 
-// The command line of ClaudeLens: what it says, what the help says it may
+// The command line of AgentAloud: what it says, what the help says it may
 // say, and what is refused.  Out of main.cpp so that it can be tested -- the
 // rules here are exactly the ones that fail silently (invariant 16), and a
 // rule nobody can run is a rule nobody checks.

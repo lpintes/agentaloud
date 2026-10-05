@@ -2,6 +2,7 @@
 
 #include <string>
 
+#include "app_name.h"
 #include "model/transcript.h"
 #include "model/utf.h"
 #include "ui/resource.h"
@@ -40,7 +41,7 @@ bool PermissionDialog::OnInit() {
   // would be answering about a tool nobody named.
   const std::string& name =
       request_.title.empty() ? request_.call.name : request_.title;
-  SetWindowTextW(hwnd_, (L"ClaudeLens — povolenie: " +
+  SetWindowTextW(hwnd_, (L"" APP_NAME L" — povolenie: " +
                          model::Utf16FromUtf8(name)).c_str());
 
   SetText(IDC_PERM_DESCRIPTION, OrMissing(request_.description));

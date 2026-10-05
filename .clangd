@@ -1,4 +1,4 @@
-# Nastavenie clangd pre ClaudeLens.  Prepinace aj toolchain berie clangd
+# Nastavenie clangd pre AgentAloud.  Prepinace aj toolchain berie clangd
 # z `compile_commands.json`, ktory generuje `make compdb` (robi to aj
 # ./build.sh).  Bez neho nevie ani o -Isrc a -DUNICODE, ani o tom, ze sa
 # preklada mingw -- a druhe je horsie: na Windows si v takom pripade najde

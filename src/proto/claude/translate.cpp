@@ -399,7 +399,7 @@ agent::Capabilities ClaudeCapabilities() {
       // lists "manual" and not "default", and the CLI maps the one to the other
       // and reports "default" back.  Measured on 2.1.288 (tools/
       // probe_cli_args.py, 2026-10-03).  Here so that the word the CLI
-      // advertises is not refused by ClaudeLens; off the cycle, so that
+      // advertises is not refused by AgentAloud; off the cycle, so that
       // Shift+Tab never lands on it.
       {"manual", "normálny", "pýta sa na každú úpravu aj na príkazy", false,
        true},

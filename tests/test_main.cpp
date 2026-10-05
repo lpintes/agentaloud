@@ -25,7 +25,7 @@
 //
 //   3. SOAK (sukromny korpus, mimo repozitara).  Netvrdi ocakavane hodnoty,
 //      len invarianty, a hlasi neznama typy zaznamov.  Zapina sa premennou
-//      CLAUDELENS_CORPUS a bezi rucne.
+//      AGENTALOUD_CORPUS a bezi rucne.
 
 #include <algorithm>
 #include <chrono>
@@ -39,6 +39,7 @@
 #include <string>
 #include <vector>
 
+#include "app_name.h"
 #include "model/bookmarks.h"
 #include "model/history.h"
 #include "model/transcript.h"
@@ -826,7 +827,7 @@ void TestArguments() {
   // Napoveda hovori pravdu: kazdy rezim aj kazdy backend v nej je.
   const std::wstring text = app::HelpText(L"2026.10.1", known, claude);
   CHECK(text.find(L"--backend") != std::wstring::npos);
-  CHECK(text.find(L"ClaudeLens 2026.10.1 ") == 0);
+  CHECK(text.find(L"" APP_NAME L" 2026.10.1 ") == 0);
   CHECK(text.find(L"--version") != std::wstring::npos);
   for (const agent::Mode& mode : claude.modes) {
     CHECK(text.find(model::Utf16FromUtf8(mode.id)) != std::wstring::npos);
@@ -1797,7 +1798,7 @@ void WriteFile(const std::filesystem::path& path, const std::string& text) {
 void TestSessionPickIgnoresMtime() {
   TEST("sessions: najnovsia je podla casu zaznamu, nie podla mtime");
   namespace fs = std::filesystem;
-  const fs::path root = fs::temp_directory_path() / "claudelens-sessions-test";
+  const fs::path root = fs::temp_directory_path() / "agentaloud-sessions-test";
   std::error_code code;
   fs::remove_all(root, code);
   const std::wstring project = L"C:\\demo\\projekt";
@@ -1844,7 +1845,7 @@ void TestSessionSummaryFindsTheHumanPrompt() {
   TEST("sessions: prvy prompt je to, co napisal clovek");
   namespace fs = std::filesystem;
   const fs::path file =
-      fs::temp_directory_path() / "claudelens-summary-test.jsonl";
+      fs::temp_directory_path() / "agentaloud-summary-test.jsonl";
   // Prve dva 'user' zaznamy nie su prompt: vypis slash prikazu (otvara sa
   // znackou) a vysledok nastroja (nema textovu cast).  Keby sa niektory z nich
   // ratal, session by sa v ohlaseni volala menom, ktore nikto nepovedal.
@@ -1866,7 +1867,7 @@ void TestSessionSummaryFindsTheHumanPrompt() {
   // Zlomy riadkov zliate: toto ide do jednej vety, ktora sa cita nahlas.
   CHECK_EQ(summary.firstPrompt, std::string("prvy riadok a druhy"));
   CHECK_EQ(summary.lastStamp, std::string("2026-09-03T08:00:03.000Z"));
-  CHECK_EQ(summary.id, std::wstring(L"claudelens-summary-test"));
+  CHECK_EQ(summary.id, std::wstring(L"agentaloud-summary-test"));
 
   // Subor bez jedineho 'user' alebo 'assistant' zaznamu nie je rozhovor.
   WriteFile(file, "{\"type\":\"summary\",\"summary\":\"nic\"}\n");
@@ -1879,7 +1880,7 @@ void TestHistoryRestore() {
   TEST("history: zo suboru na disku vzniknu tie iste bloky ako zo streamu");
   namespace fs = std::filesystem;
   const fs::path file =
-      fs::temp_directory_path() / "claudelens-history-test.jsonl";
+      fs::temp_directory_path() / "agentaloud-history-test.jsonl";
   // Uroven 1: vstup je vymysleny, ale netestuje sa format -- ktore tvary na
   // disku su, je odmerane nad korpusom (191 suborov, 35 229 zaznamov) a stoji
   // v claude-gui-lkk.7.4.  Tu sa testuje delenie: co je prompt, co je
@@ -1959,7 +1960,7 @@ void TestHistoryRestore() {
 void TestSessionFilePath() {
   TEST("sessions: cesta k suboru rozhovoru");
   namespace fs = std::filesystem;
-  const fs::path root = fs::temp_directory_path() / "claudelens-path-test";
+  const fs::path root = fs::temp_directory_path() / "agentaloud-path-test";
   _wputenv_s(L"CLAUDE_CONFIG_DIR", root.wstring().c_str());
   CHECK_EQ(proto::SessionFilePath(L"C:\\b\\mluv", L"abc-123"),
            (root / "projects" / "C--b-mluv" / "abc-123.jsonl").wstring());
@@ -2245,7 +2246,7 @@ void SoakOverCorpus(const std::string& root) {
   std::printf("\n  soak nad %s\n", root.c_str());
 
   // Ziadny <filesystem>: staci nam zoznam suborov, ktory si necha dodat
-  // volajuci cez CLAUDELENS_CORPUS_LIST, alebo ho vyrobi shell.
+  // volajuci cez AGENTALOUD_CORPUS_LIST, alebo ho vyrobi shell.
   std::ifstream list(root);
   if (!list) {
     Fail(__FILE__, __LINE__, "nedá sa otvorit zoznam suborov: " + root);
@@ -2846,7 +2847,7 @@ int main(int argc, char** argv) {
   TestCodexFixtureReasoning(fixtures);
   TestCodexFixtureResume(fixtures);
 
-  if (const char* corpus = std::getenv("CLAUDELENS_CORPUS")) {
+  if (const char* corpus = std::getenv("AGENTALOUD_CORPUS")) {
     SoakOverCorpus(corpus);
   }
 

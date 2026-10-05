@@ -64,7 +64,7 @@ bool ClaudeBackend::Start(const agent::StartOptions& options,
     // Decided here and turned into a plain --resume, rather than passed to the
     // CLI as --continue: the CLI answers "which conversation was last" out of
     // ~/.claude/history.jsonl, where only interactively typed prompts are
-    // written, so for a folder used from both a terminal and ClaudeLens it
+    // written, so for a folder used from both a terminal and AgentAloud it
     // would carry on the terminal's conversation and call it ours (invariant
     // 15).
     //

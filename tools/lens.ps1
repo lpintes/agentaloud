@@ -1,4 +1,4 @@
-# Pomocky na nahliadnutie do beziacej ClaudeLens z ineho procesu.
+# Pomocky na nahliadnutie do beziacej AgentAloud z ineho procesu.
 #
 # Preco to existuje: appka sa da preskusat aj bez oci, ale nie kazdou cestou.
 # WM_GETTEXT sa cez hranicu procesu marshaluje, GetWindowText nie -- ten cez
@@ -24,7 +24,7 @@
 #   Get-LensChildren $w[0].Hwnd
 #
 # Testovaciu instanciu zatvaraj PODLA PID, nikdy taskkill /IM -- pouzivatel ma
-# vlastnu ClaudeLens spustenu.
+# vlastnu AgentAloud spustenu.
 
 Add-Type @"
 using System;

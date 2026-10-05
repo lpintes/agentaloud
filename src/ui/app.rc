@@ -11,7 +11,8 @@
 
 #include "ui/resource.h"
 // Generated from git describe into build/ -- see the Makefile.
-#include "claudelens_version.h"
+#include "app_version.h"
+#include "app_name.h"
 
 // This file is UTF-8 and windres would otherwise read it as codepage 1252,
 // which turns every accented letter in a caption into two.  It compiles either
@@ -24,8 +25,8 @@ LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
 // What Explorer shows under Properties -> Details, and what a release checks
 // the file against before publishing it under a tag.  Slovak, Unicode.
 1 VERSIONINFO
-FILEVERSION     CLAUDELENS_FILEVERSION
-PRODUCTVERSION  CLAUDELENS_FILEVERSION
+FILEVERSION     APP_FILEVERSION
+PRODUCTVERSION  APP_FILEVERSION
 FILEOS          VOS_NT_WINDOWS32
 FILETYPE        VFT_APP
 BEGIN
@@ -33,11 +34,11 @@ BEGIN
     BEGIN
         BLOCK "041B04B0"
         BEGIN
-            VALUE "FileDescription", "ClaudeLens"
-            VALUE "ProductName", "ClaudeLens"
-            VALUE "FileVersion", CLAUDELENS_VERSION
-            VALUE "ProductVersion", CLAUDELENS_VERSION
-            VALUE "OriginalFilename", "claudelens.exe"
+            VALUE "FileDescription", APP_NAME
+            VALUE "ProductName", APP_NAME
+            VALUE "FileVersion", APP_VERSION
+            VALUE "ProductVersion", APP_VERSION
+            VALUE "OriginalFilename", APP_EXE
             VALUE "LegalCopyright", "Copyright (c) 2026 Lubos Pintes, MIT"
         END
     END
@@ -49,7 +50,7 @@ END
 
 IDD_SESSION_DETAILS DIALOGEX 0, 0, 320, 182
 STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "ClaudeLens — podrobnosti session"
+CAPTION APP_NAME " — podrobnosti session"
 FONT 9, "Segoe UI", 400, 0, 1
 BEGIN
     LTEXT           "&Id session:", IDC_DETAILS_ID_LABEL, 8, 10, 74, 8
@@ -95,7 +96,7 @@ END
 // beside the list is a second place to go and look for every option tried.
 IDD_ASK_QUESTION DIALOGEX 0, 0, 300, 196
 STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "ClaudeLens — otázka"
+CAPTION APP_NAME " — otázka"
 FONT 9, "Segoe UI", 400, 0, 1
 BEGIN
     LTEXT           "O&tázka:", IDC_ASK_QUESTION_LABEL, 8, 8, 284, 8
@@ -131,7 +132,7 @@ END
 // answer that has to be aimed at.
 IDD_PERMISSION DIALOGEX 0, 0, 320, 212
 STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "ClaudeLens — povolenie"
+CAPTION APP_NAME " — povolenie"
 FONT 9, "Segoe UI", 400, 0, 1
 BEGIN
     LTEXT           "P&opis:", IDC_PERM_DESCRIPTION_LABEL, 8, 10, 60, 8
@@ -163,7 +164,7 @@ END
 // the one command being considered.
 IDD_COMMANDS DIALOGEX 0, 0, 320, 204
 STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "ClaudeLens — príkazy"
+CAPTION APP_NAME " — príkazy"
 FONT 9, "Segoe UI", 400, 0, 1
 BEGIN
     LTEXT           "&Filter:", IDC_CMD_FILTER_LABEL, 8, 10, 40, 8
@@ -198,7 +199,7 @@ END
 // agree -- there is nothing else to do in this dialog but leave it.
 IDD_KEYS DIALOGEX 0, 0, 320, 274
 STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "ClaudeLens — klávesy"
+CAPTION APP_NAME " — klávesy"
 FONT 9, "Segoe UI", 400, 0, 1
 BEGIN
     LTEXT           "&Klávesy:", IDC_KEYS_TEXT_LABEL, 8, 8, 304, 8

@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-nvdaControllerClient.dll, shipped beside claudelens.exe, is not covered by
+nvdaControllerClient.dll, shipped beside agentaloud.exe, is not covered by
 this license: it is part of NVDA and licensed under the LGPL, see
-nvdaControllerClient-LICENSE.txt.  ClaudeLens loads it at run time and does
+nvdaControllerClient-LICENSE.txt.  AgentAloud loads it at run time and does
 not link against it.

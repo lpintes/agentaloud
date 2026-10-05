@@ -15,7 +15,7 @@ bool Usable(HANDLE handle) {
 //
 // WriteConsoleW takes UTF-16 straight and gets the code page right by itself.
 // WriteFile does not know what the bytes mean, so for a redirection the text
-// is encoded as UTF-8 -- `ClaudeLens --help > help.txt` then produces a file
+// is encoded as UTF-8 -- `AgentAloud --help > help.txt` then produces a file
 // that opens correctly in anything written this decade, rather than one where
 // the diacritics are half a character each.
 bool Write(HANDLE out, const std::wstring& text) {

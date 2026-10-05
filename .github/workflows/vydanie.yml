@@ -83,7 +83,7 @@ jobs:
       - name: Artefakt zostavenia
         uses: actions/download-artifact@v7
         with:
-          name: ClaudeLens
+          name: AgentAloud
           path: vydanie
 
       # EXE musi o sebe hovorit to iste cislo, pod ktorym ho zverejnime --
@@ -93,7 +93,7 @@ jobs:
         shell: pwsh
         run: |
           $want = $env:ZNACKA.Substring(1)
-          $have = (Get-Item vydanie\claudelens.exe).VersionInfo.ProductVersion
+          $have = (Get-Item vydanie\agentaloud.exe).VersionInfo.ProductVersion
           if ($have -ne $want) { Write-Error "EXE hovorí '$have', vydanie je '$want'."; exit 1 }
           "EXE je $have"
 
@@ -103,20 +103,20 @@ jobs:
       - name: Balík
         shell: pwsh
         run: |
-          $name = "ClaudeLens-$($env:ZNACKA.Substring(1))"
+          $name = "AgentAloud-$($env:ZNACKA.Substring(1))"
           $stage = "balik\$name"
           New-Item -ItemType Directory -Force $stage | Out-Null
-          Copy-Item vydanie\claudelens.exe, vydanie\nvdaControllerClient.dll, LICENSE.txt $stage
+          Copy-Item vydanie\agentaloud.exe, vydanie\nvdaControllerClient.dll, LICENSE.txt $stage
           Copy-Item vendor\nvda\LICENSE.txt "$stage\nvdaControllerClient-LICENSE.txt"
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           [IO.Compression.ZipFile]::CreateFromDirectory((Resolve-Path balik).Path,
               "$PWD\vydanie\$name.zip")
           # Ten isty ZIP este raz bez verzie v mene, aby existoval trvaly odkaz
-          # .../releases/latest/download/ClaudeLens.zip -- s verziou v mene by
+          # .../releases/latest/download/AgentAloud.zip -- s verziou v mene by
           # kazde vydanie malo inu adresu a rozposlany odkaz by zastaral.
-          Copy-Item "vydanie\$name.zip" vydanie\ClaudeLens.zip
+          Copy-Item "vydanie\$name.zip" vydanie\AgentAloud.zip
           # Holy exe a DLL vedla ZIP-u nejdu: von ide len balik.
-          Remove-Item vydanie\claudelens.exe, vydanie\nvdaControllerClient.dll
+          Remove-Item vydanie\agentaloud.exe, vydanie\nvdaControllerClient.dll
 
       - name: Kontrolné súčty
         shell: pwsh
@@ -141,6 +141,6 @@ jobs:
           Set-Content -Encoding utf8NoBOM poznamky.md $notes
           $version = $env:ZNACKA.Substring(1)
           gh release create $env:ZNACKA --target $env:GITHUB_SHA `
-            --title "ClaudeLens $version" --notes-file poznamky.md `
+            --title "AgentAloud $version" --notes-file poznamky.md `
             (Get-ChildItem vydanie -File).FullName
           if ($LASTEXITCODE -ne 0) { exit 1 }

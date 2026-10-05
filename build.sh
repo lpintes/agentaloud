@@ -1,5 +1,5 @@
 #!/bin/sh
-# Pohodlne zostavenie ClaudeLens z bashu.  Vsetko, co robi navyse oproti
+# Pohodlne zostavenie AgentAloud z bashu.  Vsetko, co robi navyse oproti
 # holemu `make`, je jedna vec: predradi ucrt64 na PATH.  Prekladac sa v
 # Makefile vola absolutnou cestou, ale `make` na PATH nie je (v ucrt64 je len
 # mingw32-make.exe), a `cc1.exe` si libgmp/libisl hlada po PATH -- ked tam

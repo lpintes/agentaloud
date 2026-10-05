@@ -3,7 +3,7 @@
 # Otazka je uzka a odpoved sa neda vycitat z minifikovanej binarky s istotou:
 # ked model zavola AskUserQuestion, pride to ako 'can_use_tool' (a odpoved sa
 # vracia v 'updatedInput'), alebo ako 'request_user_dialog' (vlastny subtyp
-# s vlastnym tvarom)?  Od toho zavisi, ci ClaudeLens potrebuje novu vetvu
+# s vlastnym tvarom)?  Od toho zavisi, ci AgentAloud potrebuje novu vetvu
 # v control kanali, alebo len lepsi dialog na mieste, kde dnes stoji MessageBox.
 #
 # Na rozdiel od probe_init.py toto POSIELA PROMPT, takze to stoji kredit --

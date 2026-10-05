@@ -2,6 +2,8 @@
 
 #include <chrono>
 
+#include "app_name.h"
+
 namespace proto::codex {
 namespace {
 
@@ -88,8 +90,8 @@ bool CodexBackend::Start(const agent::StartOptions& options,
   // change the mode between turns and to enter plan mode at all.
   return Request(Purpose::Initialize, "initialize",
                  {{"clientInfo",
-                   {{"name", "claudelens"},
-                    {"title", "ClaudeLens"},
+                   {{"name", "agentaloud"},
+                    {"title", APP_NAME},
                     {"version", "0"}}},
                   {"capabilities",
                    {{"experimentalApi", true}, {"requestAttestation", false}}}});
@@ -513,7 +515,7 @@ void CodexBackend::OnServerRequest(const Json& message) {
   Send({{"id", id},
         {"error",
          {{"code", -32601},
-          {"message", "ClaudeLens does not handle " + method}}}});
+          {"message", std::string(APP_NAME) + " does not handle " + method}}}});
   Emit({agent::Unrecognised{method}});
 }
 

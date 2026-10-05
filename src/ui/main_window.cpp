@@ -1,11 +1,13 @@
 #include "ui/main_window.h"
 
+#include "app_name.h"
+
 namespace ui {
 
 bool MainWindow::Open(HINSTANCE instance,
                       std::unique_ptr<agent::Backend> backend,
                       const agent::StartOptions& options) {
-  if (!Create(L"ClaudeLensMain", L"ClaudeLens",
+  if (!Create(L"" APP_NAME L"Main", L"" APP_NAME,
               WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, 900, 700, nullptr)) {
     return false;
   }
@@ -39,11 +41,11 @@ void MainWindow::WarnIfMute() {
   // than incomplete, and Ctrl+Enter sounds refused while it is in fact
   // sending.
   MessageBoxW(hwnd_,
-              L"Vedľa ClaudeLens.exe chýba nvdaControllerClient.dll, takže "
+              L"Vedľa " APP_EXE L" chýba nvdaControllerClient.dll, takže "
               L"aplikácia nemá ako hovoriť: klávesy fungujú, ale namiesto "
               L"hlásení pípajú.\n\nSkopírujte knižnicu z bin\\ vedľa .exe "
-              L"a spustite ClaudeLens znova.",
-              L"ClaudeLens — bez reči", MB_OK | MB_ICONWARNING);
+              L"a spustite " APP_NAME L" znova.",
+              L"" APP_NAME L" — bez reči", MB_OK | MB_ICONWARNING);
 }
 
 void MainWindow::Arrange(int width, int height) {
