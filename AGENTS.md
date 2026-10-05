@@ -1382,6 +1382,15 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     Manifest je `src/ui/app.manifest`, vložený cez `app.rc`. Každý ďalší
     program, ktorý linkuje `updater.o` (sonda, test), ho potrebuje tiež.
 
+    **Manifest zmenil kreslenie všetkých ovládacích prvkov, nielen dialógu**,
+    a stavový riadok to ticho rozbilo. Prázdnu časť stavového riadku číta NVDA
+    podľa toho, čo tam naposledy videla nakreslené (`StaticText` → `displayText`).
+    Klasický bar časť zmaže cez `FillRect`, ktorý NVDA sleduje; s témou zostal
+    v jej pamäti starý text a NVDA+End hovorilo „pracujem" aj po ťahu, hoci
+    `WM_GETTEXT` vracal prázdne pole (5. 10. 2026). Preto má stavový riadok
+    tému vypnutú (`SetWindowTheme` v `StatusBar::Create`). Prázdne pole po ťahu
+    je zámer — podľa toho, že NVDA+End začne modelom, sa pozná koniec práce.
+
     Repozitár bez vydania — alebo súkromný — vráti na `releases/latest` 404,
     čo appka berie ako „nie je vydanie" a mlčí. Naostro sa to dá overiť až
     s dvoma vydaniami.

@@ -1,6 +1,7 @@
 #include "ui/status_bar.h"
 
 #include <commctrl.h>
+#include <uxtheme.h>
 
 namespace ui {
 namespace {
@@ -15,7 +16,18 @@ bool StatusBar::Create(HWND host, HINSTANCE instance) {
   bar_ = CreateWindowExW(0, STATUSCLASSNAMEW, L"", WS_CHILD | WS_VISIBLE, 0, 0,
                          0, 0, host, reinterpret_cast<HMENU>(kIdStatusBar),
                          instance, nullptr);
-  return bar_ != nullptr;
+  if (bar_ == nullptr) return false;
+  // Unthemed, and not for looks.  NVDA reads a part whose text is empty by its
+  // display model -- what it last saw drawn there -- and the turn field is
+  // empty between turns, so NVDA+End must find nothing there and start with
+  // the model.  The classic bar wipes a part with FillRect, which NVDA hooks;
+  // since the Common Controls 6 manifest (app.manifest, for the updater) the
+  // bar is drawn through the theme instead, the old "pracujem" stayed in the
+  // model and was read after every turn while the control itself was empty
+  // (measured with WM_GETTEXT, 5. 10. 2026).  Fails silently: the bar looks
+  // right and is read wrong.
+  SetWindowTheme(bar_, L"", L"");
+  return true;
 }
 
 int StatusBar::Resize(int width) {

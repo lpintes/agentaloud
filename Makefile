@@ -64,7 +64,8 @@ CXXFLAGS := -std=c++20 -O2 $(WARN) -I. -Isrc -I$(BUILD) \
 # winmm je kvoli PlaySound: zvuk pre cakajuci modal sa neda dat cez
 # MessageBeep, oba jeho pouzitelne zvuky uz maju iny vyznam (invariant 11).
 # winhttp a bcrypt su aktualizacie: stiahnutie a SHA-256 (claude-gui-lkk.53).
-LDLIBS   := -lole32 -lshell32 -lcomctl32 -luuid -lgdi32 -lwinmm -lwinhttp -lbcrypt
+# uxtheme vypina temu stavoveho riadku, aby ho NVDA citala spravne (status_bar.cpp).
+LDLIBS   := -lole32 -lshell32 -lcomctl32 -luuid -lgdi32 -lwinmm -lwinhttp -lbcrypt -luxtheme
 
 # Verzia.  Nie je napisana v ziadnom zdrojaku -- urcuje ju znacka v gite
 # (v2026.10.1, rok.mesiac.poradie), aby druha kopia nemala ako zastarat.
