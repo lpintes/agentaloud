@@ -1400,6 +1400,6 @@ kroku:
 Bod 2 a 3 sú tie, ktoré sa vynechávajú, a sú to práve tie, ktoré rozhodujú
 o tom, či sa dá pokračovať zajtra.
 
-`CLAUDE.md` a `AGENTS.md` sú nezávislé súbory s odlišnou hlavičkou od beads,
-ale od nadpisu `## AgentAloud` nižšie musia byť **zhodné** — Codex číta ten
-druhý. Pri zmene tejto časti zrkadli do oboch a over `diff`om.
+Codex číta `AGENTS.md`, a ten sa sem od nadpisu `## AgentAloud` jednou vetou
+odvoláva. Projektové inštrukcie sa preto píšu **len sem**; `AGENTS.md` drží
+iba hlavičku od beads a ten odkaz.

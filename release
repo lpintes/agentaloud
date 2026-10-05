@@ -117,9 +117,12 @@ main() {
 
   # --- 2. Vydanie -------------------------------------------------------------
   say "2/2 Vydanie commitu $short"
-  local started release
+  local started release out
   started=$(date -u -d '-10 seconds' +%Y-%m-%dT%H:%M:%SZ)
-  gh workflow run vydanie.yml --ref main || fail 'vydanie sa nepodarilo spustiť.'
+  # gh po spustení radí "To see the created workflow run, try: ..."; beh si
+  # nájdeme a sledujeme sami, takže výstup ukážeme len pri chybe.
+  out=$(gh workflow run vydanie.yml --ref main 2>&1) ||
+    fail "vydanie sa nepodarilo spustiť: $out"
   release=$(find_run vydanie.yml workflow_dispatch "$started")
   [[ -n "$release" ]] || fail 'spustené vydanie sa nenašlo.'
   watch_run "$release"
