@@ -183,10 +183,18 @@ PermissionDecision ClaudeBackend::OnPermission(
   out.title = request.displayName;
   out.description = request.description;
   out.reason = ReasonSentence(request.decisionReasonType);
-  out.offered = {agent::Verdict::Allow, agent::Verdict::Deny};
+  // "For this session" is what the CLI suggests and nothing broader: for a
+  // command that is the exact command line, for a file edit acceptEdits.
+  const Json kept = SessionPermissions(request.suggestions);
+  out.offered = {agent::Verdict::Allow};
+  if (!kept.is_null()) out.offered.push_back(agent::Verdict::AllowForSession);
+  out.offered.push_back(agent::Verdict::Deny);
   const agent::PermissionAnswer answer = callbacks_.onPermission(out);
   decision.allow = answer.verdict == agent::Verdict::Allow ||
                    answer.verdict == agent::Verdict::AllowForSession;
+  if (answer.verdict == agent::Verdict::AllowForSession) {
+    decision.updatedPermissions = kept;
+  }
   // What the model is told is the adapter's to write, not the pane's: the
   // pane does not know which CLI it is talking to, nor that the words come
   // back in the stream for the Translator to recognise.

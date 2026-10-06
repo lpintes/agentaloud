@@ -150,7 +150,8 @@ BEGIN
     EDITTEXT        IDC_PERM_INPUT, 8, 56, 304, 128,
                     ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL
 
-    PUSHBUTTON      "&Povoliť", IDOK, 196, 190, 56, 14
+    PUSHBUTTON      "&Povoliť", IDOK, 96, 190, 56, 14
+    PUSHBUTTON      "Povoliť na &túto session", IDC_PERM_SESSION, 156, 190, 96, 14
     DEFPUSHBUTTON   "&Zamietnuť", IDCANCEL, 256, 190, 56, 14
 END
 

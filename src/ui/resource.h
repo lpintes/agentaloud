@@ -57,6 +57,8 @@
 #define IDC_PERM_INPUT          1050
 #define IDC_PERM_DESCRIPTION    1051
 #define IDC_PERM_REASON         1052
+// Shown only when the backend offers it (agent::Verdict::AllowForSession).
+#define IDC_PERM_SESSION        1053
 
 #define IDC_PERM_INPUT_LABEL        1060
 #define IDC_PERM_DESCRIPTION_LABEL  1061

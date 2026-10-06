@@ -29,6 +29,7 @@ struct PermissionDecision {
   bool allow = false;
   std::string denyMessage;   // used when !allow
   Json updatedInput;         // null keeps the tool's own input
+  Json updatedPermissions;   // null keeps no rule (SessionPermissions)
 };
 
 class Session {

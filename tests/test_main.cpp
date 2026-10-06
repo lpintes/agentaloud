@@ -2955,6 +2955,40 @@ void TestCodexFixtureEdit(const std::string& dir) {
   CHECK(done);
 }
 
+// Tvary doslova z tools/probe_permission_session.py (CLI 2.1.288, 6. 10.
+// 2026, claude-gui-lkk.61): navrhy idu do localSettings, my ich posielame
+// spat ako session -- tak platia a nic sa nezapise.
+void TestClaudeSessionPermissions() {
+  TEST("claude povolenie na session: navrhy CLI s destination session");
+  const proto::Json record = proto::Json::parse(R"J(
+    {"type":"control_request","request_id":"r1","request":{
+      "subtype":"can_use_tool","tool_name":"Bash","display_name":"Bash",
+      "input":{"command":"ping -n 1 127.0.0.1"},
+      "permission_suggestions":[{"type":"addRules",
+        "rules":[{"toolName":"Bash","ruleContent":"ping -n 1 127.0.0.1"}],
+        "behavior":"allow","destination":"localSettings"}],
+      "decision_reason_type":"other","tool_use_id":"t1"}})J");
+  proto::PermissionRequest request;
+  CHECK(proto::ParsePermissionRequest(record, &request));
+  const proto::Json kept = proto::SessionPermissions(request.suggestions);
+  CHECK_EQ(kept, proto::Json::parse(R"J([{"type":"addRules",
+        "rules":[{"toolName":"Bash","ruleContent":"ping -n 1 127.0.0.1"}],
+        "behavior":"allow","destination":"session"}])J"));
+  const proto::Json allow = proto::MakeAllow(request, nullptr, kept);
+  CHECK_EQ(allow["response"]["response"]["updatedPermissions"], kept);
+  CHECK(!proto::MakeAllow(request, nullptr)["response"]["response"].contains(
+      "updatedPermissions"));
+
+  // Ask pravidlo: navrhy nechodia, tlacidlo na session sa neponukne.
+  const proto::Json rule = proto::Json::parse(R"J(
+    {"type":"control_request","request_id":"r2","request":{
+      "subtype":"can_use_tool","tool_name":"Bash","display_name":"Bash",
+      "input":{"command":"echo hello"},"decision_reason_type":"rule",
+      "tool_use_id":"t2"}})J");
+  CHECK(proto::ParsePermissionRequest(rule, &request));
+  CHECK(proto::SessionPermissions(request.suggestions).is_null());
+}
+
 // Nie fixtura: computer use sa na tento stroj bez Codex Desktop nedostane.
 // Tvary su doslova zo sondy s nahradnym MCP serverom
 // (tools/probe_computer_use.py, 6. 10. 2026, claude-gui-lkk.44.12).
@@ -2981,6 +3015,11 @@ void TestCodexElicitation() {
   CHECK_EQ(request.reason,
            std::string("Allow the fakecu MCP server to run tool \"open_app\"?"));
   CHECK(!request.description.empty());
+  // Codex ponuka "session" aj "always"; "always" by zapisalo do config.toml.
+  CHECK(request.offered ==
+        (std::vector<agent::Verdict>{agent::Verdict::Allow,
+                                     agent::Verdict::AllowForSession,
+                                     agent::Verdict::Deny}));
 
   // Otazka samotneho pluginu: _meta null, ziadne argumenty.  Prave tuto
   // appka odmietala a plugin z toho hlasil "not approved".
@@ -2991,6 +3030,8 @@ void TestCodexElicitation() {
   CHECK(proto::codex::ElicitationPermission(pluginAsks, &request));
   CHECK_EQ(request.reason, std::string("Allow Codex to use Notepad?"));
   CHECK(request.call.fields.empty());
+  CHECK(request.offered == (std::vector<agent::Verdict>{agent::Verdict::Allow,
+                                                        agent::Verdict::Deny}));
 
   proto::Json form = pluginAsks;
   form["requestedSchema"]["properties"] = {{"name", {{"type", "string"}}}};
@@ -3266,6 +3307,7 @@ int main(int argc, char** argv) {
   TestFixtureDisk(fixtures);
   TestCodexModes();
   TestCodexElicitation();
+  TestClaudeSessionPermissions();
   TestCodexFixtureMulti(fixtures);
   TestCodexFixtureEdit(fixtures);
   TestCodexFixtureAsk(fixtures);

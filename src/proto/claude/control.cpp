@@ -35,6 +35,8 @@ bool ParsePermissionRequest(const Json& record, PermissionRequest* out) {
                                  interaction->get<bool>();
   auto input = request->find("input");
   out->input = input != request->end() ? *input : Json::object();
+  auto suggestions = request->find("permission_suggestions");
+  out->suggestions = suggestions != request->end() ? *suggestions : Json();
   return true;
 }
 
@@ -199,12 +201,28 @@ Json MakeInterrupt(const std::string& requestId) {
                                {"reason", "interrupt"}}}};
 }
 
-Json MakeAllow(const PermissionRequest& request, const Json& updatedInput) {
-  return Envelope(request.requestId,
-                  Json{{"behavior", "allow"},
-                       {"updatedInput", updatedInput.is_null()
-                                            ? request.input
-                                            : updatedInput}});
+Json MakeAllow(const PermissionRequest& request, const Json& updatedInput,
+               const Json& updatedPermissions) {
+  Json body{{"behavior", "allow"},
+            {"updatedInput",
+             updatedInput.is_null() ? request.input : updatedInput}};
+  if (!updatedPermissions.is_null()) {
+    body["updatedPermissions"] = updatedPermissions;
+  }
+  return Envelope(request.requestId, body);
+}
+
+Json SessionPermissions(const Json& suggestions) {
+  if (!suggestions.is_array()) return nullptr;
+  Json kept = Json::array();
+  for (const Json& suggestion : suggestions) {
+    if (!suggestion.is_object()) continue;
+    Json each = suggestion;
+    each["destination"] = "session";
+    kept.push_back(std::move(each));
+  }
+  if (kept.empty()) return nullptr;
+  return kept;
 }
 
 Json MakeDeny(const PermissionRequest& request, const std::string& message) {

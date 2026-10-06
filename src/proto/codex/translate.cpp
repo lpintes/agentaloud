@@ -568,9 +568,20 @@ bool ElicitationPermission(const Json& params, agent::PermissionRequest* out) {
   request.description = StringField(meta, "tool_description");
   // Codex's (or the server's) own question.  Already words, in English.
   request.reason = StringField(params, "message");
-  // `_meta.persist` offers "session" for Codex's layer, but the dialog
-  // answers only yes or no.
-  request.offered = {agent::Verdict::Allow, agent::Verdict::Deny};
+  // `_meta.persist` lists what Codex can remember -- "session" and "always"
+  // for its own layer, nothing for the server's question.  "always" writes to
+  // config.toml, which an answer in a dialog should not do behind the
+  // reader's back, so only "session" is offered.
+  request.offered = {agent::Verdict::Allow};
+  const Json& persist = Field(meta, "persist");
+  if (persist.is_array()) {
+    for (const Json& each : persist) {
+      if (each.is_string() && each.get<std::string>() == "session") {
+        request.offered.push_back(agent::Verdict::AllowForSession);
+      }
+    }
+  }
+  request.offered.push_back(agent::Verdict::Deny);
   *out = std::move(request);
   return true;
 }

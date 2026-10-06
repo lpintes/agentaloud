@@ -29,6 +29,7 @@ class PermissionDialog : public win::Dialog {
 
  protected:
   bool OnInit() override;
+  bool OnCommand(int id, int notification) override;
 
  private:
   const agent::PermissionRequest& request_;
@@ -60,17 +61,38 @@ bool PermissionDialog::OnInit() {
   if (arguments.empty()) arguments = i18n::Text(i18n::Str::kPermNoArguments);
   SetTextLines(IDC_PERM_INPUT, arguments);
 
+  // Hidden, not just disabled, where the backend cannot keep the answer: a
+  // disabled button is still read out, and a choice that is there but never
+  // works is worse than one that is not there.  Without it every step of
+  // computer use asked again (claude-gui-lkk.61).
+  bool session = false;
+  for (agent::Verdict offered : request_.offered) {
+    if (offered == agent::Verdict::AllowForSession) session = true;
+  }
+  if (!session) ShowWindow(Item(IDC_PERM_SESSION), SW_HIDE);
+
   // Focus into the arguments rather than onto a button.  This is the text the
   // answer is about, and it is the one control here worth walking by line.
   SetFocus(Item(IDC_PERM_INPUT));
   return true;
 }
 
+bool PermissionDialog::OnCommand(int id, int notification) {
+  if (id != IDC_PERM_SESSION || notification != BN_CLICKED) return false;
+  EndDialog(hwnd_, IDC_PERM_SESSION);
+  return true;
+}
+
 }  // namespace
 
-bool AskPermission(HWND owner, const agent::PermissionRequest& request) {
+agent::Verdict AskPermission(HWND owner,
+                             const agent::PermissionRequest& request) {
   PermissionDialog dialog(request);
-  return dialog.ShowModal(owner, IDD_PERMISSION) == IDOK;
+  switch (dialog.ShowModal(owner, IDD_PERMISSION)) {
+    case IDOK: return agent::Verdict::Allow;
+    case IDC_PERM_SESSION: return agent::Verdict::AllowForSession;
+    default: return agent::Verdict::Deny;
+  }
 }
 
 }  // namespace ui

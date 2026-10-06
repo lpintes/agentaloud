@@ -61,6 +61,12 @@ struct PermissionRequest {
   // read a payload.  See proto/ask.h.
   bool requiresUserInteraction = false;
   Json input;              // the tool's arguments, e.g. {"command": "..."}
+  // What the terminal offers as "Yes, and don't ask again for ...": rules
+  // ({type: addRules, rules: [{toolName, ruleContent}]}), a mode (setMode
+  // acceptEdits, for Write and Edit), a directory.  Null when the CLI sends
+  // none, as for a call that hit an ask rule -- which no allow rule would
+  // beat anyway.
+  Json suggestions;
 };
 
 // Returns false when the record is a control_request of some other subtype;
@@ -228,7 +234,17 @@ class PermissionModeTracker {
 // updatedInput may be null, in which case the tool's own input is used
 // unchanged.  Passing something else is how a dialog can let the user edit a
 // commit message before it runs.
-Json MakeAllow(const PermissionRequest& request, const Json& updatedInput);
+// `updatedPermissions`, when not null, is sent along: the rules the CLI is to
+// keep from now on (SessionPermissions).
+Json MakeAllow(const PermissionRequest& request, const Json& updatedInput,
+               const Json& updatedPermissions = nullptr);
+
+// The CLI's own suggestions, kept for this session only.  The CLI files them
+// under "localSettings", which is .claude/settings.local.json -- a file an
+// answer in a dialog has no business writing.  With "session" they hold the
+// same and nothing is written (measured, tools/probe_permission_session.py,
+// claude-gui-lkk.61).  Null when there is nothing to keep.
+Json SessionPermissions(const Json& suggestions);
 
 // `message` is handed to the model as the reason, so it is worth writing for
 // the model: "the user declined; ask before trying this again" gets a better

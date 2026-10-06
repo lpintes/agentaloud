@@ -789,6 +789,26 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     prvok, takže „povolenie: Bash" a samotný príkaz prídu ako jedno ohlásenie
     a v tomto poradí. V poli by bolo meno o Tab ďalej než odpoveď.
 
+    **„Povoliť na túto session" povolí presne to, čo navrhlo CLI, a nezapíše
+    nič na disk.** Kým dialóg vedel len áno/nie, pýtal sa computer use
+    v Codexe pri každom kroku a Bash pri každom príkaze (claude-gui-lkk.61).
+    Tlačidlo sa ukáže len tam, kde ho backend ponúka (`PermissionRequest::
+    offered`), a backend ho ponúka len vtedy, keď ho ponúka jeho CLI:
+    Claude, keď pošle `permission_suggestions`; Codex pri nástroji MCP podľa
+    `_meta.persist` a pri príkaze podľa `availableDecisions`. Návrhy Claude
+    idú späť s `destination` prepísaným z `localSettings` na `session`
+    (`proto::SessionPermissions`) — inak by odpoveď v dialógu ticho zapísala
+    do `.claude/settings.local.json`. Z toho istého dôvodu sa neponúka
+    Codexovo „always" ani `acceptWithExecpolicyAmendment`. Vlastné širšie
+    pravidlo (celý nástroj, prefix) by CLI prijalo, ale je to rozhodnutie,
+    ktoré nikto nenavrhol. Odmerané `tools/probe_permission_session.py`.
+
+    Rozsah je teda **taký, aký ho CLI navrhlo**, a dialóg ho zatiaľ nepovie
+    (claude-gui-lkk.62): pri Bash je to celý presný príkaz, pri `Write`
+    prepnutie do `acceptEdits` (CLI to ohlási `system/status` a stavový
+    riadok to zachytí), pri nástroji MCP celý nástroj. Pravidlo `ask`
+    v nastaveniach návrhy nepošle a má prednosť aj pred session pravidlom.
+
 14. **Id session si appka určuje sama a pozná ho pred štartom procesu.** Zo
     streamu príde až so záznamom, ktorý ho nesie, a odpoveď na `initialize` ho
     nemá: v projekte bez `SessionStart` hookov je teda známe až po prvom ťahu

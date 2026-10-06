@@ -188,7 +188,8 @@ void Session::OnLine(std::string_view line) {
       PermissionDecision decision;
       if (onPermission_) decision = onPermission_(request);
       SendJson(decision.allow
-                   ? MakeAllow(request, decision.updatedInput)
+                   ? MakeAllow(request, decision.updatedInput,
+                               decision.updatedPermissions)
                    : MakeDeny(request, decision.denyMessage.empty()
                                            ? "The user declined."
                                            : decision.denyMessage));

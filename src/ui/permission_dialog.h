@@ -24,10 +24,11 @@
 
 namespace ui {
 
-// True = allow the call.  False is every other way out, Esc included: a
-// permission prompt closed without an answer is a refusal, because the tool
-// runs only on a "yes".
-bool AskPermission(HWND owner, const agent::PermissionRequest& request);
+// Allow, AllowForSession (only when the request offers it) or Deny.  Deny is
+// every other way out, Esc included: a permission prompt closed without an
+// answer is a refusal, because the tool runs only on a "yes".
+agent::Verdict AskPermission(HWND owner,
+                             const agent::PermissionRequest& request);
 
 }  // namespace ui
 

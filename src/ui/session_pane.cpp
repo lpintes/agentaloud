@@ -641,9 +641,7 @@ LRESULT SessionPane::OnPermission(LPARAM pointer) {
   // there is an answer.
   SignalWaiting();
 
-  pending->answer.verdict = AskPermission(host_, *pending->request)
-                                ? agent::Verdict::Allow
-                                : agent::Verdict::Deny;
+  pending->answer.verdict = AskPermission(host_, *pending->request);
   // No message: what the model is told on a denial is the adapter's to say
   // (proto::kDeniedInstruction for Claude).
   return 0;

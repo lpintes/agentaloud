@@ -52,6 +52,7 @@ const std::vector<Template>& Templates() {
         {IDC_PERM_REASON_LABEL, Str::kDlgPermReason},
         {IDC_PERM_INPUT_LABEL, Str::kDlgPermArguments},
         {IDOK, Str::kDlgPermAllow},
+        {IDC_PERM_SESSION, Str::kDlgPermSession},
         {IDCANCEL, Str::kDlgPermDeny}}},
       {IDD_COMMANDS,
        Str::kDlgCmdCaption,

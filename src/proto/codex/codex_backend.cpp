@@ -482,8 +482,24 @@ void CodexBackend::OnServerRequest(const Json& message) {
     // Codex's own sentence about why it asks, when the model asked to step
     // outside the sandbox.  Not a code to translate: it is already words.
     request.reason = StringField(params, "reason");
-    request.offered = {agent::Verdict::Allow, agent::Verdict::AllowForSession,
-                       agent::Verdict::Deny, agent::Verdict::Abort};
+    // A command lists what it takes, and "acceptForSession" is not always
+    // there (measured: accept, acceptWithExecpolicyAmendment, cancel -- the
+    // amendment is a rule written to disk, not offered here).  A file change
+    // lists nothing and its schema takes it.
+    bool session = true;
+    const Json& available = Field(params, "availableDecisions");
+    if (available.is_array()) {
+      session = false;
+      for (const Json& each : available) {
+        if (each.is_string() && each.get<std::string>() == "acceptForSession") {
+          session = true;
+        }
+      }
+    }
+    request.offered = {agent::Verdict::Allow};
+    if (session) request.offered.push_back(agent::Verdict::AllowForSession);
+    request.offered.push_back(agent::Verdict::Deny);
+    request.offered.push_back(agent::Verdict::Abort);
     agent::PermissionAnswer answer;
     if (callbacks_.onPermission) answer = callbacks_.onPermission(request);
     Send({{"id", id}, {"result", {{"decision", Decision(answer.verdict)}}}});
