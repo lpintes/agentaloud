@@ -152,6 +152,23 @@ agent::ToolResult QuestionResult(const std::string& callId,
                                  const std::vector<agent::Question>& questions,
                                  const agent::QuestionAnswer& answer);
 
+// ---- MCP elicitation ------------------------------------------------------
+//
+// mcpServer/elicitation/request is how an MCP server asks the reader
+// something, and two different askers use it (measured with a stand-in for
+// computer use, tools/probe_computer_use.py, claude-gui-lkk.44.12): Codex
+// itself, before it calls a server's tool (`_meta.codex_approval_kind`
+// "mcp_tool_call", the arguments in `_meta.tool_params`), and the server,
+// whose own question Codex passes on unchanged (`_meta` null) -- computer use
+// asking "Allow Codex to use Notepad?".  Both are a form with no fields, that
+// is a yes or a no.  Refused, the first fails the call and the second is what
+// the plugin reports to the model as "not approved", with no dialog anywhere.
+
+// The request as a permission, when a yes or a no answers it.  False for a
+// form with fields and for a URL to open, which this dialog cannot do.
+bool ElicitationPermission(const Json& params, agent::PermissionRequest* out);
+Json MakeElicitationAnswer(agent::Verdict verdict);
+
 // ---- The stream -----------------------------------------------------------
 
 // The live stream, message by message.  A class, because a call is complete

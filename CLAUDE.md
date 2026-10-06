@@ -750,6 +750,18 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     katalóg bez async (`-c model_catalog_json=…`) by sync zaručil, ale je to
     snímka, ktorá s ďalšou verziou Codexu ticho zastará — zamietnuté.
 
+    **Serverová požiadavka Codexu, ktorú adaptér nepozná, je zamietnutie.**
+    Odpovedá sa na ňu `-32601` (nechať ju visieť by zastavilo ťah — server
+    čaká bez časového limitu), a Codex chybu číta ako „nie". Tak sa stratilo
+    povolenie MCP nástroja aj pluginu computer use: prichádza ako
+    `mcpServer/elicitation/request` — raz od Codexu pred volaním nástroja,
+    raz od samotného servera — a plugin potom modelu povedal „not approved"
+    bez jediného dialógu (claude-gui-lkk.44.12). Formulár bez polí je dnes
+    dialóg povolenia (`proto::codex::ElicitationPermission`); formulár s poľami
+    a `mode: "url"` stále padajú na `-32601` (claude-gui-lkk.44.13). Kto
+    hľadá, prečo Codex hlási zamietnutie, ktoré nikto nevidel, nech začne pri
+    `Unrecognised` so serverovou metódou.
+
 13. **Čo dialóg ukáže pred spustením nástroja, to prepis drží po ňom — a je to
     ten istý text.** Povolenie sa pýta na volanie, ktoré o chvíľu ukáže prepis
     znova. Keby to boli dve rôzne vykreslenia, čitateľ povolí jedno a prečíta

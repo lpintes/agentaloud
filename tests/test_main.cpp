@@ -2955,6 +2955,63 @@ void TestCodexFixtureEdit(const std::string& dir) {
   CHECK(done);
 }
 
+// Nie fixtura: computer use sa na tento stroj bez Codex Desktop nedostane.
+// Tvary su doslova zo sondy s nahradnym MCP serverom
+// (tools/probe_computer_use.py, 6. 10. 2026, claude-gui-lkk.44.12).
+void TestCodexElicitation() {
+  TEST("codex elicitacia: ano/nie je povolenie, formular s polami nie");
+  const proto::Json codexAsks = proto::Json::parse(
+      R"({"threadId":"t","turnId":"u","serverName":"fakecu","mode":"form",
+          "_meta":{"codex_approval_kind":"mcp_tool_call",
+                   "persist":["session","always"],
+                   "tool_description":"Computer use: open a desktop application.",
+                   "tool_params":{"app":"Notepad"},
+                   "tool_params_display":[{"name":"app","value":"Notepad",
+                                           "display_name":"app"}]},
+          "message":"Allow the fakecu MCP server to run tool \"open_app\"?",
+          "requestedSchema":{"type":"object","properties":{}}})");
+  agent::PermissionRequest request;
+  CHECK(proto::codex::ElicitationPermission(codexAsks, &request));
+  CHECK_EQ(request.call.name, std::string("fakecu"));
+  CHECK_EQ(request.call.fields.size(), size_t{1});
+  if (!request.call.fields.empty()) {
+    CHECK_EQ(request.call.fields[0].name, std::string("app"));
+    CHECK_EQ(request.call.fields[0].value, std::string("Notepad"));
+  }
+  CHECK_EQ(request.reason,
+           std::string("Allow the fakecu MCP server to run tool \"open_app\"?"));
+  CHECK(!request.description.empty());
+
+  // Otazka samotneho pluginu: _meta null, ziadne argumenty.  Prave tuto
+  // appka odmietala a plugin z toho hlasil "not approved".
+  const proto::Json pluginAsks = proto::Json::parse(
+      R"({"threadId":"t","turnId":"u","serverName":"fakecu","mode":"form",
+          "_meta":null,"message":"Allow Codex to use Notepad?",
+          "requestedSchema":{"type":"object","properties":{}}})");
+  CHECK(proto::codex::ElicitationPermission(pluginAsks, &request));
+  CHECK_EQ(request.reason, std::string("Allow Codex to use Notepad?"));
+  CHECK(request.call.fields.empty());
+
+  proto::Json form = pluginAsks;
+  form["requestedSchema"]["properties"] = {{"name", {{"type", "string"}}}};
+  CHECK(!proto::codex::ElicitationPermission(form, &request));
+  const proto::Json url = proto::Json::parse(
+      R"({"threadId":"t","turnId":null,"serverName":"s","mode":"url",
+          "_meta":null,"message":"Sign in","url":"https://example.com",
+          "elicitationId":"e"})");
+  CHECK(!proto::codex::ElicitationPermission(url, &request));
+
+  CHECK_EQ(proto::codex::MakeElicitationAnswer(agent::Verdict::Allow),
+           proto::Json::parse(R"({"action":"accept","content":{},"_meta":null})"));
+  CHECK_EQ(
+      proto::codex::MakeElicitationAnswer(agent::Verdict::AllowForSession),
+      proto::Json::parse(
+          R"({"action":"accept","content":{},"_meta":{"persist":"session"}})"));
+  CHECK_EQ(proto::codex::MakeElicitationAnswer(agent::Verdict::Deny),
+           proto::Json::parse(
+               R"({"action":"decline","content":null,"_meta":null})"));
+}
+
 void TestCodexFixtureAsk(const std::string& dir) {
   TEST("codex fixtura ask: otazka je klucovana id, odpoved je pole");
   CodexReplay replay;
@@ -3208,6 +3265,7 @@ int main(int argc, char** argv) {
   TestFixtureThinking(fixtures);
   TestFixtureDisk(fixtures);
   TestCodexModes();
+  TestCodexElicitation();
   TestCodexFixtureMulti(fixtures);
   TestCodexFixtureEdit(fixtures);
   TestCodexFixtureAsk(fixtures);

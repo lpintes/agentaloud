@@ -508,7 +508,17 @@ void CodexBackend::OnServerRequest(const Json& message) {
     return;
   }
 
-  // Anything else -- an MCP elicitation, a dynamic tool, a token refresh --
+  if (method == "mcpServer/elicitation/request") {
+    agent::PermissionRequest request;
+    if (ElicitationPermission(params, &request)) {
+      agent::PermissionAnswer answer;
+      if (callbacks_.onPermission) answer = callbacks_.onPermission(request);
+      Send({{"id", id}, {"result", MakeElicitationAnswer(answer.verdict)}});
+      return;
+    }
+  }
+
+  // Anything else -- a form with fields, a dynamic tool, a token refresh --
   // is refused rather than left waiting: the server waits without a timeout
   // (measured), and a turn stuck on a request nobody shows is worse than one
   // told no.

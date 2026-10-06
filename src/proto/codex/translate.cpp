@@ -552,6 +552,46 @@ agent::ToolResult QuestionResult(const std::string& callId,
   return result;
 }
 
+bool ElicitationPermission(const Json& params, agent::PermissionRequest* out) {
+  // "openai/form" and "openaiForm" carry a schema of their own shape; one with
+  // no properties is still a yes or a no, and anything else is not.
+  if (StringField(params, "mode") == "url") return false;
+  const Json& properties = Field(Field(params, "requestedSchema"), "properties");
+  if (!properties.is_null() && !properties.empty()) return false;
+
+  agent::PermissionRequest request;
+  const Json& meta = Field(params, "_meta");
+  // No item id: the call item/started announced is not found by it.  The
+  // arguments are, and they make the same fields the transcript shows.
+  request.call.name = StringField(params, "serverName");
+  ArgumentFields(Field(meta, "tool_params"), &request.call);
+  request.description = StringField(meta, "tool_description");
+  // Codex's (or the server's) own question.  Already words, in English.
+  request.reason = StringField(params, "message");
+  // `_meta.persist` offers "session" for Codex's layer, but the dialog
+  // answers only yes or no.
+  request.offered = {agent::Verdict::Allow, agent::Verdict::Deny};
+  *out = std::move(request);
+  return true;
+}
+
+Json MakeElicitationAnswer(agent::Verdict verdict) {
+  switch (verdict) {
+    case agent::Verdict::Allow:
+      return {{"action", "accept"},
+              {"content", Json::object()},
+              {"_meta", nullptr}};
+    case agent::Verdict::AllowForSession:
+      return {{"action", "accept"},
+              {"content", Json::object()},
+              {"_meta", {{"persist", "session"}}}};
+    case agent::Verdict::Deny: break;
+    case agent::Verdict::Abort:
+      return {{"action", "cancel"}, {"content", nullptr}, {"_meta", nullptr}};
+  }
+  return {{"action", "decline"}, {"content", nullptr}, {"_meta", nullptr}};
+}
+
 void Translator::ReportModel(const std::string& model,
                              std::vector<agent::Event>* out) {
   if (model.empty() || model == model_) return;
