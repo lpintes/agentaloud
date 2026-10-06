@@ -1,6 +1,7 @@
 #include "settings.h"
 
 #include "arguments.h"
+#include "i18n/i18n.h"
 #include "model/utf.h"
 
 namespace app {
@@ -125,6 +126,14 @@ void Settings::Check(const std::map<std::string, agent::Capabilities>& backends)
     if (key == kCheckUpdatesKey) {
       if (!empty && entry.value != "0" && entry.value != "1") {
         Complain(entry.line, L"check-updates je 0 alebo 1, nie " +
+                                 Wide(entry.value));
+      }
+      continue;
+    }
+    if (key == kLanguageKey) {
+      i18n::Lang lang;
+      if (!empty && !i18n::ParseLanguage(entry.value, &lang)) {
+        Complain(entry.line, L"language je sk alebo en, nie " +
                                  Wide(entry.value));
       }
       continue;

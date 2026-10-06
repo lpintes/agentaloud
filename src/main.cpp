@@ -14,6 +14,7 @@
 
 #include "app_name.h"
 #include "arguments.h"
+#include "i18n/i18n.h"
 #include "model/utf.h"
 #include "settings.h"
 #include "update.h"
@@ -85,10 +86,35 @@ std::wstring SettingsFile() {
 }
 
 // A file that is not there is no settings at all, which is how every first
-// run starts; a file that is there is checked against every backend.
-app::Settings ReadSettings(const std::wstring& file) {
+// run starts: empty.
+std::string ReadSettingsBytes(const std::wstring& file) {
   std::string bytes;
   if (file.empty() || !win::ReadFileBytes(file, &bytes)) return {};
+  return bytes;
+}
+
+// The language, chosen before any text is made -- and text is made early: the
+// complaints about the command line and about the settings file are both
+// built while they are read.  So the one key is taken out of the bytes ahead
+// of everything, and it is taken even from a file that is wrong elsewhere:
+// the complaint about that file is the first thing the reader hears, and it
+// should be in the reader's language.  A language the file gets wrong falls
+// back to Windows' and is complained about there.
+//
+// Slovak Windows gets Slovak, every other one English (claude-gui-lkk.52).
+i18n::Lang ChooseLanguage(const std::string& settingsBytes) {
+  i18n::Lang lang;
+  if (i18n::ParseLanguage(
+          app::Settings::Parse(settingsBytes).Get(app::kLanguageKey), &lang)) {
+    return lang;
+  }
+  return PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_SLOVAK
+             ? i18n::Lang::kSlovak
+             : i18n::Lang::kEnglish;
+}
+
+// Checked against every backend, not only the one that will run.
+app::Settings ReadSettings(const std::string& bytes) {
   app::Settings settings = app::Settings::Parse(bytes);
   std::map<std::string, agent::Capabilities> backends;
   for (const std::string& name : kBackends) {
@@ -194,6 +220,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   controls.dwICC = ICC_STANDARD_CLASSES;
   InitCommonControlsEx(&controls);
 
+  const std::wstring settingsFile = SettingsFile();
+  const std::string settingsBytes = ReadSettingsBytes(settingsFile);
+  i18n::SetLanguage(ChooseLanguage(settingsBytes));
+
   // Read before anything is loaded and long before anything is shown, because
   // --help must end without a window ever existing -- and Msftedit.dll below
   // is the first thing that would put one on screen if it failed.
@@ -206,8 +236,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   // line left out, and then goes through the same checks as if it had been
   // typed.  A file with a bad line is not applied at all -- half a file is a
   // setting nobody wrote.
-  const std::wstring settingsFile = SettingsFile();
-  app::Settings settings = ReadSettings(settingsFile);
+  app::Settings settings = ReadSettings(settingsBytes);
   if (settings.error().empty()) app::ApplySettings(&arguments, settings);
   app::CheckBackend(&arguments, kBackends);
   // Made now, before the folder picker: its capabilities are what the mode is

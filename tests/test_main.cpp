@@ -1000,6 +1000,18 @@ void TestSettingsWrite() {
   app::Settings yes = app::Settings::Parse("check-updates=ano\n");
   yes.Check(backends);
   CHECK(yes.error().find(L"ano") != std::wstring::npos);
+
+  // Jazyk: sk, en alebo prazdny riadok-sablona; nic ine.
+  app::Settings language = app::Settings::Parse("language=en\n");
+  language.Check(backends);
+  CHECK(language.error().empty());
+  CHECK_EQ(language.Get(app::kLanguageKey), std::string("en"));
+  app::Settings template_ = app::Settings::Parse("language=\n");
+  template_.Check(backends);
+  CHECK(template_.error().empty());
+  app::Settings german = app::Settings::Parse("language=de\n");
+  german.Check(backends);
+  CHECK(german.error().find(L"de") != std::wstring::npos);
 }
 
 // Pravidla aktualizacii bez siete (claude-gui-lkk.53).

@@ -111,6 +111,10 @@ class Settings {
 inline constexpr char kBackendKey[] = "backend";
 inline constexpr char kPermissionModeKey[] = "permission-mode";
 inline constexpr char kModelKey[] = "model";
+// "sk" or "en"; without it, the language of Windows (claude-gui-lkk.52).
+// main.cpp reads it out of the bytes before anything else, because the
+// complaints this file makes are already text in some language.
+inline constexpr char kLanguageKey[] = "language";
 // Updates (claude-gui-lkk.53).  The last two are written by the application:
 // the day of the last check that got an answer, "YYYY-MM-DD", and the release
 // the reader answered "Preskočiť túto verziu" to, "2026.10.1".
