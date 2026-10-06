@@ -66,8 +66,23 @@ std::vector<agent::Event> TranslateRecord(const Json& record);
 // translator.
 std::vector<agent::Event> TranslateHistory(const std::vector<Json>& records);
 
+// What the adapter tells the model when the reader turns a tool down or
+// closes a question unanswered.  English whatever the reader's language: an
+// instruction to the model, not text for the reader (claude-gui-lkk.52).
+//
+// The CLI hands both back in the stream as the text of the tool's result --
+// a plain string, byte for byte the message, is_error true, and no
+// system/permission_denied record at all (measured on 2.1.288, 2026-10-06).
+// The transcript would show the reader the model's instruction, so
+// MakeToolResult recognises its own words and puts the reader's in their
+// place: "zamietnuté" and "bez odpovede", Codex's words for the same two
+// events.  Any other text -- a rule's, a hook's -- is shown as it came.
+extern const char kDeniedInstruction[];
+extern const char kQuestionDeclinedInstruction[];
+
 // What Claude Code can do, in the port's words -- above all its permission
-// modes, their Slovak names and the order Shift+Tab steps through them.  Here
+// modes, their names in the reader's language and the order Shift+Tab steps
+// through them.  Here
 // and not in ClaudeBackend so that a test can hold the cycle against the one
 // it replaced without starting a process.
 agent::Capabilities ClaudeCapabilities();

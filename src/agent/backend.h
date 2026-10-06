@@ -122,7 +122,8 @@ struct PermissionRequest {
 struct PermissionAnswer {
   Verdict verdict = Verdict::Deny;
   // Handed to the model when the tool is denied, so it is written for the
-  // model: "the user declined; ask before trying this again".
+  // model: "the user declined; ask before trying this again".  Empty leaves
+  // the words to the adapter, which knows its CLI and writes them in English.
   std::string message;
 };
 

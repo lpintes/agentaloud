@@ -644,10 +644,8 @@ LRESULT SessionPane::OnPermission(LPARAM pointer) {
   pending->answer.verdict = AskPermission(host_, *pending->request)
                                 ? agent::Verdict::Allow
                                 : agent::Verdict::Deny;
-  // English whatever the reader's language: this is an instruction to the
-  // model, not text for the reader (claude-gui-lkk.52).
-  pending->answer.message =
-      "The user denied this. Do not continue; ask what to do next.";
+  // No message: what the model is told on a denial is the adapter's to say
+  // (proto::kDeniedInstruction for Claude).
   return 0;
 }
 

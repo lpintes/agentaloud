@@ -1700,6 +1700,55 @@ void TestToolPathsAreShortened() {
   CHECK(summary.find(L"...") == size_t{6});  // hned za "Read: "
 }
 
+// Pokyn, ktory adapter posle modelu pri zamietnuti, vrati CLI v streame ako
+// text vysledku nastroja -- a prepis by citatelovi ukazal anglicku vetu pre
+// model.  Tvar zaznamu je odmerany sondou (CLI 2.1.288, 6. 10. 2026,
+// claude-gui-lkk.52): obycajny retazec, is_error true, bez obalu a bez
+// system/permission_denied.  Iny text chyby zostava, ako prisiel.
+void TestOwnInstructionsStayOutOfTranscript() {
+  TEST("transcript: vlastny pokyn modelu sa citatelovi neukaze");
+  const auto result = [](const std::string& id, const std::string& text) {
+    proto::Json block = {{"type", "tool_result"},
+                         {"content", text},
+                         {"is_error", true},
+                         {"tool_use_id", id}};
+    proto::Json record = {{"type", "user"}};
+    record["message"] = {{"role", "user"},
+                         {"content", proto::Json::array({block})}};
+    return record;
+  };
+  model::Transcript transcript;
+  transcript.Append(proto::TranslateRecord(proto::Json::parse(R"({
+    "type": "assistant",
+    "message": {"content": [
+      {"type": "tool_use", "id": "toolu_B", "name": "Bash",
+       "input": {"command": "echo hello > hello.txt"}},
+      {"type": "tool_use", "id": "toolu_Q", "name": "AskUserQuestion",
+       "input": {"questions": []}},
+      {"type": "tool_use", "id": "toolu_X", "name": "Bash",
+       "input": {"command": "ls"}}
+    ]}
+  })")));
+  transcript.Append(
+      proto::TranslateRecord(result("toolu_B", proto::kDeniedInstruction)));
+  transcript.Append(proto::TranslateRecord(
+      result("toolu_Q", proto::kQuestionDeclinedInstruction)));
+  transcript.Append(proto::TranslateRecord(
+      result("toolu_X", "Permission to use Bash has been denied.")));
+  std::vector<std::wstring> results;
+  for (const model::Block& block : transcript.blocks()) {
+    if (block.kind == model::BlockKind::ToolResult) {
+      results.push_back(block.summary);
+    }
+  }
+  CHECK_EQ(results.size(), size_t{3});
+  if (results.size() == 3) {
+    CHECK_EQ(results[0], std::wstring(L"chyba: zamietnuté"));
+    CHECK_EQ(results[1], std::wstring(L"chyba: bez odpovede"));
+    CHECK(results[2].find(L"denied") != std::wstring::npos);
+  }
+}
+
 void TestEditAndWriteSayWhatChanged() {
   TEST("transcript: Edit a Write hovoria zmenu, nie vypis poli");
   model::Transcript transcript;
@@ -3141,6 +3190,7 @@ int main(int argc, char** argv) {
   TestAnsiEscapesAreStripped();
   TestToolPathsAreShortened();
   TestEditAndWriteSayWhatChanged();
+  TestOwnInstructionsStayOutOfTranscript();
   TestPermissionTextMatchesTranscript();
   TestFailedToolResultReadsLikeAnError();
   TestEmptyBlocksAreDropped();

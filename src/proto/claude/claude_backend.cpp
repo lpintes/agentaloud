@@ -166,11 +166,8 @@ PermissionDecision ClaudeBackend::OnPermission(
     if (answer.declined) {
       // Written for the model.  "Denied" would read as a rule refusing the
       // tool and invite a retry; this says a person declined to answer, which
-      // is a thing to stop for.  English whatever the reader's language: it
-      // is an instruction to the model (claude-gui-lkk.52).
-      decision.denyMessage =
-          "The user closed the question without answering. Do not ask it "
-          "again; ask in plain text what to do next.";
+      // is a thing to stop for.
+      decision.denyMessage = kQuestionDeclinedInstruction;
     } else {
       decision.allow = true;
       decision.updatedInput =
@@ -190,7 +187,11 @@ PermissionDecision ClaudeBackend::OnPermission(
   const agent::PermissionAnswer answer = callbacks_.onPermission(out);
   decision.allow = answer.verdict == agent::Verdict::Allow ||
                    answer.verdict == agent::Verdict::AllowForSession;
-  decision.denyMessage = answer.message;
+  // What the model is told is the adapter's to write, not the pane's: the
+  // pane does not know which CLI it is talking to, nor that the words come
+  // back in the stream for the Translator to recognise.
+  decision.denyMessage =
+      answer.message.empty() ? kDeniedInstruction : answer.message;
   return decision;
 }
 

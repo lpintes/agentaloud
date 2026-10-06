@@ -1390,7 +1390,13 @@ sa nás na nič nespýta. Prepínač je z `--help` vypadnutý, ale CLI ho prijí
   `ids.def` je zoznam, `<jazyk>.def` texty, chýbajúci preklad zastaví build.
   Jazyk sa volí raz pri štarte (`language` v nastaveniach, inak jazyk
   Windows) a za behu sa nemení — súhrny blokov sú text prepisu. Výnimka je
-  text pre agenta (pokyn modelu), ten je vždy anglicky. Čitateľovi sa vyká.
+  text pre agenta (pokyn modelu), ten je vždy anglicky a píše ho adaptér, nie
+  panel. **CLI ho vráti v streame ako text výsledku nástroja** (odmerané
+  6. 10. 2026: obyčajný reťazec, `is_error`, bez `system/permission_denied`),
+  takže by ho prepis ukázal čitateľovi; `proto::MakeToolResult` preto vlastné
+  pokyny (`kDeniedInstruction`, `kQuestionDeclinedInstruction`) spozná a
+  nahradí slovom z katalógu. Nový pokyn modelu patrí tam tiež. Čitateľovi sa
+  vyká.
 - **Zdrojáky nepíš cez shell heredoc.** Toto prostredie v ňom žerie spätné
   lomky, takže `L'\\'` sa ticho zmení na `L'\'`. Používaj Write/Edit.
 - Žiadny Python ani Node v produkte. Python je na prieskum správania CLI

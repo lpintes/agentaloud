@@ -6,6 +6,13 @@
 #include "proto/claude/sessions.h"
 
 namespace proto {
+
+const char kDeniedInstruction[] =
+    "The user denied this. Do not continue; ask what to do next.";
+const char kQuestionDeclinedInstruction[] =
+    "The user closed the question without answering. Do not ask it again; "
+    "ask in plain text what to do next.";
+
 namespace {
 
 std::string StringField(const Json& object, const char* name) {
@@ -131,6 +138,14 @@ agent::ToolResult MakeToolResult(const Json& block) {
   result.text = ResultText(block);
   const bool wrapped = UnwrapToolError(result.text);
   result.isError = block.value("is_error", false) || wrapped;
+  // Our own instruction to the model, echoed back -- see the header.  The
+  // words are Codex's for the same two events, so a denial reads the same
+  // whichever agent was refused.
+  if (result.isError && result.text == kDeniedInstruction) {
+    result.text = i18n::Utf8(i18n::Str::kToolDeclined);
+  } else if (result.isError && result.text == kQuestionDeclinedInstruction) {
+    result.text = i18n::Utf8(i18n::Str::kNoAnswer);
+  }
   return result;
 }
 
