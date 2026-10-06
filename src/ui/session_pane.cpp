@@ -8,6 +8,7 @@
 #include <ctime>
 
 #include "app_name.h"
+#include "i18n/i18n.h"
 #include "model/history.h"
 #include "model/utf.h"
 #include "ui/ask_dialog.h"
@@ -18,6 +19,9 @@
 #include "win/clipboard.h"
 
 namespace ui {
+
+using i18n::Str;
+
 namespace {
 
 constexpr int kIdTranscriptLabel = 1001;
@@ -206,7 +210,7 @@ bool SessionPane::Create(HWND host, HINSTANCE instance) {
   // A static label immediately before an edit is what gives the edit its
   // accessible name; without one a screen reader announces only "edit".
   transcriptLabel_ = CreateWindowExW(
-      0, L"STATIC", L"&Prepis:", WS_CHILD | WS_VISIBLE | SS_LEFT, 0, 0, 0, 0,
+      0, L"STATIC", i18n::Text(Str::kLabelTranscript), WS_CHILD | WS_VISIBLE | SS_LEFT, 0, 0, 0, 0,
       host, reinterpret_cast<HMENU>(kIdTranscriptLabel), instance, nullptr);
 
   transcript_ = CreateWindowExW(
@@ -217,7 +221,7 @@ bool SessionPane::Create(HWND host, HINSTANCE instance) {
       nullptr);
 
   promptLabel_ = CreateWindowExW(
-      0, L"STATIC", L"P&rompt (Ctrl+Enter odošle):",
+      0, L"STATIC", i18n::Text(Str::kLabelPrompt),
       WS_CHILD | WS_VISIBLE | SS_LEFT, 0, 0, 0, 0, host,
       reinterpret_cast<HMENU>(kIdPromptLabel), instance, nullptr);
 
@@ -336,7 +340,9 @@ void SessionPane::Apply(const model::Edit& edit) {
   // wrong place and nothing else would say so.  Loud, in the title, because a
   // quiet log is a thing nobody reads.
   if (TextLength(transcript_) != static_cast<int>(model_.Text().size())) {
-    SetWindowTextW(host_, L"" APP_NAME L" — NESÚLAD MAPY ROZSAHOV");
+    const std::wstring title = std::wstring(L"" APP_NAME L" — ") +
+                               i18n::Text(Str::kTitleRangeMismatch);
+    SetWindowTextW(host_, title.c_str());
   }
 }
 
@@ -368,7 +374,7 @@ bool SessionPane::Start(std::unique_ptr<agent::Backend> backend,
   // question, and it answers it with the real id.
   details_.model = options.model;
   details_.requestedModel = options.model;
-  if (statusBar_) statusBar_->Set(StatusBar::kProject, L"projekt " + project_);
+  if (statusBar_) statusBar_->Set(StatusBar::kProject, i18n::Format(Str::kStatusProject, {project_}));
   SetWindowTextW(host_, (L"" APP_NAME L" — " + path).c_str());
 
   agent::Backend::Callbacks callbacks;
@@ -519,7 +525,7 @@ void SessionPane::OnDrain() {
           // so a turn that thinks, calls a tool and thinks again says it
           // twice, which is what is happening.
           thinkingSaid_ = true;
-          if (speech_.available()) speech_.Say(L"premýšľam", false);
+          if (speech_.available()) speech_.Say(i18n::Text(Str::kSayThinking), false);
         }
       } else if (const auto* usage = std::get_if<agent::UsageChanged>(&event)) {
         // Overwritten, not added to: it is the session's running total, so
@@ -581,7 +587,7 @@ void SessionPane::OnTurnEnded() {
   if (interrupted_) {
     interrupted_ = false;
     if (InForeground() && speech_.available()) {
-      speech_.Say(L"prerušené", false);
+      speech_.Say(i18n::Text(Str::kSayInterrupted), false);
     } else {
       MessageBeep(InForeground() ? MB_ICONASTERISK : kBackgroundEndSound);
     }
@@ -638,8 +644,10 @@ LRESULT SessionPane::OnPermission(LPARAM pointer) {
   pending->answer.verdict = AskPermission(host_, *pending->request)
                                 ? agent::Verdict::Allow
                                 : agent::Verdict::Deny;
+  // English whatever the reader's language: this is an instruction to the
+  // model, not text for the reader (claude-gui-lkk.52).
   pending->answer.message =
-      "Používateľ to zamietol. Nepokračuj a spýtaj sa, čo ďalej.";
+      "The user denied this. Do not continue; ask what to do next.";
   return 0;
 }
 
@@ -784,7 +792,7 @@ void SessionPane::SignalTurnEnd() {
   // offer, NVDA speaks text.  It queues, like everything that arrived on its
   // own -- invariant 7.
   if (spokeThisTurn_ && speech_.available()) {
-    speech_.Say(L"hotovo", false);
+    speech_.Say(i18n::Text(Str::kSayDone), false);
     return;
   }
   // Nothing was said all turn -- it did no tool and produced no text -- or
@@ -828,7 +836,7 @@ bool SessionPane::Navigate(wchar_t key) {
         return block.isError ||
                block.kind == model::BlockKind::PermissionDenied;
       };
-      what = L"chyba";
+      what = i18n::Text(Str::kError);
       break;
     default:
       return false;
@@ -839,9 +847,8 @@ bool SessionPane::Navigate(wchar_t key) {
                                           ? model_.PreviousWhere(caret, match)
                                           : model_.NextWhere(caret, match);
   if (!found.has_value()) {
-    Announce((backwards ? L"žiadny predchádzajúci výskyt: "
-                        : L"žiadny ďalší výskyt: ") +
-             what);
+    Announce(i18n::Format(
+        backwards ? Str::kNoPreviousMatch : Str::kNoNextMatch, {what}));
     return true;
   }
   GoToBlock(*found);
@@ -851,20 +858,21 @@ bool SessionPane::Navigate(wchar_t key) {
 void SessionPane::SetBookmark(size_t slot) {
   if (slot >= model::Bookmarks::kSlots) return;
   if (slot == 0) {
-    Announce(L"nultá záložka sa nenastavuje, píše ju aplikácia");
+    Announce(i18n::Text(Str::kBookmarkZeroIsAuto));
     return;
   }
   const model::Mark mark = model::MarkAt(model_, CaretOffset(transcript_));
   if (!mark.set) {
-    Announce(L"prepis je prázdny");
+    Announce(i18n::Text(Str::kTranscriptEmpty));
     return;
   }
   bookmarks_.Set(slot, mark);
   // The slot number and the line, in that order.  The number alone leaves the
   // reader wondering what they just marked; the line alone leaves them
   // wondering whether the key arrived.
-  Announce(L"záložka " + std::to_wstring(slot) + L": " +
-           model_.LineAt(CaretOffset(transcript_)));
+  Announce(i18n::Format(Str::kBookmarkSet,
+                        {std::to_wstring(slot),
+                         model_.LineAt(CaretOffset(transcript_))}));
 }
 
 void SessionPane::GoToBookmark(size_t slot) {
@@ -873,8 +881,9 @@ void SessionPane::GoToBookmark(size_t slot) {
   if (!offset.has_value()) {
     // Slot 0 is empty until something arrives while you are reading, which is
     // the only situation it is for -- so it says something different.
-    Announce(slot == 0 ? L"odvtedy nič nepribudlo"
-                       : L"záložka " + std::to_wstring(slot) + L" je prázdna");
+    Announce(slot == 0 ? std::wstring(i18n::Text(Str::kNothingNewSince))
+                       : i18n::Format(Str::kBookmarkEmpty,
+                                      {std::to_wstring(slot)}));
     return;
   }
   GoToOffset(*offset);
@@ -959,7 +968,7 @@ std::wstring SessionPane::ModeLabel(const std::wstring& id) const {
 // sentence for the key and for a change the CLI made, so the two never sound
 // like different things.
 std::wstring SessionPane::ModeSentence(const std::wstring& id) const {
-  std::wstring said = L"režim " + ModeLabel(id);
+  std::wstring said = i18n::Format(Str::kModeNamed, {ModeLabel(id)});
   const agent::Mode* mode =
       agent::FindMode(backend_->capabilities(), model::Utf8FromUtf16(id));
   if (mode != nullptr && !mode->gloss.empty()) {
@@ -1002,7 +1011,7 @@ void SessionPane::RefreshModelField() {
   // bare values otherwise, and "claude-opus-5, pokus, 5 h 83 %" is a riddle.
   // A part that is not known yet is left out rather than said empty.
   std::wstring facts;
-  if (!details_.model.empty()) facts = L"model " + details_.model;
+  if (!details_.model.empty()) facts = i18n::Format(Str::kStatusModel, {details_.model});
   const std::wstring& mode = details_.permissionMode;
   // The ordinary mode is left off: it is the state a reader assumes, and
   // naming it every time would crowd the field that has to be read in one
@@ -1011,7 +1020,7 @@ void SessionPane::RefreshModelField() {
       agent::FindMode(backend_->capabilities(), model::Utf8FromUtf16(mode));
   if (!mode.empty() && !(known != nullptr && known->ordinary)) {
     if (!facts.empty()) facts += L", ";
-    facts += L"režim " + ModeLabel(mode);
+    facts += i18n::Format(Str::kModeNamed, {ModeLabel(mode)});
   }
   statusBar_->Set(StatusBar::kModel, facts);
 }
@@ -1026,12 +1035,13 @@ void SessionPane::ShowRateLimit(const agent::RateLimitChanged& limit) {
   // with three others.
   const auto length = [](int minutes) {
     if (minutes > 0 && minutes % (24 * 60) == 0) {
-      return std::to_wstring(minutes / (24 * 60)) + L" d";
+      return i18n::Format(Str::kDurationDays,
+                          {std::to_wstring(minutes / (24 * 60))});
     }
     if (minutes > 0 && minutes % 60 == 0) {
-      return std::to_wstring(minutes / 60) + L" h";
+      return i18n::Format(Str::kDurationHours, {std::to_wstring(minutes / 60)});
     }
-    return std::to_wstring(minutes) + L" min";
+    return i18n::Format(Str::kDurationMinutes, {std::to_wstring(minutes)});
   };
   std::wstring text;
   long long resetsAt = limit.resetsAt;
@@ -1042,11 +1052,6 @@ void SessionPane::ShowRateLimit(const agent::RateLimitChanged& limit) {
     if (resetsAt == 0) resetsAt = window.resetsAt;
   }
   if (text.empty() && limit.used >= 0) text = percent(limit.used);
-  if (limit.state == agent::LimitState::Exhausted) {
-    text = text.empty() ? L"limit vyčerpaný" : L"limit vyčerpaný, " + text;
-  } else if (limit.state == agent::LimitState::Warning) {
-    text = text.empty() ? L"blízko limitu" : L"blízko limitu, " + text;
-  }
   if (resetsAt > 0) {
     const std::time_t when = static_cast<std::time_t>(resetsAt);
     std::tm local = {};
@@ -1054,11 +1059,25 @@ void SessionPane::ShowRateLimit(const agent::RateLimitChanged& limit) {
       wchar_t stamp[32] = {};
       // Day and time, not just time: a seven-day window resets on some other
       // day, and "resets at 6:00" would be read as this morning.
-      std::wcsftime(stamp, 32, L"%#d.%#m. %H:%M", &local);
-      text += (text.empty() ? L"" : L", ") + std::wstring(L"obnova ") + stamp;
+      std::wcsftime(stamp, 32, i18n::Text(Str::kLimitStampFormat), &local);
+      if (!text.empty()) text += L", ";
+      text += i18n::Format(Str::kLimitResets, {stamp});
     }
   }
-  statusBar_->Set(StatusBar::kLimit, text.empty() ? text : L"limit " + text);
+  // The state, when there is one, is what names the field; otherwise the word
+  // "limit" does.  Both used to be put in front, so an exhausted limit read
+  // "limit limit vyčerpaný".
+  const wchar_t* state = limit.state == agent::LimitState::Exhausted
+                             ? i18n::Text(Str::kLimitExhausted)
+                         : limit.state == agent::LimitState::Warning
+                             ? i18n::Text(Str::kLimitWarning)
+                             : nullptr;
+  if (state != nullptr) {
+    text = text.empty() ? std::wstring(state) : state + (L", " + text);
+  } else if (!text.empty()) {
+    text = i18n::Format(Str::kStatusLimit, {text});
+  }
+  statusBar_->Set(StatusBar::kLimit, text);
 }
 
 void SessionPane::FocusPrompt() const { SetFocus(prompt_); }
@@ -1074,12 +1093,12 @@ void SessionPane::Send() {
   // arrived.  The text is left in the box in both cases; that is why the
   // wording says what is in the way rather than that something was lost.
   if (busy_) {
-    Announce(L"ťah ešte beží, prompt zostal v poli");
+    Announce(i18n::Text(Str::kTurnStillRunning));
     return;
   }
   const std::wstring text = GetText(prompt_);
   if (IsBlank(text)) {
-    Announce(L"prázdny prompt");
+    Announce(i18n::Text(Str::kPromptEmpty));
     return;
   }
   SendText(text);
@@ -1181,33 +1200,33 @@ void SessionPane::SendText(const std::wstring& text) {
   thinkingSaid_ = false;
   spokeThisTurn_ = false;
   busy_ = true;
-  SetStatus(L"pracujem");
+  SetStatus(i18n::Text(Str::kWorking));
   // Said as well as written.  The bar is silent until NVDA+End is pressed, and
   // "did that go?" is a question one has right after pressing the key, not one
   // worth a second key.  This answers the key, so it interrupts -- invariant 7
   // allows exactly that, and only that.
-  Announce(L"pracujem");
+  Announce(i18n::Text(Str::kWorking));
 }
 
 void SessionPane::Interrupt() {
   if (!busy_) {
-    Announce(L"nič nebeží");
+    Announce(i18n::Text(Str::kNothingRunning));
     return;
   }
   if (!backend_->Interrupt()) {
     // The session and the pane disagree about whether a turn is running.  Say
     // so rather than pretending: the reader is about to wait for something to
     // stop that nobody is stopping.
-    Announce(L"prerušenie sa nepodarilo poslať");
+    Announce(i18n::Text(Str::kInterruptFailed));
     return;
   }
   // Not busy_ = false.  The turn ends when the CLI says it does, with a
   // Result like any other turn; until then something is still coming and the
   // status line must not claim otherwise.
   interrupted_ = true;
-  SetStatus(L"prerušujem");
+  SetStatus(i18n::Text(Str::kInterrupting));
   Apply(model_.AppendInterrupted());
-  Announce(L"prerušujem");
+  Announce(i18n::Text(Str::kInterrupting));
 }
 
 void SessionPane::CyclePermissionMode() {
@@ -1217,19 +1236,19 @@ void SessionPane::CyclePermissionMode() {
     // handshake yet: the mode comes from settings and nobody here knows it.
     // Cycling from a guess would send a mode the reader did not step to --
     // which is exactly how plan used to become acceptEdits on the first press.
-    Announce(L"režim zatiaľ nie je známy, CLI ešte štartuje");
+    Announce(i18n::Text(Str::kModeNotKnownYet));
     return;
   }
   const std::string next = agent::NextMode(backend_->capabilities(), current);
   if (next.empty()) {
     // An agent whose modes cannot be switched while it runs.  Said, like
     // every key that has nothing to do -- invariant 6.
-    Announce(L"režim sa za behu prepnúť nedá");
+    Announce(i18n::Text(Str::kModeFixed));
     return;
   }
   if (!backend_->SetMode(next)) {
     // The pipe is gone.  Say so rather than leaving the key silent.
-    Announce(L"režim sa nepodarilo prepnúť");
+    Announce(i18n::Text(Str::kModeSwitchFailed));
     return;
   }
   // Said now, on the key, and the bar rewritten now too.  The CLI's
@@ -1252,16 +1271,16 @@ void SessionPane::CopySessionId() {
   // we only read it back -- and a key that quietly put an empty string on the
   // clipboard would be found out in the terminal, pasting nothing.
   if (details_.id.empty()) {
-    Announce(L"id session zatiaľ nie je známe, pošlite najprv prompt");
+    Announce(i18n::Text(Str::kSessionIdUnknown));
     return;
   }
   if (!win::SetClipboardText(host_, details_.id)) {
-    Announce(L"schránku sa nepodarilo otvoriť, id skopírované nebolo");
+    Announce(i18n::Text(Str::kClipboardFailed));
     return;
   }
   // Short on purpose.  The id itself is 36 characters of hex and reading it
   // out is no use to anybody: the only thing done with it is pasting it.
-  Announce(L"id skopírované");
+  Announce(i18n::Text(Str::kIdCopied));
 }
 
 void SessionPane::RefreshFacts() {
@@ -1313,7 +1332,7 @@ void SessionPane::ShowDetails() {
 
 void SessionPane::ShowCommands() {
   if (!backend_->capabilities().slashCommands) {
-    Announce(L"tento agent zoznam príkazov neposiela");
+    Announce(i18n::Text(Str::kNoCommandList));
     return;
   }
   const std::vector<agent::SlashCommand> commands = backend_->commands();
@@ -1324,7 +1343,7 @@ void SessionPane::ShowCommands() {
   // is open an empty dialog: an empty list reads as "this session has no
   // commands", which is a different and false statement.
   if (commands.empty()) {
-    Announce(L"zoznam príkazov ešte neprišiel, skús o chvíľu");
+    Announce(i18n::Text(Str::kCommandsNotYet));
     return;
   }
 

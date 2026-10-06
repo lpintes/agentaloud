@@ -1329,7 +1329,8 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
 
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa
-rozídu, titulok okna sa zmení na **„AgentAloud — NESÚLAD MAPY ROZSAHOV"**. Ak
+rozídu, titulok okna sa zmení na **„AgentAloud — NESÚLAD MAPY ROZSAHOV"**
+(po anglicky „RANGE MAP MISMATCH"). Ak
 to niekedy uvidíš, neladí invariant 3, 4 alebo 8 a navigácia bude zameriavať
 zle. Raz sa to už stalo (6. 9. 2026) a bol to `NUL` z binárky — hľadaj teda
 najprv znak, ktorý widget spočíta inak než model, a hľadaj ho v poslednom
