@@ -1,7 +1,9 @@
 #include "ui/new_session_dialog.h"
 
 #include "app_name.h"
+#include "i18n/i18n.h"
 #include "model/utf.h"
+#include "ui/dialog_texts.h"
 #include "ui/resource.h"
 
 namespace ui {
@@ -19,6 +21,7 @@ std::wstring Trimmed(const std::wstring& text) {
 NewSessionDialog::NewSessionDialog(NewSession* session) : session_(session) {}
 
 bool NewSessionDialog::OnInit() {
+  LocalizeDialog(hwnd_, IDD_NEW_SESSION);
   const HWND backends = Item(IDC_NEW_BACKEND);
   int selected = 0;
   for (size_t i = 0; i < session_->backends.size(); ++i) {
@@ -58,7 +61,7 @@ void NewSessionDialog::ShowModels(int backend) {
 // makes that announcement the path that was just chosen (invariant 6).
 void NewSessionDialog::Browse() {
   const std::wstring chosen =
-      win::PickFolder(hwnd_, L"Vyberte priečinok projektu",
+      win::PickFolder(hwnd_, i18n::Text(i18n::Str::kNewPickFolder),
                       Trimmed(GetText(IDC_NEW_PROJECT)));
   if (!chosen.empty()) SetText(IDC_NEW_PROJECT, chosen);
   SendMessageW(hwnd_, WM_NEXTDLGCTL,
@@ -91,19 +94,20 @@ bool NewSessionDialog::OnCommand(int id, int notification) {
 bool NewSessionDialog::OnOk() {
   const std::wstring project = Trimmed(GetText(IDC_NEW_PROJECT));
   if (project.empty()) {
-    Refuse(IDC_NEW_PROJECT, L"Zadajte priečinok projektu.");
+    Refuse(IDC_NEW_PROJECT, i18n::Text(i18n::Str::kNewEnterProject));
     return false;
   }
   const DWORD attributes = GetFileAttributesW(project.c_str());
   if (attributes == INVALID_FILE_ATTRIBUTES ||
       !(attributes & FILE_ATTRIBUTE_DIRECTORY)) {
-    Refuse(IDC_NEW_PROJECT, L"Priečinok " + project + L" neexistuje.");
+    Refuse(IDC_NEW_PROJECT,
+           i18n::Format(i18n::Str::kNewFolderMissing, {project}));
     return false;
   }
   const int backend = static_cast<int>(
       SendMessageW(Item(IDC_NEW_BACKEND), CB_GETCURSEL, 0, 0));
   if (backend < 0 || backend >= static_cast<int>(session_->backends.size())) {
-    Refuse(IDC_NEW_BACKEND, L"Vyberte backend.");
+    Refuse(IDC_NEW_BACKEND, i18n::Text(i18n::Str::kNewChooseBackend));
     return false;
   }
   session_->backend = session_->backends[backend].name;

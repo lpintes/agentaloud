@@ -102,6 +102,134 @@ S(kIdCopied, L"id skopírované")
 S(kNoCommandList, L"tento agent zoznam príkazov neposiela")
 S(kCommandsNotYet, L"zoznam príkazov ešte neprišiel, skúste o chvíľu")
 
+// ui/keys_dialog
+S(kKeysSending,
+  L"Odosielanie a ťah:\n"
+  L"Ctrl+Enter — odošle prompt. Len z poľa Prompt.\n"
+  L"Esc — preruší bežiaci ťah. Z oboch polí.\n"
+  L"Tab — prepne medzi prepisom a promptom.\n")
+S(kKeysModesNone, L"Shift+Tab — tento agent režimy za behu meniť nevie.\n")
+S(kKeysModesHeading, L"Shift+Tab — mení režim povolení dokola, z oboch polí:\n")
+S(kKeysModesStartOnly, L"Len pri štarte, cez --permission-mode: {0}.\n")
+S(kKeysMoving,
+  L"\n"
+  L"Pohyb po prepise:\n"
+  L"T — ďalšie volanie nástroja, Shift+T — predchádzajúce.\n"
+  L"R — ďalší výstup nástroja, Shift+R — predchádzajúci.\n"
+  L"P — ďalší prompt, Shift+P — predchádzajúci.\n"
+  L"A — ďalšia odpoveď, Shift+A — predchádzajúca.\n"
+  L"K — ďalšie premýšľanie, Shift+K — predchádzajúce.\n"
+  L"E — ďalšia chyba alebo zamietnuté volanie, Shift+E — predchádzajúce.\n"
+  L"Shift znamená dozadu. Týchto šesť písmen platí len v prepise.\n"
+  L"Ctrl+Shift+T, R, P, A, K, E — to isté dopredu, aj z poľa Prompt.\n"
+  L"Enter — zbalí alebo rozbalí blok pod kurzorom. Len v prepise.\n"
+  L"Ctrl+C — skopíruje označený text. Robí to samotné pole prepisu.\n"
+  L"\n"
+  L"Záložky, z oboch polí:\n"
+  L"Ctrl+Shift+1 až Ctrl+Shift+9 — označí blok, na ktorom stojí kurzor.\n"
+  L"Ctrl+1 až Ctrl+9 — vráti kurzor na označený blok.\n"
+  L"Ctrl+0 — späť tam, kde kurzor stál, kým naposledy niečo pribudlo.\n"
+  L"Nultú záložku píše aplikácia sama, nastaviť sa nedá.\n"
+  L"\n"
+  L"Dialógy a schránka, z oboch polí:\n"
+  L"F1 — tento zoznam.\n"
+  L"F2 — podrobnosti session: id, model, kontext, cena.\n")
+S(kKeysCommands,
+  L"F4 — zoznam slash príkazov. Vybraný vloží do promptu, neodošle.\n")
+S(kKeysNoCommands, L"F4 — zoznam slash príkazov; tento agent žiadny nemá.\n")
+S(kKeysCopyId, L"Ctrl+Shift+C — skopíruje id session do schránky.")
+
+// Dialog templates.  The same words as in ui/app.rc, which keeps them only
+// as the layout's placeholder.
+S(kDlgDetailsCaption, L"podrobnosti session")
+S(kDlgDetailsId, L"&Id session:")
+S(kDlgDetailsModel, L"&Model:")
+S(kDlgDetailsMode, L"&Režim povolení:")
+S(kDlgDetailsProject, L"&Priečinok:")
+S(kDlgDetailsContext, L"&Kontext:")
+S(kDlgDetailsAccount, L"Úč&et:")
+S(kDlgDetailsCost, L"&Cena:")
+S(kDlgDetailsTokens, L"&Tokeny:")
+S(kDlgDetailsCopy, L"&Skopírovať id")
+S(kDlgClose, L"&Zavrieť")
+S(kDlgAskCaption, L"otázka")
+S(kDlgAskQuestion, L"O&tázka:")
+S(kDlgAskOptions, L"&Možnosti:")
+S(kDlgAskOther, L"&Vlastná odpoveď:")
+S(kDlgAskAnswer, L"&Odpovedať")
+S(kDlgAskDecline, L"&Zamietnuť")
+S(kDlgPermCaption, L"povolenie")
+S(kDlgPermDescription, L"P&opis:")
+S(kDlgPermReason, L"&Dôvod:")
+S(kDlgPermArguments, L"&Argumenty:")
+S(kDlgPermAllow, L"&Povoliť")
+S(kDlgPermDeny, L"&Zamietnuť")
+S(kDlgCmdCaption, L"príkazy")
+S(kDlgCmdFilter, L"&Filter:")
+S(kDlgCmdList, L"&Príkazy:")
+S(kDlgCmdDetail, L"P&opis:")
+S(kDlgCmdInsert, L"&Vložiť")
+S(kDlgCmdCancel, L"&Zrušiť")
+S(kDlgKeysCaption, L"klávesy")
+S(kDlgKeysText, L"&Klávesy:")
+S(kDlgNewCaption, L"nová session")
+S(kDlgNewBackend, L"&Backend:")
+S(kDlgNewModel, L"&Model (prázdny = predvolený):")
+S(kDlgNewProject, L"&Priečinok:")
+S(kDlgNewBrowse, L"&Vybrať…")
+S(kDlgNewStart, L"&Spustiť")
+S(kDlgNewCancel, L"&Zrušiť")
+
+// Dialogs at run time.  The reader is addressed formally (vykanie), as
+// everywhere else in the application.
+S(kAskOtherItem, L"Iné — vlastná odpoveď, napíšte ju do poľa nižšie")
+S(kAskCounter, L"{0} (otázka {1} z {2})")
+S(kAskOptionsMulti, L"&Možnosti — dá sa označiť viac (medzerník):")
+S(kAskOptionsSingle, L"&Možnosti — vyberte jednu:")
+S(kAskNothingChosen,
+  L"Nič nie je označené. Vyberte možnosť zo zoznamu, alebo otázku odmietnite "
+  L"tlačidlom Zamietnuť.")
+S(kAskOtherEmpty,
+  L"Je označená možnosť Iné, ale pole Vlastná odpoveď je prázdne. Napíšte do "
+  L"neho odpoveď.")
+S(kAskOwnWithoutOther,
+  L"Vlastná odpoveď sa použije, len keď je v zozname označená možnosť Iné. "
+  L"Označte ju, alebo pole vyprázdnite.")
+S(kCmdListLabel, L"&Príkazy ({0}):")
+S(kCmdListLabelFiltered, L"&Príkazy ({0} z {1}):")
+S(kCmdArguments, L"Argumenty: {0}")
+S(kCmdAliases, L"Aj ako: {0}")
+S(kCmdNoMatch,
+  L"Filtru nezodpovedá žiadny príkaz. Vyprázdnite filter, alebo dialóg "
+  L"zavrite klávesou Esc.")
+S(kUnknownYet, L"zatiaľ neznáme")
+S(kDecimalSeparator, L",")
+// A no-break space, as it was before the catalog: the number must not be
+// split across lines.
+S(kThousandsSeparator, L" ")
+S(kContextWindowOnly, L"okno {0} tokenov, využitie zatiaľ neznáme")
+S(kContextTokens, L"{0} tokenov")
+S(kContextOf, L"{0} z {1} ({2} %)")
+S(kCostListOnly, L"{0} podľa cenníka, účtované 0")
+S(kTokensInput, L"vstup {0}")
+S(kTokensOutput, L"výstup {0}")
+S(kTokensReasoning, L"myslenie {0}")
+S(kTokensCacheRead, L"cache čítaná {0}")
+S(kTokensCacheWrite, L"cache zapísaná {0}")
+S(kModelRequested, L"zvolený {0}")
+S(kPermMissing, L"neuvedený")
+S(kPermTitle, L"povolenie: {0}")
+S(kPermNoArguments, L"bez argumentov")
+S(kNewPickFolder, L"Vyberte priečinok projektu")
+S(kNewEnterProject, L"Zadajte priečinok projektu.")
+S(kNewFolderMissing, L"Priečinok {0} neexistuje.")
+S(kNewChooseBackend, L"Vyberte backend.")
+S(kNoSpeechDll,
+  L"Vedľa {0} chýba nvdaControllerClient.dll, takže aplikácia nemá ako "
+  L"hovoriť: klávesy fungujú, ale namiesto hlásení pípajú.\n\nSkopírujte "
+  L"knižnicu z bin\\ vedľa .exe a spustite {1} znova.")
+S(kNoSpeechTitle, L"bez reči")
+
 S(kKindPrompt, L"prompt")
 S(kKindAnswer, L"odpoveď")
 S(kKindDenied, L"zamietnuté")

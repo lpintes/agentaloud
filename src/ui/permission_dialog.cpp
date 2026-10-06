@@ -3,8 +3,10 @@
 #include <string>
 
 #include "app_name.h"
+#include "i18n/i18n.h"
 #include "model/transcript.h"
 #include "model/utf.h"
+#include "ui/dialog_texts.h"
 #include "ui/resource.h"
 #include "win/dialog.h"
 
@@ -15,9 +17,8 @@ namespace {
 // passes over punctuation without a word at the usual settings, and an empty
 // edit box is announced as "blank", which reads as a bug rather than as an
 // answer.  "Neuvedený" says the CLI sent nothing, which is what happened.
-const wchar_t kMissing[] = L"neuvedený";
-
 std::wstring OrMissing(const std::string& text) {
+  const std::wstring kMissing = i18n::Text(i18n::Str::kPermMissing);
   return text.empty() ? std::wstring(kMissing) : model::Utf16FromUtf8(text);
 }
 
@@ -39,10 +40,13 @@ bool PermissionDialog::OnInit() {
   // the command itself arrive as one announcement, in that order.  In a field
   // of its own the name would be a Tab away, and a reader answering quickly
   // would be answering about a tool nobody named.
+  LocalizeDialog(hwnd_, IDD_PERMISSION);
   const std::string& name =
       request_.title.empty() ? request_.call.name : request_.title;
-  SetWindowTextW(hwnd_, (L"" APP_NAME L" — povolenie: " +
-                         model::Utf16FromUtf8(name)).c_str());
+  const std::wstring caption =
+      std::wstring(L"" APP_NAME L" — ") +
+      i18n::Format(i18n::Str::kPermTitle, {model::Utf16FromUtf8(name)});
+  SetWindowTextW(hwnd_, caption.c_str());
 
   SetText(IDC_PERM_DESCRIPTION, OrMissing(request_.description));
   // Already a sentence: what the CLI's word for it means is the adapter's to
@@ -53,7 +57,7 @@ bool PermissionDialog::OnInit() {
   // line, and the long ones as text.  Whatever is allowed here is what will be
   // read back in the transcript afterwards, character for character.
   std::wstring arguments = model::RenderToolCall(request_.call);
-  if (arguments.empty()) arguments = L"bez argumentov";
+  if (arguments.empty()) arguments = i18n::Text(i18n::Str::kPermNoArguments);
   SetTextLines(IDC_PERM_INPUT, arguments);
 
   // Focus into the arguments rather than onto a button.  This is the text the

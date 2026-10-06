@@ -1,6 +1,9 @@
 #include "ui/main_window.h"
 
+#include <string>
+
 #include "app_name.h"
+#include "i18n/i18n.h"
 
 namespace ui {
 
@@ -40,12 +43,11 @@ void MainWindow::WarnIfMute() {
   // reads as "this key does nothing": the copy of the .exe looks broken rather
   // than incomplete, and Ctrl+Enter sounds refused while it is in fact
   // sending.
-  MessageBoxW(hwnd_,
-              L"Vedľa " APP_EXE L" chýba nvdaControllerClient.dll, takže "
-              L"aplikácia nemá ako hovoriť: klávesy fungujú, ale namiesto "
-              L"hlásení pípajú.\n\nSkopírujte knižnicu z bin\\ vedľa .exe "
-              L"a spustite " APP_NAME L" znova.",
-              L"" APP_NAME L" — bez reči", MB_OK | MB_ICONWARNING);
+  const std::wstring text =
+      i18n::Format(i18n::Str::kNoSpeechDll, {L"" APP_EXE, L"" APP_NAME});
+  const std::wstring title = std::wstring(L"" APP_NAME L" — ") +
+                             i18n::Text(i18n::Str::kNoSpeechTitle);
+  MessageBoxW(hwnd_, text.c_str(), title.c_str(), MB_OK | MB_ICONWARNING);
 }
 
 void MainWindow::Arrange(int width, int height) {

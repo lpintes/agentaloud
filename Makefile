@@ -128,7 +128,7 @@ UI_SRCS := src/ui/session_pane.cpp src/ui/main_window.cpp src/ui/speech.cpp \
            src/ui/status_bar.cpp src/ui/session_details.cpp \
            src/ui/ask_dialog.cpp src/ui/permission_dialog.cpp \
            src/ui/command_dialog.cpp src/ui/keys_dialog.cpp \
-           src/ui/new_session_dialog.cpp
+           src/ui/new_session_dialog.cpp src/ui/dialog_texts.cpp
 
 APP_SRCS := $(I18N_SRCS) $(WIN_SRCS) $(AGENT_SRCS) $(PROTO_SRCS) $(MODEL_SRCS) $(UI_SRCS) \
             $(APP_PURE_SRCS) src/version_current.cpp src/updater.cpp src/main.cpp

@@ -99,6 +99,131 @@ S(kIdCopied, L"id copied")
 S(kNoCommandList, L"this agent sends no list of commands")
 S(kCommandsNotYet, L"the list of commands has not arrived yet, try again in a moment")
 
+// ui/keys_dialog
+S(kKeysSending,
+  L"Sending and the turn:\n"
+  L"Ctrl+Enter — sends the prompt. Only from the Prompt field.\n"
+  L"Esc — interrupts the running turn. From either field.\n"
+  L"Tab — switches between the transcript and the prompt.\n")
+S(kKeysModesNone, L"Shift+Tab — this agent cannot change modes while running.\n")
+S(kKeysModesHeading,
+  L"Shift+Tab — cycles the permission mode, from either field:\n")
+S(kKeysModesStartOnly, L"Only at startup, with --permission-mode: {0}.\n")
+S(kKeysMoving,
+  L"\n"
+  L"Moving through the transcript:\n"
+  L"T — next tool call, Shift+T — previous.\n"
+  L"R — next tool output, Shift+R — previous.\n"
+  L"P — next prompt, Shift+P — previous.\n"
+  L"A — next answer, Shift+A — previous.\n"
+  L"K — next thinking, Shift+K — previous.\n"
+  L"E — next error or denied call, Shift+E — previous.\n"
+  L"Shift means backwards. These six letters work only in the transcript.\n"
+  L"Ctrl+Shift+T, R, P, A, K, E — the same forwards, from the Prompt field too.\n"
+  L"Enter — collapses or expands the block under the cursor. Only in the transcript.\n"
+  L"Ctrl+C — copies the selected text. The transcript field does that itself.\n"
+  L"\n"
+  L"Bookmarks, from either field:\n"
+  L"Ctrl+Shift+1 to Ctrl+Shift+9 — marks the block the cursor is on.\n"
+  L"Ctrl+1 to Ctrl+9 — returns the cursor to the marked block.\n"
+  L"Ctrl+0 — back to where the cursor was when something last arrived.\n"
+  L"Bookmark zero is written by the application, it cannot be set.\n"
+  L"\n"
+  L"Dialogs and the clipboard, from either field:\n"
+  L"F1 — this list.\n"
+  L"F2 — session details: id, model, context, cost.\n")
+S(kKeysCommands,
+  L"F4 — list of slash commands. The chosen one goes into the prompt, unsent.\n")
+S(kKeysNoCommands, L"F4 — list of slash commands; this agent has none.\n")
+S(kKeysCopyId, L"Ctrl+Shift+C — copies the session id to the clipboard.")
+
+// Dialog templates.  Access keys chosen so that none repeats in a dialog.
+S(kDlgDetailsCaption, L"session details")
+S(kDlgDetailsId, L"&Session id:")
+S(kDlgDetailsModel, L"&Model:")
+S(kDlgDetailsMode, L"Permission m&ode:")
+S(kDlgDetailsProject, L"&Folder:")
+S(kDlgDetailsContext, L"Co&ntext:")
+S(kDlgDetailsAccount, L"&Account:")
+S(kDlgDetailsCost, L"Cos&t:")
+S(kDlgDetailsTokens, L"To&kens:")
+S(kDlgDetailsCopy, L"&Copy id")
+S(kDlgClose, L"C&lose")
+S(kDlgAskCaption, L"question")
+S(kDlgAskQuestion, L"&Question:")
+S(kDlgAskOptions, L"&Options:")
+S(kDlgAskOther, L"&Your answer:")
+S(kDlgAskAnswer, L"&Answer")
+S(kDlgAskDecline, L"&Decline")
+S(kDlgPermCaption, L"permission")
+S(kDlgPermDescription, L"D&escription:")
+S(kDlgPermReason, L"&Reason:")
+S(kDlgPermArguments, L"Ar&guments:")
+S(kDlgPermAllow, L"&Allow")
+S(kDlgPermDeny, L"&Deny")
+S(kDlgCmdCaption, L"commands")
+S(kDlgCmdFilter, L"&Filter:")
+S(kDlgCmdList, L"&Commands:")
+S(kDlgCmdDetail, L"D&escription:")
+S(kDlgCmdInsert, L"&Insert")
+S(kDlgCmdCancel, L"Ca&ncel")
+S(kDlgKeysCaption, L"keys")
+S(kDlgKeysText, L"&Keys:")
+S(kDlgNewCaption, L"new session")
+S(kDlgNewBackend, L"&Backend:")
+S(kDlgNewModel, L"&Model (empty = default):")
+S(kDlgNewProject, L"&Folder:")
+S(kDlgNewBrowse, L"Bro&wse…")
+S(kDlgNewStart, L"&Start")
+S(kDlgNewCancel, L"&Cancel")
+
+// Dialogs at run time.
+S(kAskOtherItem, L"Other — your own answer, type it in the field below")
+S(kAskCounter, L"{0} (question {1} of {2})")
+S(kAskOptionsMulti, L"&Options — choose any number (Space):")
+S(kAskOptionsSingle, L"&Options — choose one:")
+S(kAskNothingChosen,
+  L"Nothing is selected. Choose an option from the list, or turn the question "
+  L"down with the Decline button.")
+S(kAskOtherEmpty,
+  L"Other is selected, but the Your answer field is empty. Type an answer "
+  L"into it.")
+S(kAskOwnWithoutOther,
+  L"Your answer is used only when Other is selected in the list. Select it, "
+  L"or empty the field.")
+S(kCmdListLabel, L"&Commands ({0}):")
+S(kCmdListLabelFiltered, L"&Commands ({0} of {1}):")
+S(kCmdArguments, L"Arguments: {0}")
+S(kCmdAliases, L"Also as: {0}")
+S(kCmdNoMatch,
+  L"No command matches the filter. Empty the filter, or close the dialog "
+  L"with Esc.")
+S(kUnknownYet, L"not known yet")
+S(kDecimalSeparator, L".")
+S(kThousandsSeparator, L",")
+S(kContextWindowOnly, L"window of {0} tokens, use not known yet")
+S(kContextTokens, L"{0} tokens")
+S(kContextOf, L"{0} of {1} ({2} %)")
+S(kCostListOnly, L"{0} at list price, billed 0")
+S(kTokensInput, L"input {0}")
+S(kTokensOutput, L"output {0}")
+S(kTokensReasoning, L"reasoning {0}")
+S(kTokensCacheRead, L"cache read {0}")
+S(kTokensCacheWrite, L"cache written {0}")
+S(kModelRequested, L"chosen {0}")
+S(kPermMissing, L"not given")
+S(kPermTitle, L"permission: {0}")
+S(kPermNoArguments, L"no arguments")
+S(kNewPickFolder, L"Choose the project folder")
+S(kNewEnterProject, L"Enter the project folder.")
+S(kNewFolderMissing, L"The folder {0} does not exist.")
+S(kNewChooseBackend, L"Choose a backend.")
+S(kNoSpeechDll,
+  L"nvdaControllerClient.dll is missing beside {0}, so the application has "
+  L"no way to speak: the keys work, but they beep instead of speaking.\n\n"
+  L"Copy the library from bin\\ beside the .exe and start {1} again.")
+S(kNoSpeechTitle, L"no speech")
+
 S(kKindPrompt, L"prompt")
 S(kKindAnswer, L"answer")
 S(kKindDenied, L"denied")

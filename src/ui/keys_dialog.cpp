@@ -3,7 +3,9 @@
 #include <string>
 #include <vector>
 
+#include "i18n/i18n.h"
 #include "model/utf.h"
+#include "ui/dialog_texts.h"
 #include "ui/resource.h"
 #include "win/dialog.h"
 
@@ -32,37 +34,10 @@ namespace {
 // character and not the shift state -- that is what makes it work on any
 // layout -- so with Caps Lock on the two swap over; the name written here is
 // the one the key has the rest of the time.
-const wchar_t kSending[] =
-    L"Odosielanie a ťah:\n"
-    L"Ctrl+Enter — odošle prompt. Len z poľa Prompt.\n"
-    L"Esc — preruší bežiaci ťah. Z oboch polí.\n"
-    L"Tab — prepne medzi prepisom a promptom.\n";
-
-// The modes are the agent's and come from Capabilities; see ModesText.
-
-const wchar_t kMoving[] =
-    L"\n"
-    L"Pohyb po prepise:\n"
-    L"T — ďalšie volanie nástroja, Shift+T — predchádzajúce.\n"
-    L"R — ďalší výstup nástroja, Shift+R — predchádzajúci.\n"
-    L"P — ďalší prompt, Shift+P — predchádzajúci.\n"
-    L"A — ďalšia odpoveď, Shift+A — predchádzajúca.\n"
-    L"K — ďalšie premýšľanie, Shift+K — predchádzajúce.\n"
-    L"E — ďalšia chyba alebo zamietnuté volanie, Shift+E — predchádzajúce.\n"
-    L"Shift znamená dozadu. Týchto šesť písmen platí len v prepise.\n"
-    L"Ctrl+Shift+T, R, P, A, K, E — to isté dopredu, aj z poľa Prompt.\n"
-    L"Enter — zbalí alebo rozbalí blok pod kurzorom. Len v prepise.\n"
-    L"Ctrl+C — skopíruje označený text. Robí to samotné pole prepisu.\n"
-    L"\n"
-    L"Záložky, z oboch polí:\n"
-    L"Ctrl+Shift+1 až Ctrl+Shift+9 — označí blok, na ktorom stojí kurzor.\n"
-    L"Ctrl+1 až Ctrl+9 — vráti kurzor na označený blok.\n"
-    L"Ctrl+0 — späť tam, kde kurzor stál, kým naposledy niečo pribudlo.\n"
-    L"Nultú záložku píše aplikácia sama, nastaviť sa nedá.\n"
-    L"\n"
-    L"Dialógy a schránka, z oboch polí:\n"
-    L"F1 — tento zoznam.\n"
-    L"F2 — podrobnosti session: id, model, kontext, cena.\n";
+//
+// The text itself is in the catalog, in every language (i18n/<code>.def); the
+// rules above hold for each of them.  A key added to the application is added
+// to every language's list at once, or it does not exist (invariant 19).
 
 // Shift+Tab's lines, out of the agent's own list of modes in its own order.
 // A mode off the cycle is named too, once per label: a session can be
@@ -82,10 +57,8 @@ std::wstring ModesText(const agent::Capabilities& capabilities) {
       startOnly.push_back(label);
     }
   }
-  if (cycle.empty()) {
-    return L"Shift+Tab — tento agent režimy za behu meniť nevie.\n";
-  }
-  text += L"Shift+Tab — mení režim povolení dokola, z oboch polí:\n";
+  if (cycle.empty()) return i18n::Text(i18n::Str::kKeysModesNone);
+  text += i18n::Text(i18n::Str::kKeysModesHeading);
   for (size_t i = 0; i < cycle.size(); ++i) {
     text += cycle[i] + (i + 1 < cycle.size() ? L";\n" : L".\n");
   }
@@ -102,7 +75,7 @@ std::wstring ModesText(const agent::Capabilities& capabilities) {
     rest += label;
   }
   if (!rest.empty()) {
-    text += L"Len pri štarte, cez --permission-mode: " + rest + L".\n";
+    text += i18n::Format(i18n::Str::kKeysModesStartOnly, {rest});
   }
   return text;
 }
@@ -113,6 +86,7 @@ class KeysDialog : public win::Dialog {
 
  protected:
   bool OnInit() override {
+    LocalizeDialog(hwnd_, IDD_KEYS);
     SetTextLines(IDC_KEYS_TEXT, text_.c_str());
     // The caret starts at the top of the box, which is where the dialog
     // manager leaves it, so the first arrow key reads the first heading.
@@ -126,16 +100,16 @@ class KeysDialog : public win::Dialog {
 }  // namespace
 
 std::wstring KeysText(const agent::Capabilities& capabilities) {
-  std::wstring text = kSending;
+  using i18n::Str;
+  std::wstring text = i18n::Text(Str::kKeysSending);
+  // The modes are the agent's and come from Capabilities.
   text += ModesText(capabilities);
-  text += kMoving;
+  text += i18n::Text(Str::kKeysMoving);
   // Listed even when the agent has none, and saying so: a key missing from
   // this list does not exist (invariant 19), and F4 still answers.
-  text += capabilities.slashCommands
-              ? L"F4 — zoznam slash príkazov. Vybraný vloží do promptu, "
-                L"neodošle.\n"
-              : L"F4 — zoznam slash príkazov; tento agent žiadny nemá.\n";
-  text += L"Ctrl+Shift+C — skopíruje id session do schránky.";
+  text += i18n::Text(capabilities.slashCommands ? Str::kKeysCommands
+                                                : Str::kKeysNoCommands);
+  text += i18n::Text(Str::kKeysCopyId);
   return text;
 }
 

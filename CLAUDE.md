@@ -1053,9 +1053,12 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
 19. **Klávesa, ktorú F1 nevymenúva, neexistuje.** Kláves pribúda a nie sú
     v žiadnej tabuľke — sedia v dvoch procedúrach okna (`PromptProc`,
     `TranscriptProc`), časť ako `WM_KEYDOWN`, časť ako `WM_CHAR`, a nedajú sa
-    z kódu vymenovať ani generovaním, ani testom. Zoznam v `KeysText`
-    (`ui/keys_dialog.cpp`) preto drží pravdivý jediná vec, a je to pravidlo,
-    nie stroj: **kláves nie je hotový, kým nie je v tom zozname.**
+    z kódu vymenovať ani generovaním, ani testom. Zoznam, ktorý skladá
+    `KeysText` (`ui/keys_dialog.cpp`) z textov `kKeys…` v katalógu
+    (`src/i18n/<jazyk>.def`), preto drží pravdivý jediná vec, a je to
+    pravidlo, nie stroj: **kláves nie je hotový, kým nie je v tom zozname —
+    v každom jazyku.** Katalóg vynúti, aby text mal každý jazyk; že je v ňom
+    nová klávesa, nevynúti nič.
 
     Čo sa medzi agentmi líši, sa do zoznamu **neopisuje, ale skladá
     z `Capabilities`**: riadky Shift+Tabu sú režimy backendu v jeho poradí
@@ -1366,6 +1369,17 @@ sa nás na nič nespýta. Prepínač je z `--help` vypadnutý, ale CLI ho prijí
   `.rc` je v UTF-8 a windres to musí vedieť (`#pragma code_page(65001)`, plus
   `--codepage` v Makefile) — inak sa diakritika v popiskoch **ticho** zmení na
   dvojice znakov a preloží sa to.
+- **Texty dialógu sú z katalógu, nie zo šablóny.** Šablóna je jedna pre všetky
+  jazyky a jej slovenské slová sú len náhrada pre rozloženie; titulok a každý
+  popisok či tlačidlo dosadí `ui::LocalizeDialog` (`ui/dialog_texts.cpp`) ako
+  prvú vec v `OnInit`. Prvok s textom v `.rc`, ktorý nie je v jej tabuľke,
+  zostane **ticho** po slovensky. Skratky (`&`) si volí každý jazyk sám
+  a v rámci jedného dialógu sa nesmú opakovať.
+- **Všetko, čo čitateľ počuje alebo vidí, ide cez `i18n`** (`src/i18n/`):
+  `ids.def` je zoznam, `<jazyk>.def` texty, chýbajúci preklad zastaví build.
+  Jazyk sa volí raz pri štarte (`language` v nastaveniach, inak jazyk
+  Windows) a za behu sa nemení — súhrny blokov sú text prepisu. Výnimka je
+  text pre agenta (pokyn modelu), ten je vždy anglicky. Čitateľovi sa vyká.
 - **Zdrojáky nepíš cez shell heredoc.** Toto prostredie v ňom žerie spätné
   lomky, takže `L'\\'` sa ticho zmení na `L'\'`. Používaj Write/Edit.
 - Žiadny Python ani Node v produkte. Python je na prieskum správania CLI

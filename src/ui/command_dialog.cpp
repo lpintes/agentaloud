@@ -5,11 +5,16 @@
 #include <string>
 
 #include "app_name.h"
+#include "i18n/i18n.h"
 #include "model/utf.h"
+#include "ui/dialog_texts.h"
 #include "ui/resource.h"
 #include "win/dialog.h"
 
 namespace ui {
+
+using i18n::Str;
+
 namespace {
 
 // As much of a description as goes on one list line.  Read aloud, a line is
@@ -112,6 +117,7 @@ class CommandDialog : public win::Dialog {
 };
 
 bool CommandDialog::OnInit() {
+  LocalizeDialog(hwnd_, IDD_COMMANDS);
   Refill();
   // The filter box is subclassed so that Down leads into the list.  Without it
   // the way from typing to choosing is Tab, which is one key more than the
@@ -149,12 +155,12 @@ void CommandDialog::Refill() {
                         static_cast<LPARAM>(i));
     ++shown;
   }
-  std::wstring label = L"&Príkazy (" + std::to_wstring(shown);
-  if (shown != commands_.size()) {
-    label += L" z " + std::to_wstring(commands_.size());
-  }
-  label += L"):";
-  SetText(IDC_CMD_LIST_LABEL, label);
+  SetText(IDC_CMD_LIST_LABEL,
+          shown == commands_.size()
+              ? i18n::Format(Str::kCmdListLabel, {std::to_wstring(shown)})
+              : i18n::Format(Str::kCmdListLabelFiltered,
+                             {std::to_wstring(shown),
+                              std::to_wstring(commands_.size())}));
   // Nothing is highlighted after a refill, so the box below has nothing to
   // show either.  Emptying it matters: a description left over from a command
   // the filter has since thrown out is a description of something that is no
@@ -172,15 +178,17 @@ void CommandDialog::ShowDetail() {
   const agent::SlashCommand& command = commands_[static_cast<size_t>(index)];
   std::wstring text;
   if (!command.argumentHint.empty()) {
-    text += L"Argumenty: " + model::Utf16FromUtf8(command.argumentHint) + L"\n";
+    text += i18n::Format(Str::kCmdArguments,
+                         {model::Utf16FromUtf8(command.argumentHint)}) +
+            L"\n";
   }
   if (!command.aliases.empty()) {
-    text += L"Aj ako: ";
+    std::wstring aliases;
     for (size_t i = 0; i < command.aliases.size(); ++i) {
-      if (i) text += L", ";
-      text += L"/" + model::Utf16FromUtf8(command.aliases[i]);
+      if (i) aliases += L", ";
+      aliases += L"/" + model::Utf16FromUtf8(command.aliases[i]);
     }
-    text += L"\n";
+    text += i18n::Format(Str::kCmdAliases, {aliases}) + L"\n";
   }
   text += model::Utf16FromUtf8(command.description);
   SetTextLines(IDC_CMD_DETAIL, text);
@@ -211,10 +219,10 @@ bool CommandDialog::OnOk() {
   // there is exactly nothing to take does the dialog refuse.
   if (index < 0) index = CommandAt(0);
   if (index < 0) {
-    MessageBoxW(hwnd_,
-                L"Filtru nezodpovedá žiadny príkaz. Vyprázdni filter, alebo "
-                L"dialóg zavri klávesou Esc.",
-                L"" APP_NAME L" — príkazy", MB_OK | MB_ICONINFORMATION);
+    const std::wstring title =
+        std::wstring(L"" APP_NAME L" — ") + i18n::Text(Str::kDlgCmdCaption);
+    MessageBoxW(hwnd_, i18n::Text(Str::kCmdNoMatch), title.c_str(),
+                MB_OK | MB_ICONINFORMATION);
     SetFocus(Item(IDC_CMD_FILTER));
     return false;
   }
