@@ -1,0 +1,12 @@
+// English.  The ids are in i18n/ids.def.
+//
+//   S(id, text)
+//   P(id, 1, other)
+//
+// "Other" includes 0: 0 lines.  {0} in a P line is the number; {0}, {1}...
+// elsewhere are filled by i18n::Format.
+//
+// Written for the ear first: no abbreviation the synthesizer reads letter by
+// letter, no symbol it skips.
+
+P(kLines, L"{0} line", L"{0} lines")

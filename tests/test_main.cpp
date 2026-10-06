@@ -155,18 +155,18 @@ void TestUtfRoundTrip() {
 void TestCatalog() {
   TEST("i18n: mnozne cislo, jazyk, UTF-8");
   i18n::SetLanguage(i18n::Lang::kSlovak);
-  CHECK(i18n::Count(i18n::Plural::Lines, 0) == L"0 riadkov");
-  CHECK(i18n::Count(i18n::Plural::Lines, 1) == L"1 riadok");
-  CHECK(i18n::Count(i18n::Plural::Lines, 2) == L"2 riadky");
-  CHECK(i18n::Count(i18n::Plural::Lines, 4) == L"4 riadky");
-  CHECK(i18n::Count(i18n::Plural::Lines, 5) == L"5 riadkov");
+  CHECK(i18n::Count(i18n::Plural::kLines, 0) == L"0 riadkov");
+  CHECK(i18n::Count(i18n::Plural::kLines, 1) == L"1 riadok");
+  CHECK(i18n::Count(i18n::Plural::kLines, 2) == L"2 riadky");
+  CHECK(i18n::Count(i18n::Plural::kLines, 4) == L"4 riadky");
+  CHECK(i18n::Count(i18n::Plural::kLines, 5) == L"5 riadkov");
   // Slovencina sa riadi celym cislom, nie poslednou cifrou: 22 riadkov.
-  CHECK(i18n::Count(i18n::Plural::Lines, 22) == L"22 riadkov");
+  CHECK(i18n::Count(i18n::Plural::kLines, 22) == L"22 riadkov");
 
   i18n::SetLanguage(i18n::Lang::kEnglish);
-  CHECK(i18n::Count(i18n::Plural::Lines, 0) == L"0 lines");
-  CHECK(i18n::Count(i18n::Plural::Lines, 1) == L"1 line");
-  CHECK(i18n::Count(i18n::Plural::Lines, 3) == L"3 lines");
+  CHECK(i18n::Count(i18n::Plural::kLines, 0) == L"0 lines");
+  CHECK(i18n::Count(i18n::Plural::kLines, 1) == L"1 line");
+  CHECK(i18n::Count(i18n::Plural::kLines, 3) == L"3 lines");
 
   i18n::Lang lang = i18n::Lang::kSlovak;
   CHECK(i18n::ParseLanguage("en", &lang) && lang == i18n::Lang::kEnglish);
@@ -174,6 +174,15 @@ void TestCatalog() {
   CHECK(!i18n::ParseLanguage("SK", &lang));
   CHECK(!i18n::ParseLanguage("", &lang));
   CHECK_EQ(std::string(i18n::LanguageCode(i18n::Lang::kEnglish)), "en");
+
+  // Pocet tvarov kazdeho cisla musi sediet s pravidlom jazyka.  Prekladac to
+  // nevynuti: P je variadicke a tvar navyse alebo menej sa prelozi.
+  for (const i18n::Lang lang : i18n::Languages()) {
+    for (size_t id = 0; id < static_cast<size_t>(i18n::Plural::kCount); ++id) {
+      CHECK_EQ(i18n::PluralFormsGiven(lang, static_cast<i18n::Plural>(id)),
+               i18n::PluralFormCount(lang));
+    }
+  }
 
   // Katalog pre proto/ ide do UTF-8 vlastnym kodovacom; musi sa zhodovat
   // s tym, ktorym model/ cita protokol.

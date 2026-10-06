@@ -1,6 +1,7 @@
 #include "arguments.h"
 
 #include "app_name.h"
+#include "i18n/i18n.h"
 #include "model/utf.h"
 
 namespace app {
@@ -154,6 +155,10 @@ std::wstring HelpText(const std::wstring& version,
   for (const agent::Mode& mode : defaultBackend.modes) {
     modes += L"        " + Wide(mode.id) + L" — " + Wide(mode.label) + L"\n";
   }
+  std::vector<std::string> languages;
+  for (const i18n::Lang lang : i18n::Languages()) {
+    languages.push_back(i18n::LanguageCode(lang));
+  }
   return
       L"" APP_NAME L" " + version +
       L" — okno namiesto terminálu pre coding agentov (Claude Code, Codex).\n"
@@ -225,9 +230,10 @@ std::wstring HelpText(const std::wstring& version,
       L"      codex.permission-mode=plan\n"
       L"      check-updates=0\n"
       L"      language=en\n"
-      L"  Platí to, čo nepovie príkazový riadok.  language je sk alebo en;\n"
-      L"  bez neho hovorí " APP_NAME L" jazykom Windows, a keď to nie je\n"
-      L"  slovenčina, po anglicky.  check-updates=0 vypne\n"
+      L"  Platí to, čo nepovie príkazový riadok.  language je jeden z: " +
+      Joined(languages) + L";\n"
+      L"  bez neho hovorí " APP_NAME L" jazykom Windows, a keď ho nevie,\n"
+      L"  po anglicky.  check-updates=0 vypne\n"
       L"  kontrolu novej verzie, ktorú " APP_NAME L" inak robí pri štarte raz\n"
       L"  denne; kedy kontroloval naposledy, si zapíše do toho istého súboru\n"
       L"  a ostatné riadky pritom nechá tak.  Neznámy kľúč alebo režim\n"

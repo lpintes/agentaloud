@@ -178,7 +178,7 @@ std::wstring OneLine(const std::wstring& text, size_t limit) {
 }
 
 std::wstring Count(size_t lines) {
-  return i18n::Count(i18n::Plural::Lines, static_cast<long long>(lines));
+  return i18n::Count(i18n::Plural::kLines, static_cast<long long>(lines));
 }
 
 // A path as it belongs in a summary line: what is left of it once the project

@@ -1,0 +1,12 @@
+// The name of every string the reader hears or sees, one line each.  What the
+// strings say is in one file per language, i18n/<code>.def.
+//
+//   S(id)   a string
+//   P(id)   a string with a number in it, in as many forms as the language
+//           has plurals (see the language's file for its rule)
+//
+// A language file must give every id here and nothing else, or i18n.cpp does
+// not compile (-Wswitch is an error there).  So an id is added here and in
+// every language at once, and a language cannot ship with a hole in it.
+
+P(kLines)

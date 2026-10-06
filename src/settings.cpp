@@ -133,8 +133,12 @@ void Settings::Check(const std::map<std::string, agent::Capabilities>& backends)
     if (key == kLanguageKey) {
       i18n::Lang lang;
       if (!empty && !i18n::ParseLanguage(entry.value, &lang)) {
-        Complain(entry.line, L"language je sk alebo en, nie " +
-                                 Wide(entry.value));
+        std::vector<std::string> codes;
+        for (const i18n::Lang known : i18n::Languages()) {
+          codes.push_back(i18n::LanguageCode(known));
+        }
+        Complain(entry.line, L"neznámy jazyk " + Wide(entry.value) +
+                                 L"; známe sú: " + Joined(codes));
       }
       continue;
     }

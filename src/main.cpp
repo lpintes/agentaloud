@@ -101,16 +101,23 @@ std::string ReadSettingsBytes(const std::wstring& file) {
 // should be in the reader's language.  A language the file gets wrong falls
 // back to Windows' and is complained about there.
 //
-// Slovak Windows gets Slovak, every other one English (claude-gui-lkk.52).
+// Without the key, the language of Windows when there is a catalog for it --
+// the locale name up to its dash, "sk-SK" is "sk" -- and English otherwise
+// (claude-gui-lkk.52).
 i18n::Lang ChooseLanguage(const std::string& settingsBytes) {
   i18n::Lang lang;
   if (i18n::ParseLanguage(
           app::Settings::Parse(settingsBytes).Get(app::kLanguageKey), &lang)) {
     return lang;
   }
-  return PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_SLOVAK
-             ? i18n::Lang::kSlovak
-             : i18n::Lang::kEnglish;
+  wchar_t locale[LOCALE_NAME_MAX_LENGTH] = {};
+  if (LCIDToLocaleName(MAKELCID(GetUserDefaultUILanguage(), SORT_DEFAULT),
+                       locale, LOCALE_NAME_MAX_LENGTH, 0) > 0) {
+    std::wstring_view name = locale;
+    name = name.substr(0, name.find(L'-'));
+    if (i18n::ParseLanguage(model::Utf8FromUtf16(name), &lang)) return lang;
+  }
+  return i18n::Lang::kEnglish;
 }
 
 // Checked against every backend, not only the one that will run.

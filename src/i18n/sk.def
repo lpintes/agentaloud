@@ -1,0 +1,13 @@
+// Slovenčina.  The ids are in i18n/ids.def.
+//
+//   S(id, text)
+//   P(id, 1, 2-4, other)
+//
+// "Other" is everything else, 0 included: 0 riadkov, 5 riadkov, 22 riadkov.
+// Slovak looks at the whole number, not at its last digit.  {0} in a P line
+// is the number; {0}, {1}... elsewhere are filled by i18n::Format.
+//
+// Written for the ear first: no abbreviation the synthesizer reads letter by
+// letter, no symbol it skips.
+
+P(kLines, L"{0} riadok", L"{0} riadky", L"{0} riadkov")
