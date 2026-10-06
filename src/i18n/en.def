@@ -224,6 +224,111 @@ S(kNoSpeechDll,
   L"Copy the library from bin\\ beside the .exe and start {1} again.")
 S(kNoSpeechTitle, L"no speech")
 
+// Command line, settings file, start.
+S(kArgNeedsValue, L"option {0} needs a value")
+S(kArgUnknownOption,
+  L"unknown option {0} (options for the CLI go after the -- separator)")
+S(kUnknownBackend, L"unknown backend {0}; known are: {1}")
+S(kUnknownMode, L"{1} has no mode {0}; valid are: {2}")
+// {0} name, {1} version, {2} backends, {3} the default backend, {4} its
+// agent name, {5} its modes (one per line), {6} the settings file, {7} the
+// languages, {8} the .exe.
+S(kHelp,
+  L"{0} {1} — a window instead of a terminal for coding agents (Claude Code, Codex).\n"
+  L"\n"
+  L"Usage:\n"
+  L"  {0} [options] [folder] [-- CLI arguments]\n"
+  L"\n"
+  L"  folder\n"
+  L"      The session's working directory: it decides which CLAUDE.md\n"
+  L"      and which git repository apply and what the tools may touch.\n"
+  L"      When it is left out, {0} asks for it in the New session\n"
+  L"      dialog, where the backend and the model can be chosen too.\n"
+  L"\n"
+  L"  -- CLI arguments\n"
+  L"      Everything after a lone -- goes to the CLI unchanged and unchecked,\n"
+  L"      for example: {0} C:\\project -- --chrome --add-dir D:\\other\n"
+  L"      Whether the CLI takes an argument in headless mode, {0} does not\n"
+  L"      know; the CLI's own --help lists its arguments.\n"
+  L"\n"
+  L"Options:\n"
+  L"  --backend <name>\n"
+  L"      Which CLI runs behind the window: {2}.\n"
+  L"      Without it, {3}.\n"
+  L"\n"
+  L"  --permission-mode <mode>\n"
+  L"      The permission mode, spelled as the CLI spells it.  For {4}:\n"
+  L"{5}"
+  L"      Another backend has modes of its own; {0} refuses an unknown\n"
+  L"      mode and lists the valid ones.  Without the option, whatever the\n"
+  L"      CLI is set to applies.\n"
+  L"\n"
+  L"  --model <alias|id>\n"
+  L"      sonnet, haiku, opus or a full model id.  Without it, the model\n"
+  L"      from the CLI's settings applies -- the expensive one.\n"
+  L"\n"
+  L"  --resume <id|title>, -r <id|title>\n"
+  L"      Carries on the named conversation.  The earlier turns are read\n"
+  L"      from disk and the cursor stands after them, where the\n"
+  L"      conversation continues; when the file is not found -- under a\n"
+  L"      title it never is -- the window starts empty.\n"
+  L"\n"
+  L"  --continue, -c\n"
+  L"      Carries on the latest conversation in this folder.  Which one\n"
+  L"      that is, {0} picks itself from the files in ~/.claude/projects --\n"
+  L"      not the CLI, which does not know about headless sessions.  A\n"
+  L"      folder without a single conversation starts a new session.\n"
+  L"      Together with --resume, --resume wins.\n"
+  L"\n"
+  L"  --help, -h\n"
+  L"      This text.\n"
+  L"\n"
+  L"  --version\n"
+  L"      Only the version of {0}.\n"
+  L"\n"
+  L"An option before -- that {0} does not know -- --fork-session, say --\n"
+  L"is neither passed on nor taken for a path: {0} says so and ends.\n"
+  L"Whoever wants it to reach the CLI writes it after --.  The project\n"
+  L"folder is the first argument before -- that does not start with a\n"
+  L"dash, so a folder whose name starts with one cannot be given this way.\n"
+  L"\n"
+  L"Settings:\n"
+  L"  {6}\n"
+  L"  Until there is a settings dialog, the file is written by hand.  A\n"
+  L"  line is key=value, # starts a comment:\n"
+  L"      backend=codex\n"
+  L"      claude.permission-mode=auto\n"
+  L"      claude.model=opus\n"
+  L"      codex.permission-mode=plan\n"
+  L"      check-updates=0\n"
+  L"      language=sk\n"
+  L"  What the command line does not say applies.  language is one of:\n"
+  L"  {7}; without it {0} speaks the language of Windows, and English\n"
+  L"  when it does not know that one.  check-updates=0 turns off the check\n"
+  L"  for a new version that {0} otherwise makes once a day at startup;\n"
+  L"  when it last checked, it writes into the same file, leaving the\n"
+  L"  other lines as they are.  {0} refuses an unknown key or mode and\n"
+  L"  names the line, just as it does an unknown option.  A config folder\n"
+  L"  beside {8}, when there is one, is used instead of the one in\n"
+  L"  %APPDATA%.\n"
+  L"\n"
+  L"What the keyboard can do, {0} tells you itself: F1 lists every key, F2\n"
+  L"shows the session details and F4 opens the list of slash commands.\n")
+S(kHelpNoSettingsFolder, L"(the folder cannot be determined)")
+S(kHelpTitle, L"help")
+S(kSeeHelp, L"{0} --help lists the options.")
+S(kSettingsLine, L"line {0}: {1}")
+S(kSettingsNotKeyValue, L"expected key=value, found \"{0}\"")
+S(kSettingsDuplicate, L"key {0} is already on line {1}")
+S(kSettingsCheckUpdates, L"check-updates is 0 or 1, not {0}")
+S(kUnknownLanguage, L"unknown language {0}; known are: {1}")
+S(kUnknownKey, L"unknown key {0}")
+S(kSettingsFileError, L"settings {0}, {1}")
+S(kNoRichEdit, L"Msftedit.dll could not be loaded.")
+S(kSessionStartFailed, L"The session could not be started.")
+S(kPackageBadPath, L"the package contains an invalid path {0}")
+S(kPackageMissing, L"the package lacks {0}")
+
 S(kKindPrompt, L"prompt")
 S(kKindAnswer, L"answer")
 S(kKindDenied, L"denied")

@@ -230,6 +230,110 @@ S(kNoSpeechDll,
   L"knižnicu z bin\\ vedľa .exe a spustite {1} znova.")
 S(kNoSpeechTitle, L"bez reči")
 
+// Command line, settings file, start.
+S(kArgNeedsValue, L"voľba {0} potrebuje hodnotu")
+S(kArgUnknownOption,
+  L"neznáma voľba {0} (voľby pre CLI patria za oddeľovač --)")
+S(kUnknownBackend, L"neznámy backend {0}; známe sú: {1}")
+S(kUnknownMode, L"režim {0} {1} nepozná; platné sú: {2}")
+// {0} name, {1} version, {2} backends, {3} the default backend, {4} its
+// agent name, {5} its modes (one per line), {6} the settings file, {7} the
+// languages, {8} the .exe.
+S(kHelp,
+  L"{0} {1} — okno namiesto terminálu pre coding agentov (Claude Code, Codex).\n"
+  L"\n"
+  L"Použitie:\n"
+  L"  {0} [voľby] [priečinok] [-- parametre CLI]\n"
+  L"\n"
+  L"  priečinok\n"
+  L"      Pracovný adresár session: rozhoduje o tom, ktoré CLAUDE.md\n"
+  L"      a ktorý git repozitár platia a čoho sa smú dotknúť nástroje.\n"
+  L"      Keď sa neuvedie, {0} sa naň spýta dialógom Nová\n"
+  L"      session, v ktorom sa dá zvoliť aj backend a model.\n"
+  L"\n"
+  L"  -- parametre CLI\n"
+  L"      Všetko za samostatným -- ide do CLI bez zmeny a bez kontroly,\n"
+  L"      napríklad: {0} C:\\projekt -- --chrome --add-dir D:\\iny\n"
+  L"      Či CLI parameter v headless režime prijme, {0} nevie;\n"
+  L"      parametre CLI vypíše jeho vlastné --help.\n"
+  L"\n"
+  L"Voľby:\n"
+  L"  --backend <meno>\n"
+  L"      Ktoré CLI beží za oknom: {2}.\n"
+  L"      Bez neho {3}.\n"
+  L"\n"
+  L"  --permission-mode <režim>\n"
+  L"      Režim povolení v pravopise CLI.  Pre {4}:\n"
+  L"{5}"
+  L"      Iný backend má vlastné režimy; neznámy režim {0}\n"
+  L"      odmietne a vymenuje platné.  Bez voľby platí to, čo má\n"
+  L"      nastavené CLI.\n"
+  L"\n"
+  L"  --model <alias|id>\n"
+  L"      sonnet, haiku, opus alebo úplné id modelu.  Bez neho platí\n"
+  L"      model z nastavení, teda ten drahý.\n"
+  L"\n"
+  L"  --resume <id|titul>, -r <id|titul>\n"
+  L"      Pokračuje v pomenovanom rozhovore.  Predchádzajúce ťahy sa\n"
+  L"      prečítajú z disku a kurzor stojí za nimi, na mieste, kde sa\n"
+  L"      pokračuje; keď sa súbor nenájde — pod titulom sa nenájde\n"
+  L"      nikdy — okno začne prázdne.\n"
+  L"\n"
+  L"  --continue, -c\n"
+  L"      Pokračuje v poslednom rozhovore tohto priečinka.  Ktorý to je,\n"
+  L"      vyberá {0} sám zo súborov v ~/.claude/projects — nie\n"
+  L"      CLI, ktoré o headless session nevie.  Priečinok bez jediného\n"
+  L"      rozhovoru začne novú session.  Spolu s --resume vyhráva\n"
+  L"      --resume.\n"
+  L"\n"
+  L"  --help, -h\n"
+  L"      Tento text.\n"
+  L"\n"
+  L"  --version\n"
+  L"      Iba verziu {0}.\n"
+  L"\n"
+  L"Voľba pred --, ktorú {0} nepozná — napríklad --fork-session —\n"
+  L"sa neprepošle a ani sa z nej nestane cesta: povie to a skončí.  Kto\n"
+  L"ju chce poslať CLI, napíše ju za --.  Priečinok projektu je prvý\n"
+  L"argument pred --, ktorý sa nezačína pomlčkou, takže priečinok\n"
+  L"s pomlčkou na začiatku mena sa takto zadať nedá.\n"
+  L"\n"
+  L"Nastavenia:\n"
+  L"  {6}\n"
+  L"  Kým nie je dialóg nastavení, súbor sa píše ručne.  Riadok je\n"
+  L"  kľúč=hodnota, # začína poznámku:\n"
+  L"      backend=codex\n"
+  L"      claude.permission-mode=auto\n"
+  L"      claude.model=opus\n"
+  L"      codex.permission-mode=plan\n"
+  L"      check-updates=0\n"
+  L"      language=en\n"
+  L"  Platí to, čo nepovie príkazový riadok.  language je jeden z: {7};\n"
+  L"  bez neho hovorí {0} jazykom Windows, a keď ho nevie,\n"
+  L"  po anglicky.  check-updates=0 vypne kontrolu novej verzie, ktorú\n"
+  L"  {0} inak robí pri štarte raz denne; kedy kontroloval naposledy,\n"
+  L"  si zapíše do toho istého súboru a ostatné riadky pritom nechá tak.\n"
+  L"  Neznámy kľúč alebo režim {0} odmietne a povie riadok, rovnako\n"
+  L"  ako neznámu voľbu.  Priečinok config vedľa {8}, keď existuje,\n"
+  L"  sa použije namiesto toho v %APPDATA%.\n"
+  L"\n"
+  L"Čo vie klávesnica, povie {0} sám: F1 vypíše všetky klávesy, F2\n"
+  L"podrobnosti session a F4 otvorí zoznam slash príkazov.\n")
+S(kHelpNoSettingsFolder, L"(priečinok sa nedá zistiť)")
+S(kHelpTitle, L"nápoveda")
+S(kSeeHelp, L"Zoznam volieb vypíše {0} --help.")
+S(kSettingsLine, L"riadok {0}: {1}")
+S(kSettingsNotKeyValue, L"očakáva sa kľúč=hodnota, je tam „{0}“")
+S(kSettingsDuplicate, L"kľúč {0} je už na riadku {1}")
+S(kSettingsCheckUpdates, L"check-updates je 0 alebo 1, nie {0}")
+S(kUnknownLanguage, L"neznámy jazyk {0}; známe sú: {1}")
+S(kUnknownKey, L"neznámy kľúč {0}")
+S(kSettingsFileError, L"nastavenia {0}, {1}")
+S(kNoRichEdit, L"Nepodarilo sa načítať Msftedit.dll.")
+S(kSessionStartFailed, L"Nepodarilo sa spustiť session.")
+S(kPackageBadPath, L"balík obsahuje neplatnú cestu {0}")
+S(kPackageMissing, L"v balíku chýba {0}")
+
 S(kKindPrompt, L"prompt")
 S(kKindAnswer, L"odpoveď")
 S(kKindDenied, L"zamietnuté")

@@ -23,7 +23,9 @@ bool ReadFileBytes(const std::wstring& path, std::string* out);
 // Writes the whole file or nothing: into "<path>.tmp" first, then over the
 // old one in a single rename, so a failure halfway -- a full disk, a crash --
 // cannot leave a file cut short where a whole one was.  The folder is created
-// when it is missing, one level only.  False and the reason otherwise.
+// when it is missing, one level only.  False and the reason otherwise -- in
+// English, because win/ knows nothing of the application and its catalog;
+// a caller that shows the reason to a reader says it in the reader's words.
 bool WriteFileBytes(const std::wstring& path, const std::string& bytes,
                     std::wstring* error);
 

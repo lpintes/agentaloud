@@ -264,7 +264,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
                       MakeBackend(app::kDefaultBackend)->capabilities(),
                       settingsFile);
     if (!win::WriteToParentConsole(help)) {
-      MessageBoxW(nullptr, help.c_str(), L"" APP_NAME L" — nápoveda",
+      const std::wstring title = std::wstring(L"" APP_NAME L" — ") +
+                                 i18n::Text(i18n::Str::kHelpTitle);
+      MessageBoxW(nullptr, help.c_str(), title.c_str(),
                   MB_OK | MB_ICONINFORMATION);
     }
     CoUninitialize();
@@ -285,7 +287,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     // complaint nobody reads -- but where to get it is.
     const std::wstring text =
         L"" APP_NAME L": " + arguments.error + L".\n" +
-        L"Zoznam volieb vypíše " APP_NAME L" --help.\n";
+        i18n::Format(i18n::Str::kSeeHelp, {L"" APP_NAME}) + L"\n";
     if (!win::WriteToParentConsole(text)) {
       MessageBoxW(nullptr, text.c_str(), L"" APP_NAME, MB_OK | MB_ICONERROR);
     }
@@ -298,8 +300,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   // the reader has to open it, and %APPDATA% is not a place anyone finds by
   // guessing.
   if (!settings.error().empty()) {
-    const std::wstring text = L"" APP_NAME L": nastavenia " + settingsFile +
-                              L", " + settings.error() + L".\n";
+    const std::wstring text =
+        L"" APP_NAME L": " +
+        i18n::Format(i18n::Str::kSettingsFileError,
+                     {settingsFile, settings.error()}) +
+        L".\n";
     if (!win::WriteToParentConsole(text)) {
       MessageBoxW(nullptr, text.c_str(), L"" APP_NAME, MB_OK | MB_ICONERROR);
     }
@@ -361,7 +366,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   // until it is loaded.  Deliberately not freed: the class must outlive every
   // window that uses it, and that is the whole run.
   if (!LoadLibraryW(L"Msftedit.dll")) {
-    MessageBoxW(nullptr, L"Nepodarilo sa načítať Msftedit.dll.", L"" APP_NAME,
+    MessageBoxW(nullptr, i18n::Text(i18n::Str::kNoRichEdit), L"" APP_NAME,
                 MB_OK | MB_ICONERROR);
     return 1;
   }
@@ -385,8 +390,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
 
   ui::MainWindow window;
   if (!window.Open(instance, std::move(backend), options)) {
-    MessageBoxW(nullptr, L"Nepodarilo sa spustiť session.", L"" APP_NAME,
-                MB_OK | MB_ICONERROR);
+    MessageBoxW(nullptr, i18n::Text(i18n::Str::kSessionStartFailed),
+                L"" APP_NAME, MB_OK | MB_ICONERROR);
     return 1;
   }
 

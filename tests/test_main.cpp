@@ -889,17 +889,30 @@ void TestArguments() {
   app::CheckMode(&first, claude);
   CHECK(first.error.find(L"--bogus") != std::wstring::npos);
 
-  // Napoveda hovori pravdu: kazdy rezim aj kazdy backend v nej je.
-  const std::wstring text =
-      app::HelpText(L"2026.10.1", known, claude, L"C:\\nastavenia\\settings.txt");
-  CHECK(text.find(L"--backend") != std::wstring::npos);
-  // Kde sa subor nastaveni hlada, nikto neuhadne; napoveda to musi povedat.
-  CHECK(text.find(L"C:\\nastavenia\\settings.txt") != std::wstring::npos);
-  CHECK(text.find(L"" APP_NAME L" 2026.10.1 ") == 0);
-  CHECK(text.find(L"--version") != std::wstring::npos);
-  for (const agent::Mode& mode : claude.modes) {
-    CHECK(text.find(model::Utf16FromUtf8(mode.id)) != std::wstring::npos);
+  // Napoveda hovori pravdu: kazdy rezim aj kazdy backend v nej je -- v kazdom
+  // jazyku, lebo text je v katalogu a nie vedla Parse.
+  for (const i18n::Lang lang : i18n::Languages()) {
+    i18n::SetLanguage(lang);
+    const std::wstring text = app::HelpText(
+        L"2026.10.1", known, claude, L"C:\\nastavenia\\settings.txt");
+    // Kde sa subor nastaveni hlada, nikto neuhadne; napoveda to musi povedat.
+    CHECK(text.find(L"C:\\nastavenia\\settings.txt") != std::wstring::npos);
+    CHECK(text.find(L"" APP_NAME L" 2026.10.1 ") == 0);
+    for (const wchar_t* option :
+         {L"--backend", L"--permission-mode", L"--model", L"--resume",
+          L"--continue", L"--help", L"--version", L"language=", L"F1"}) {
+      CHECK(text.find(option) != std::wstring::npos);
+    }
+    for (const std::string& name : known) {
+      CHECK(text.find(model::Utf16FromUtf8(name)) != std::wstring::npos);
+    }
+    for (const agent::Mode& mode : claude.modes) {
+      CHECK(text.find(model::Utf16FromUtf8(mode.id)) != std::wstring::npos);
+    }
+    // Znacka bez argumentu by v texte zostala doslova.
+    CHECK(text.find(L"{") == std::wstring::npos);
   }
+  i18n::SetLanguage(i18n::Lang::kSlovak);
 }
 
 // Subor nastaveni (claude-gui-lkk.55).  Zly riadok sa odmieta, nie preskakuje:

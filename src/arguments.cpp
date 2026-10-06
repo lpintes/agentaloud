@@ -6,6 +6,8 @@
 
 namespace app {
 
+using i18n::Str;
+
 const char kDefaultBackend[] = "claude";
 
 namespace {
@@ -51,7 +53,7 @@ Arguments Parse(const std::vector<std::wstring>& words) {
     const bool wantsValue = word == L"--permission-mode" || word == L"--model" ||
                             word == L"--backend";
     if (wantsValue && i + 1 >= words.size()) {
-      complain(L"voľba " + word + L" potrebuje hodnotu");
+      complain(i18n::Format(Str::kArgNeedsValue, {word}));
       break;
     }
     if (word == L"--backend") {
@@ -103,8 +105,7 @@ Arguments Parse(const std::vector<std::wstring>& words) {
     // folder anybody means on Windows, and a rule with one exception is a rule
     // nobody remembers.  An option meant for the CLI goes behind "--".
     } else if (!word.empty() && word[0] == L'-') {
-      complain(L"neznáma voľba " + word +
-               L" (voľby pre CLI patria za oddeľovač --)");
+      complain(i18n::Format(Str::kArgUnknownOption, {word}));
     } else if (arguments.project.empty()) {
       arguments.project = word;
     }
@@ -120,8 +121,8 @@ void CheckBackend(Arguments* arguments, const std::vector<std::string>& known) {
   for (const std::string& name : known) {
     if (name == arguments->backend) return;
   }
-  arguments->error = L"neznámy backend " + Wide(arguments->backend) +
-                     L"; známe sú: " + Joined(known);
+  arguments->error = i18n::Format(Str::kUnknownBackend,
+                                  {Wide(arguments->backend), Joined(known)});
 }
 
 void CheckMode(Arguments* arguments, const agent::Capabilities& capabilities) {
@@ -133,17 +134,18 @@ void CheckMode(Arguments* arguments, const agent::Capabilities& capabilities) {
   if (agent::FindMode(capabilities, mode) != nullptr) return;
   std::vector<std::string> valid;
   for (const agent::Mode& known : capabilities.modes) valid.push_back(known.id);
-  arguments->error = L"režim " + arguments->permissionMode + L" " +
-                     Wide(capabilities.agentName) + L" nepozná; platné sú: " +
-                     Joined(valid);
+  arguments->error =
+      i18n::Format(Str::kUnknownMode, {arguments->permissionMode,
+                                       Wide(capabilities.agentName),
+                                       Joined(valid)});
 }
 
 // Whoever types --help types it at a prompt, so this is the one place the
-// application answers in text rather than in a window.  Written out here, and
-// not read from anywhere: a help text in a resource or a file is a help text
-// that gets out of step with Parse above, and the two are in one file
-// precisely so that they do not.  What can be filled in from the truth -- the
-// backends, the modes -- is.
+// application answers in text rather than in a window.  The wording is the
+// catalog's, one block per language (kHelp), so it no longer sits beside
+// Parse; what keeps the two in step is TestArguments, which looks for every
+// option in every language.  What can be filled in from the truth -- the
+// backends, the modes, the languages -- is.
 //
 // It names every option this process understands, and then says what happens
 // to the ones it does not, because that is the failure nobody would guess.
@@ -159,90 +161,14 @@ std::wstring HelpText(const std::wstring& version,
   for (const i18n::Lang lang : i18n::Languages()) {
     languages.push_back(i18n::LanguageCode(lang));
   }
-  return
-      L"" APP_NAME L" " + version +
-      L" — okno namiesto terminálu pre coding agentov (Claude Code, Codex).\n"
-      L"\n"
-      L"Použitie:\n"
-      L"  " APP_NAME L" [voľby] [priečinok] [-- parametre CLI]\n"
-      L"\n"
-      L"  priečinok\n"
-      L"      Pracovný adresár session: rozhoduje o tom, ktoré CLAUDE.md\n"
-      L"      a ktorý git repozitár platia a čoho sa smú dotknúť nástroje.\n"
-      L"      Keď sa neuvedie, " APP_NAME L" sa naň spýta dialógom Nová\n"
-      L"      session, v ktorom sa dá zvoliť aj backend a model.\n"
-      L"\n"
-      L"  -- parametre CLI\n"
-      L"      Všetko za samostatným -- ide do CLI bez zmeny a bez kontroly,\n"
-      L"      napríklad: " APP_NAME L" C:\\projekt -- --chrome --add-dir D:\\iny\n"
-      L"      Či CLI parameter v headless režime prijme, " APP_NAME L" nevie;\n"
-      L"      parametre CLI vypíše jeho vlastné --help.\n"
-      L"\n"
-      L"Voľby:\n"
-      L"  --backend <meno>\n"
-      L"      Ktoré CLI beží za oknom: " + Joined(backends) + L".\n"
-      L"      Bez neho " + Wide(kDefaultBackend) + L".\n"
-      L"\n"
-      L"  --permission-mode <režim>\n"
-      L"      Režim povolení v pravopise CLI.  Pre " +
-      Wide(defaultBackend.agentName) + L":\n" + modes +
-      L"      Iný backend má vlastné režimy; neznámy režim " APP_NAME L"\n"
-      L"      odmietne a vymenuje platné.  Bez voľby platí to, čo má\n"
-      L"      nastavené CLI.\n"
-      L"\n"
-      L"  --model <alias|id>\n"
-      L"      sonnet, haiku, opus alebo úplné id modelu.  Bez neho platí\n"
-      L"      model z nastavení, teda ten drahý.\n"
-      L"\n"
-      L"  --resume <id|titul>, -r <id|titul>\n"
-      L"      Pokračuje v pomenovanom rozhovore.  Predchádzajúce ťahy sa\n"
-      L"      prečítajú z disku a kurzor stojí za nimi, na mieste, kde sa\n"
-      L"      pokračuje; keď sa súbor nenájde — pod titulom sa nenájde\n"
-      L"      nikdy — okno začne prázdne.\n"
-      L"\n"
-      L"  --continue, -c\n"
-      L"      Pokračuje v poslednom rozhovore tohto priečinka.  Ktorý to je,\n"
-      L"      vyberá " APP_NAME L" sám zo súborov v ~/.claude/projects — nie\n"
-      L"      CLI, ktoré o headless session nevie.  Priečinok bez jediného\n"
-      L"      rozhovoru začne novú session.  Spolu s --resume vyhráva\n"
-      L"      --resume.\n"
-      L"\n"
-      L"  --help, -h\n"
-      L"      Tento text.\n"
-      L"\n"
-      L"  --version\n"
-      L"      Iba verziu " APP_NAME L".\n"
-      L"\n"
-      L"Voľba pred --, ktorú " APP_NAME L" nepozná — napríklad --fork-session —\n"
-      L"sa neprepošle a ani sa z nej nestane cesta: povie to a skončí.  Kto\n"
-      L"ju chce poslať CLI, napíše ju za --.  Priečinok projektu je prvý\n"
-      L"argument pred --, ktorý sa nezačína pomlčkou, takže priečinok\n"
-      L"s pomlčkou na začiatku mena sa takto zadať nedá.\n"
-      L"\n"
-      L"Nastavenia:\n"
-      L"  " + (settingsFile.empty() ? std::wstring(L"(priečinok sa nedá zistiť)")
-                                    : settingsFile) + L"\n"
-      L"  Kým nie je dialóg nastavení, súbor sa píše ručne.  Riadok je\n"
-      L"  kľúč=hodnota, # začína poznámku:\n"
-      L"      backend=codex\n"
-      L"      claude.permission-mode=auto\n"
-      L"      claude.model=opus\n"
-      L"      codex.permission-mode=plan\n"
-      L"      check-updates=0\n"
-      L"      language=en\n"
-      L"  Platí to, čo nepovie príkazový riadok.  language je jeden z: " +
-      Joined(languages) + L";\n"
-      L"  bez neho hovorí " APP_NAME L" jazykom Windows, a keď ho nevie,\n"
-      L"  po anglicky.  check-updates=0 vypne\n"
-      L"  kontrolu novej verzie, ktorú " APP_NAME L" inak robí pri štarte raz\n"
-      L"  denne; kedy kontroloval naposledy, si zapíše do toho istého súboru\n"
-      L"  a ostatné riadky pritom nechá tak.  Neznámy kľúč alebo režim\n"
-      L"  " APP_NAME L" odmietne a povie riadok, rovnako ako neznámu voľbu.\n"
-      L"  Priečinok config vedľa " APP_EXE L", keď existuje, sa použije\n"
-      L"  namiesto toho v %APPDATA%.\n"
-      L"\n"
-      L"Čo vie klávesnica, povie " APP_NAME L" sám: F1 vypíše všetky klávesy, F2\n"
-      L"podrobnosti session a F4 otvorí zoznam slash príkazov.\n";
+  const std::wstring settings =
+      settingsFile.empty()
+          ? std::wstring(i18n::Text(Str::kHelpNoSettingsFolder))
+          : settingsFile;
+  return i18n::Format(Str::kHelp,
+                      {L"" APP_NAME, version, Joined(backends),
+                       Wide(kDefaultBackend), Wide(defaultBackend.agentName),
+                       modes, settings, Joined(languages), L"" APP_EXE});
 }
 
 }  // namespace app

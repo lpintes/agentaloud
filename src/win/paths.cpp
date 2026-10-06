@@ -52,7 +52,7 @@ bool WriteFileBytes(const std::wstring& path, const std::string& bytes,
   const HANDLE file = CreateFileW(temporary.c_str(), GENERIC_WRITE, 0, nullptr,
                                   CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
   if (file == INVALID_HANDLE_VALUE) {
-    *error = L"súbor " + temporary + L" sa nedá vytvoriť (chyba " +
+    *error = L"cannot create " + temporary + L" (error " +
              std::to_wstring(GetLastError()) + L")";
     return false;
   }
@@ -64,12 +64,12 @@ bool WriteFileBytes(const std::wstring& path, const std::string& bytes,
   CloseHandle(file);
   if (!wrote) {
     DeleteFileW(temporary.c_str());
-    *error = L"súbor " + temporary + L" sa nedá zapísať celý";
+    *error = L"cannot write all of " + temporary;
     return false;
   }
   if (!MoveFileExW(temporary.c_str(), path.c_str(),
                    MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
-    *error = L"súbor " + path + L" sa nedá prepísať (chyba " +
+    *error = L"cannot replace " + path + L" (error " +
              std::to_wstring(GetLastError()) + L")";
     DeleteFileW(temporary.c_str());
     return false;

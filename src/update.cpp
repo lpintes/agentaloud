@@ -2,6 +2,8 @@
 
 #include <cwctype>
 
+#include "i18n/i18n.h"
+
 namespace update {
 
 namespace {
@@ -98,13 +100,13 @@ Plan PlanReplace(const std::vector<std::wstring>& entries,
     // separator is a rooted path, and ':' is a drive or a stream.
     if (entry.empty() || entry.front() == L'/' || entry.front() == L'\\' ||
         entry.find(L':') != std::wstring::npos) {
-      plan.error = L"balík obsahuje neplatnú cestu " + entry;
+      plan.error = i18n::Format(i18n::Str::kPackageBadPath, {entry});
       return plan;
     }
     std::vector<std::wstring> parts = Components(entry);
     for (const std::wstring& part : parts) {
       if (part == L"..") {
-        plan.error = L"balík obsahuje neplatnú cestu " + entry;
+        plan.error = i18n::Format(i18n::Str::kPackageBadPath, {entry});
         return plan;
       }
     }
@@ -132,7 +134,7 @@ Plan PlanReplace(const std::vector<std::wstring>& entries,
   }
   if (!hasExe) {
     plan.files.clear();
-    plan.error = L"v balíku chýba " + std::wstring(exeName);
+    plan.error = i18n::Format(i18n::Str::kPackageMissing, {exeName});
   }
   return plan;
 }

@@ -29,7 +29,10 @@ std::wstring Joined(const std::vector<std::string>& words) {
 }  // namespace
 
 void Settings::Complain(int line, const std::wstring& text) {
-  if (error_.empty()) error_ = L"riadok " + std::to_wstring(line) + L": " + text;
+  if (error_.empty()) {
+    error_ = i18n::Format(i18n::Str::kSettingsLine,
+                          {std::to_wstring(line), text});
+  }
 }
 
 Settings Settings::Parse(std::string_view text) {
@@ -54,8 +57,8 @@ Settings Settings::Parse(std::string_view text) {
                                                    ? line.size()
                                                    : equals)));
     if (equals == std::string_view::npos || key.empty()) {
-      settings.Complain(number, L"očakáva sa kľúč=hodnota, je tam „" +
-                                    Wide(line) + L"“");
+      settings.Complain(
+          number, i18n::Format(i18n::Str::kSettingsNotKeyValue, {Wide(line)}));
       continue;
     }
     // Twice is refused rather than "the last one wins": a reader who adds a
@@ -64,8 +67,9 @@ Settings Settings::Parse(std::string_view text) {
     // choice.
     const auto known = settings.entries_.find(key);
     if (known != settings.entries_.end()) {
-      settings.Complain(number, L"kľúč " + Wide(key) + L" je už na riadku " +
-                                    std::to_wstring(known->second.line));
+      settings.Complain(
+          number, i18n::Format(i18n::Str::kSettingsDuplicate,
+                               {Wide(key), std::to_wstring(known->second.line)}));
       continue;
     }
     settings.entries_[key] = {std::string(Trim(line.substr(equals + 1))), number};
@@ -118,15 +122,15 @@ void Settings::Check(const std::map<std::string, agent::Capabilities>& backends)
     const bool empty = entry.value.empty();
     if (key == kBackendKey) {
       if (!empty && backends.count(entry.value) == 0) {
-        Complain(entry.line, L"neznámy backend " + Wide(entry.value) +
-                                 L"; známe sú: " + Joined(names));
+        Complain(entry.line, i18n::Format(i18n::Str::kUnknownBackend,
+                                          {Wide(entry.value), Joined(names)}));
       }
       continue;
     }
     if (key == kCheckUpdatesKey) {
       if (!empty && entry.value != "0" && entry.value != "1") {
-        Complain(entry.line, L"check-updates je 0 alebo 1, nie " +
-                                 Wide(entry.value));
+        Complain(entry.line, i18n::Format(i18n::Str::kSettingsCheckUpdates,
+                                          {Wide(entry.value)}));
       }
       continue;
     }
@@ -137,8 +141,8 @@ void Settings::Check(const std::map<std::string, agent::Capabilities>& backends)
         for (const i18n::Lang known : i18n::Languages()) {
           codes.push_back(i18n::LanguageCode(known));
         }
-        Complain(entry.line, L"neznámy jazyk " + Wide(entry.value) +
-                                 L"; známe sú: " + Joined(codes));
+        Complain(entry.line, i18n::Format(i18n::Str::kUnknownLanguage,
+                                          {Wide(entry.value), Joined(codes)}));
       }
       continue;
     }
@@ -152,7 +156,7 @@ void Settings::Check(const std::map<std::string, agent::Capabilities>& backends)
     const std::string name = dot == std::string::npos ? "" : key.substr(dot + 1);
     if (backend == backends.end() ||
         (name != kPermissionModeKey && name != kModelKey)) {
-      Complain(entry.line, L"neznámy kľúč " + Wide(key));
+      Complain(entry.line, i18n::Format(i18n::Str::kUnknownKey, {Wide(key)}));
       continue;
     }
     // The model is not checked, for the reason --model is not: the list is
@@ -163,9 +167,10 @@ void Settings::Check(const std::map<std::string, agent::Capabilities>& backends)
       for (const agent::Mode& mode : backend->second.modes) {
         valid.push_back(mode.id);
       }
-      Complain(entry.line, L"režim " + Wide(entry.value) + L" " +
-                               Wide(backend->second.agentName) +
-                               L" nepozná; platné sú: " + Joined(valid));
+      Complain(entry.line,
+               i18n::Format(i18n::Str::kUnknownMode,
+                            {Wide(entry.value),
+                             Wide(backend->second.agentName), Joined(valid)}));
     }
   }
 }
