@@ -1,0 +1,17 @@
+// Every string the reader hears or sees, in every language, one line each.
+//
+// An X-macro so that the enum and the table cannot drift: a string is one
+// line here, and a line without its translation does not compile.  Included
+// only by i18n.h and i18n.cpp.
+//
+//   S(id, slovak, english)
+//   P(id, slovak 1, slovak 2-4, slovak other, english 1, english other)
+//
+// "Other" is everything else, 0 included: 0 riadkov, 5 riadkov, 22 riadkov.
+// Slovak looks at the whole number, not its last digit.
+//
+// {0}, {1}... are filled by i18n::Format; in a P line {0} is the number.
+// A string that is said is written for the ear first: no abbreviation the
+// synthesizer reads letter by letter, no symbol it skips.
+
+P(Lines, L"{0} riadok", L"{0} riadky", L"{0} riadkov", L"{0} line", L"{0} lines")

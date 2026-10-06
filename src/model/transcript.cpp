@@ -1,5 +1,6 @@
 #include "model/transcript.h"
 
+#include "i18n/i18n.h"
 #include "model/utf.h"
 
 namespace model {
@@ -177,11 +178,7 @@ std::wstring OneLine(const std::wstring& text, size_t limit) {
 }
 
 std::wstring Count(size_t lines) {
-  // Slovak counts in three: 1 riadok, 2-4 riadky, 5+ riadkov.
-  if (lines == 1) return L"1 riadok";
-  const std::wstring number = std::to_wstring(lines);
-  if (lines >= 2 && lines <= 4) return number + L" riadky";
-  return number + L" riadkov";
+  return i18n::Count(i18n::Plural::Lines, static_cast<long long>(lines));
 }
 
 // A path as it belongs in a summary line: what is left of it once the project

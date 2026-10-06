@@ -40,6 +40,7 @@
 #include <vector>
 
 #include "app_name.h"
+#include "i18n/i18n.h"
 #include "model/bookmarks.h"
 #include "model/history.h"
 #include "model/transcript.h"
@@ -147,6 +148,39 @@ void TestUtfRoundTrip() {
     }
   }
   CHECK_EQ(model::Utf16FromUtf8("\xF0\x9F\x94\x8A").size(), size_t{2});
+}
+
+// Katalog textov.  Jazyk je globalny stav, takze test ho na konci vrati na
+// slovencinu -- na nej stoja kontroly textu vo vsetkych testoch za nim.
+void TestCatalog() {
+  TEST("i18n: mnozne cislo, jazyk, UTF-8");
+  i18n::SetLanguage(i18n::Lang::kSlovak);
+  CHECK(i18n::Count(i18n::Plural::Lines, 0) == L"0 riadkov");
+  CHECK(i18n::Count(i18n::Plural::Lines, 1) == L"1 riadok");
+  CHECK(i18n::Count(i18n::Plural::Lines, 2) == L"2 riadky");
+  CHECK(i18n::Count(i18n::Plural::Lines, 4) == L"4 riadky");
+  CHECK(i18n::Count(i18n::Plural::Lines, 5) == L"5 riadkov");
+  // Slovencina sa riadi celym cislom, nie poslednou cifrou: 22 riadkov.
+  CHECK(i18n::Count(i18n::Plural::Lines, 22) == L"22 riadkov");
+
+  i18n::SetLanguage(i18n::Lang::kEnglish);
+  CHECK(i18n::Count(i18n::Plural::Lines, 0) == L"0 lines");
+  CHECK(i18n::Count(i18n::Plural::Lines, 1) == L"1 line");
+  CHECK(i18n::Count(i18n::Plural::Lines, 3) == L"3 lines");
+
+  i18n::Lang lang = i18n::Lang::kSlovak;
+  CHECK(i18n::ParseLanguage("en", &lang) && lang == i18n::Lang::kEnglish);
+  CHECK(i18n::ParseLanguage("sk", &lang) && lang == i18n::Lang::kSlovak);
+  CHECK(!i18n::ParseLanguage("SK", &lang));
+  CHECK(!i18n::ParseLanguage("", &lang));
+  CHECK_EQ(std::string(i18n::LanguageCode(i18n::Lang::kEnglish)), "en");
+
+  // Katalog pre proto/ ide do UTF-8 vlastnym kodovacom; musi sa zhodovat
+  // s tym, ktorym model/ cita protokol.
+  const std::wstring wide = L"plánovanie — „x“ \U0001F50A";
+  CHECK_EQ(i18n::Utf8(wide), model::Utf8FromUtf16(wide));
+
+  i18n::SetLanguage(i18n::Lang::kSlovak);
 }
 
 void TestRangeMap() {
@@ -3013,6 +3047,7 @@ int main(int argc, char** argv) {
   const std::string fixtures = argc > 1 ? argv[1] : "tests/fixtures";
 
   TestUtfRoundTrip();
+  TestCatalog();
   TestRangeMap();
   TestBlockAtAndNavigation();
   TestControlCharactersNeverReachTheBuffer();

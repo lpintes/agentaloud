@@ -89,6 +89,10 @@ VERSION_H := $(BUILD)/app_version.h
 # Nezavisle na AgentAloud, da sa vziat do ineho projektu tak ako je.
 WIN_SRCS   := src/win/window.cpp src/win/dialog.cpp src/win/process.cpp \
               src/win/clipboard.cpp src/win/console.cpp src/win/paths.cpp
+# Jazyk vsetkeho, co citatel pocuje a vidi.  Pod vsetkymi vrstvami, lebo text
+# nie je len v ui/: zhrnutia blokov pise model/ a nazvy rezimov proto/.  Bez
+# windows.h, preto ho maju appka, spike aj testy.
+I18N_SRCS  := src/i18n/i18n.cpp
 # Port: co appka od coding agenta potrebuje, bez ohladu na to, ktore CLI to
 # je.  Len std typy, ziadny JSON a ziadne windows.h.
 AGENT_SRCS := src/agent/backend.cpp
@@ -126,17 +130,17 @@ UI_SRCS := src/ui/session_pane.cpp src/ui/main_window.cpp src/ui/speech.cpp \
            src/ui/command_dialog.cpp src/ui/keys_dialog.cpp \
            src/ui/new_session_dialog.cpp
 
-APP_SRCS := $(WIN_SRCS) $(AGENT_SRCS) $(PROTO_SRCS) $(MODEL_SRCS) $(UI_SRCS) \
+APP_SRCS := $(I18N_SRCS) $(WIN_SRCS) $(AGENT_SRCS) $(PROTO_SRCS) $(MODEL_SRCS) $(UI_SRCS) \
             $(APP_PURE_SRCS) src/version_current.cpp src/updater.cpp src/main.cpp
 APP_OBJS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(APP_SRCS))
 
 # Dialogove sablony.  Len appka: spike ani testy okno nemaju.
 APP_RES := $(BUILD)/ui/app.res.o
 
-SPIKE_SRCS := $(WIN_SRCS) $(AGENT_SRCS) $(PROTO_SRCS) src/spike_console.cpp
+SPIKE_SRCS := $(I18N_SRCS) $(WIN_SRCS) $(AGENT_SRCS) $(PROTO_SRCS) src/spike_console.cpp
 SPIKE_OBJS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(SPIKE_SRCS))
 
-TEST_SRCS := $(AGENT_SRCS) $(PROTO_PURE_SRCS) $(MODEL_SRCS) $(APP_PURE_SRCS)
+TEST_SRCS := $(I18N_SRCS) $(AGENT_SRCS) $(PROTO_PURE_SRCS) $(MODEL_SRCS) $(APP_PURE_SRCS)
 TEST_OBJS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(TEST_SRCS)) \
              $(BUILD)/tests/test_main.o
 
