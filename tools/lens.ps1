@@ -5,13 +5,14 @@
 # hranicu vrati prazdny retazec, cize ZLYHA TICHO a vyzera to, akoby bolo pole
 # prazdne. Preto Lens::Text posiela WM_GETTEXT rucne.
 #
-# Klavesy sa takto posielat NEDAJU. SendKeys aj keybd_event idu do okna
-# v popredi, cize by pristali u pouzivatela, nie v testovanej instancii.
-# PostMessage WM_KEYDOWN priamo prvku funguje a je to legitimne overenie pre
-# klavesu, ktoru chyta subclass procedura (F1, F2, F4, chordy) -- tie sa
-# obsluhuju v tej istej procedure, do ktorej by prisla aj skutocna sprava.
-# Pre klavesu, ktoru rozhoduje az dialogova slucka alebo akceleratory, to
-# nedokazuje nic.
+# SendKeys ani keybd_event sa pouzit NESMU: idu do okna v popredi, cize by
+# pristali u pouzivatela, nie v testovanej instancii. PostMessage WM_KEYDOWN
+# priamo prvku funguje a je to legitimne overenie pre klavesu, ktoru chyta
+# subclass procedura (F1, F2, F4) -- obsluhuje ju ta ista procedura, do ktorej
+# by prisla aj skutocna sprava. Chord s Ctrl alebo Shift posiela
+# Send-LensChord, ktory modifikator nastavi cez AttachThreadInput +
+# SetKeyboardState (nizsie). Pre klavesu, ktoru rozhoduje az dialogova slucka
+# alebo akceleratory, nic z toho nedokazuje nic.
 #
 # SendMessage do modalneho dialogu tento shell ZABLOKUJE, kym sa dialog
 # nezavrie -- SendMessage caka na navrat. Na otvorenie dialogu teda
@@ -51,6 +52,39 @@ public class Lens {
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hwnd);
   [DllImport("user32.dll")] public static extern bool GetGUIThreadInfo(uint tid, ref GUITHREADINFO gti);
   [DllImport("user32.dll")] public static extern bool PostMessageW(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr SendMessageW(IntPtr hwnd, uint msg, IntPtr wp, string lp);
+  [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool attach);
+  [DllImport("user32.dll")] public static extern bool GetKeyboardState(byte[] s);
+  [DllImport("user32.dll")] public static extern bool SetKeyboardState(byte[] s);
+  [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+
+  // A key with modifiers held, as the target thread's GetKeyState sees them.
+  // On a fresh thread, because AttachThreadInput shares the key state of the
+  // two threads until it is undone, and the shell's own thread must not be
+  // left sharing it.  Nothing goes to the foreground window.
+  public static bool Chord(IntPtr control, int key, bool ctrl, bool shift) {
+    bool ok = false;
+    System.Threading.Thread t = new System.Threading.Thread(() => {
+      uint me = GetCurrentThreadId();
+      uint target = GetWindowThreadProcessId(control, IntPtr.Zero);
+      if (!AttachThreadInput(me, target, true)) return;
+      byte[] state = new byte[256];
+      GetKeyboardState(state);
+      byte[] saved = (byte[])state.Clone();
+      if (ctrl) { state[0x11] = 0x80; state[0xA2] = 0x80; }
+      if (shift) { state[0x10] = 0x80; state[0xA0] = 0x80; }
+      ok = SetKeyboardState(state);
+      PostMessageW(control, 0x0100, (IntPtr)key, IntPtr.Zero);  // WM_KEYDOWN
+      // The message is handled on the target's thread; the state must still
+      // be set when it is.
+      System.Threading.Thread.Sleep(300);
+      SetKeyboardState(saved);
+      AttachThreadInput(me, target, false);
+    });
+    t.Start();
+    t.Join();
+    return ok;
+  }
 
   public static string Text(IntPtr hwnd) {
     int len = (int)SendMessageW(hwnd, 0x000E, IntPtr.Zero, IntPtr.Zero); // WM_GETTEXTLENGTH
@@ -107,4 +141,23 @@ function Get-LensFocus([IntPtr]$Window) {
 # Esc = 0x1B, Enter = 0x0D.
 function Send-LensKey([IntPtr]$Control, [int]$VirtualKey) {
   [void][Lens]::PostMessageW($Control, 0x0100, [IntPtr]$VirtualKey, [IntPtr]0)
+}
+
+# Klavesa s Ctrl alebo Shift, napriklad Ctrl+Enter, ktory odosle prompt.
+# Procedura okna sa na modifikator pyta cez GetKeyState, a ten PostMessage
+# nastavit nevie. Preto AttachThreadInput na vlakno appky + SetKeyboardState:
+# stav klaves je po pripojeni spolocny, takze ho appka vidi, a nic sa
+# neposiela do okna v popredi. Overene 6. 10. 2026 (claude-gui-lkk.52) --
+# Ctrl+Enter odoslal prompt trikrat z troch.
+#
+#   Set-LensText $prompt 'Run echo hello > hello.txt with Bash.'
+#   Send-LensChord $prompt 0x0D -Ctrl
+function Send-LensChord([IntPtr]$Control, [int]$VirtualKey, [switch]$Ctrl,
+                        [switch]$Shift) {
+  return [Lens]::Chord($Control, $VirtualKey, $Ctrl.IsPresent, $Shift.IsPresent)
+}
+
+# Text do editacneho pola (WM_SETTEXT), napriklad prompt pred odoslanim.
+function Set-LensText([IntPtr]$Control, [string]$Text) {
+  [void][Lens]::SendMessageW($Control, 0x000C, [IntPtr]::Zero, $Text)
 }

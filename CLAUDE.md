@@ -240,6 +240,17 @@ rozhoduje až dialógová slučka, nedokazuje nič. A `SendMessage` do modálneh
 dialógu zablokuje volajúci shell, kým sa dialóg nezavrie; na otvorenie dialógu
 teda `PostMessage`.
 
+**Chord s Ctrl alebo Shift — a teda aj odoslanie promptu — sa poslať dá**, a
+tiež bez popredia: `Set-LensText` dá text do promptu a `Send-LensChord $prompt
+0x0D -Ctrl` ho odošle. Procedúra sa na modifikátor pýta cez `GetKeyState`,
+ktorý `PostMessage` nastaviť nevie; `Send-LensChord` sa preto z pomocného
+vlákna pripojí `AttachThreadInput` na vlákno appky a modifikátor nastaví
+`SetKeyboardState` — stav kláves je po pripojení spoločný. Overené 6. 10. 2026
+(claude-gui-lkk.52): celý ťah naostro, aj s dialógom povolenia a otázky, bez
+jediného stlačenia u používateľa. Na overenie naostro stačí `--model haiku`.
+Dialóg povolenia pritom nevyvolá hocijaký príkaz: `echo hello` CLI povolí
+samo ako read-only, `echo hello > hello.txt` už nie.
+
 Testovaciu inštanciu zatváraj **podľa PID**, nikdy `taskkill /IM` — používateľ
 má vlastnú AgentAloud (či staršiu ClaudeLens) spustenú.
 
