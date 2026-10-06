@@ -3,6 +3,8 @@
 #include "i18n/i18n.h"
 #include "model/utf.h"
 
+using i18n::Str;
+
 namespace model {
 namespace {
 
@@ -232,15 +234,19 @@ std::wstring RenderQuestions(const std::vector<agent::Question>& questions,
     const std::wstring first = Widen(questions.front().text);
     const size_t rest = questions.size() - 1;
     return rest == 0 ? first
-                     : first + L" (+" + std::to_wstring(rest) + L" ďalšie)";
+                     : i18n::Format(Str::kQuestionsMore,
+                                    {first, std::to_wstring(rest)});
   }
   std::wstring text;
   size_t number = 0;
   for (const agent::Question& question : questions) {
     ++number;
     if (!text.empty()) text += L'\n';
-    text += std::to_wstring(number) + L". " + Widen(question.text);
-    if (question.multiSelect) text += L" (dá sa označiť viac)";
+    const std::wstring asked = Widen(question.text);
+    text += std::to_wstring(number) + L". " +
+            (question.multiSelect
+                 ? i18n::Format(Str::kQuestionMultiSelect, {asked})
+                 : asked);
     for (const agent::QuestionOption& option : question.options) {
       text += L'\n';
       text += L"   " + Widen(option.label);
@@ -303,21 +309,30 @@ std::wstring RenderToolCall(const agent::ToolCall& call) {
   // all: "obsah: ..." alone asked to allow a write without saying where to --
   // found on Codex's apply_patch and true of Claude's Write and Edit as well.
   const std::wstring file =
-      call.primaryIsPath ? L"súbor: " + Widen(call.primary) + L'\n' : L"";
+      call.primaryIsPath
+          ? i18n::Format(Str::kFileLine, {Widen(call.primary)}) + L'\n'
+          : L"";
   if (call.kind == agent::ToolKind::EditFile && !call.replacements.empty()) {
     std::wstring body;
     for (const agent::TextReplacement& replacement : call.replacements) {
       if (!body.empty()) body += L'\n';
-      body += L"pôvodné:\n" + Widen(replacement.before) + L"\nnové:\n" +
-              Widen(replacement.after);
-      if (replacement.everywhere) body += L"\nvšetky výskyty";
+      body += i18n::Text(Str::kReplaceBefore) + std::wstring(L"\n") +
+              Widen(replacement.before) + L'\n' +
+              i18n::Text(Str::kReplaceAfter) + L'\n' + Widen(replacement.after);
+      if (replacement.everywhere) {
+        body += L'\n';
+        body += i18n::Text(Str::kReplaceEverywhere);
+      }
     }
     return file + body;
   }
   if (call.kind == agent::ToolKind::CreateFile && call.newContent) {
-    return file + L"obsah:\n" + Widen(*call.newContent);
+    return file + i18n::Text(Str::kNewContent) + L'\n' +
+           Widen(*call.newContent);
   }
-  if (!call.diff.empty()) return file + L"zmena:\n" + Widen(call.diff);
+  if (!call.diff.empty()) {
+    return file + i18n::Text(Str::kDiff) + L'\n' + Widen(call.diff);
+  }
   if (call.kind == agent::ToolKind::Question) {
     const std::wstring asked = RenderQuestions(call.questions, true);
     if (!asked.empty()) return asked;
@@ -333,8 +348,9 @@ namespace {
 std::wstring InputDetail(const agent::ToolCall& call) {
   if (call.kind == agent::ToolKind::EditFile && !call.replacements.empty()) {
     const agent::TextReplacement& first = call.replacements.front();
-    return Count(CountLines(Widen(first.before))) + L" na " +
-           Count(CountLines(Widen(first.after)));
+    return i18n::Format(Str::kLinesToLines,
+                        {Count(CountLines(Widen(first.before))),
+                         Count(CountLines(Widen(first.after)))});
   }
   if (call.kind == agent::ToolKind::CreateFile && call.newContent) {
     return Count(CountLines(Widen(*call.newContent)));
@@ -346,7 +362,8 @@ Block MakeThinking(const std::wstring& text) {
   Block block;
   block.kind = BlockKind::Thinking;
   block.body = text;
-  block.summary = L"premýšľanie (" + Count(CountLines(text)) + L")";
+  block.summary =
+      i18n::Format(Str::kThinkingSummary, {Count(CountLines(text))});
   block.collapsed = true;
   return block;
 }
@@ -379,8 +396,8 @@ Block MakeToolUse(const agent::ToolCall& call, const std::wstring& root) {
 // for: it happened.  Everything else -- the path, the size -- stands in the
 // summary of the call, one line above.
 const wchar_t* DoneWord(agent::ToolKind kind) {
-  if (kind == agent::ToolKind::EditFile) return L"zapísané";
-  if (kind == agent::ToolKind::CreateFile) return L"vytvorené";
+  if (kind == agent::ToolKind::EditFile) return i18n::Text(Str::kWritten);
+  if (kind == agent::ToolKind::CreateFile) return i18n::Text(Str::kCreated);
   return nullptr;
 }
 
@@ -412,15 +429,20 @@ Block MakeToolResult(const agent::ToolResult& result, const Block* call) {
     return block;
   }
 
-  const std::wstring label = block.isError ? L"chyba" : L"výstup";
+  const std::wstring label =
+      i18n::Text(block.isError ? Str::kError : Str::kOutput);
   const size_t lines = CountLines(block.body);
   if (lines <= 1 && block.body.size() <= kInlineResultLimit) {
     // A one-line result is shorter than the sentence describing it, so it is
     // shown whole and there is nothing to expand.  Marking it uncollapsible
     // rather than merely expanded matters: otherwise pressing the toggle key
     // on it would rewrite the line into a header and a copy of itself.
-    block.summary = label + (block.body.empty() ? L" (prázdny)"
-                                                : L": " + block.body);
+    // Empty is its own string and not label + "(empty)": the adjective agrees
+    // with the noun, and "chyba" and "výstup" differ in gender.
+    block.summary =
+        block.body.empty()
+            ? i18n::Text(block.isError ? Str::kErrorEmpty : Str::kOutputEmpty)
+            : label + L": " + block.body;
     block.collapsible = false;
     block.collapsed = false;
   } else if (block.isError) {
@@ -451,7 +473,7 @@ Block MakeToolResult(const agent::ToolResult& result, const Block* call) {
 // what a speaker is called.
 std::wstring Transcript::SpeakerPrefix(BlockKind kind) const {
   switch (kind) {
-    case BlockKind::UserPrompt: return L"you: ";
+    case BlockKind::UserPrompt: return i18n::Text(Str::kSpeakerUser);
     case BlockKind::AssistantText: return agentName_ + L": ";
     default: return L"";
   }
@@ -480,13 +502,13 @@ bool IsMechanism(BlockKind kind) {
 
 const wchar_t* KindLabel(BlockKind kind) {
   switch (kind) {
-    case BlockKind::UserPrompt: return L"prompt";
-    case BlockKind::AssistantText: return L"odpoveď";
-    case BlockKind::PermissionDenied: return L"zamietnuté";
-    case BlockKind::Interrupted: return L"prerušenie";
-    case BlockKind::Thinking: return L"premýšľanie";
-    case BlockKind::ToolUse: return L"nástroj";
-    case BlockKind::ToolResult: return L"výstup";
+    case BlockKind::UserPrompt: return i18n::Text(Str::kKindPrompt);
+    case BlockKind::AssistantText: return i18n::Text(Str::kKindAnswer);
+    case BlockKind::PermissionDenied: return i18n::Text(Str::kKindDenied);
+    case BlockKind::Interrupted: return i18n::Text(Str::kKindInterrupted);
+    case BlockKind::Thinking: return i18n::Text(Str::kKindThinking);
+    case BlockKind::ToolUse: return i18n::Text(Str::kKindTool);
+    case BlockKind::ToolResult: return i18n::Text(Str::kKindOutput);
   }
   return L"?";
 }
@@ -503,7 +525,8 @@ std::wstring Transcript::Render(const Block& block) const {
   // They get the speaker prefix instead, on the first line, which says the
   // same thing without spending a line on it.
   if (IsMechanism(block.kind) && block.collapsible) {
-    return block.summary + L", rozbalené\n" + block.body + L'\n';
+    return i18n::Format(Str::kExpanded, {block.summary}) + L'\n' + block.body +
+           L'\n';
   }
   return prefix + block.body + L'\n';
 }
@@ -594,7 +617,7 @@ Block MakeUserPrompt(const std::wstring& text) {
 Block MakeInterrupted() {
   Block block;
   block.kind = BlockKind::Interrupted;
-  block.body = L"Prerušené používateľom.";
+  block.body = i18n::Text(Str::kInterrupted);
   block.summary = block.body;
   // One line, so there is nothing behind the summary to unfold.
   block.collapsible = false;
@@ -653,8 +676,8 @@ std::vector<Edit> Transcript::Append(const std::vector<agent::Event>& events) {
       block.kind = BlockKind::PermissionDenied;
       const std::wstring message = Widen(denied->message);
       block.body = message.empty()
-                       ? L"Nástroj " + Widen(denied->toolName) +
-                             L" bol zamietnutý."
+                       ? i18n::Format(Str::kToolDenied,
+                                      {Widen(denied->toolName)})
                        : message;
       block.summary = OneLine(block.body, kSummaryLimit);
       made.push_back(std::move(block));

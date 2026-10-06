@@ -200,7 +200,7 @@ void TestRangeMap() {
   const model::Edit first = transcript.AppendUserPrompt(L"prvy prompt");
   CHECK_EQ(first.start, size_t{0});
   CHECK_EQ(first.removed, size_t{0});
-  CHECK_EQ(first.inserted, std::wstring(L"you: prvy prompt\n"));
+  CHECK_EQ(first.inserted, std::wstring(L"ja: prvy prompt\n"));
 
   proto::Json assistant = proto::Json::parse(R"({
     "type": "assistant",
@@ -418,7 +418,7 @@ void TestErrorNavigationAndFirstLine() {
                                       line.size()),
              line);
   }
-  CHECK_EQ(transcript.FirstLine(0), std::wstring(L"you: prompt"));
+  CHECK_EQ(transcript.FirstLine(0), std::wstring(L"ja: prompt"));
 
   // Rozbalenim sa riadok zmeni, a FirstLine to musi ukazat -- inak by skok
   // ohlasil zbaleny tvar bloku, ktory je otvoreny.
@@ -1719,6 +1719,21 @@ void TestEditAndWriteSayWhatChanged() {
   CHECK_EQ(blocks[3].summary, std::wstring(L"vytvorené"));
   CHECK_EQ(blocks[3].toolName, std::wstring(L"Write"));
 
+  // Ten isty prepis po anglicky: skladanie viet aj mnozne cislo idu cez
+  // katalog, nie cez slovenske lepenie.
+  i18n::SetLanguage(i18n::Lang::kEnglish);
+  model::Transcript english;
+  english.Append(proto::TranslateRecord(calls));
+  english.Append(proto::TranslateRecord(results));
+  const std::vector<model::Block>& en = english.blocks();
+  CHECK_EQ(en[0].summary, std::wstring(L"Edit: src/x.cpp, 1 line to 2 lines"));
+  CHECK_EQ(en[0].body, std::wstring(L"file: src/x.cpp\nbefore:\nstary\nafter:\n"
+                                    L"novy\nriadok"));
+  CHECK_EQ(en[2].body, std::wstring(L"file: src/y.cpp\ncontent:\na\nb\nc"));
+  CHECK_EQ(en[1].summary, std::wstring(L"written"));
+  CHECK_EQ(en[3].summary, std::wstring(L"created"));
+  i18n::SetLanguage(i18n::Lang::kSlovak);
+
   // Bash sa nemeni: prikaz JE svojimi argumentmi a vystup je cely obsah.
   model::Transcript other;
   proto::Json bash = proto::Json::parse(R"({
@@ -1869,7 +1884,7 @@ void TestSpeakerPrefix() {
   })");
   transcript.Append(proto::TranslateRecord(assistant));
 
-  CHECK_EQ(transcript.Text().substr(0, 5), std::wstring(L"you: "));
+  CHECK_EQ(transcript.Text().substr(0, 4), std::wstring(L"ja: "));
   CHECK_EQ(transcript.blocks()[0].body, std::wstring(L"otazka"));
 
   const model::Block& answer = transcript.blocks()[1];
@@ -1890,7 +1905,7 @@ void TestSpeakerPrefix() {
            std::wstring(L"claude: "));
   transcript.SetCollapsed(0, true);
   CHECK(transcript.CheckInvariants(&problem));
-  CHECK_EQ(transcript.Text().substr(0, 5), std::wstring(L"you: "));
+  CHECK_EQ(transcript.Text().substr(0, 4), std::wstring(L"ja: "));
 
   // Codex sa v prepise aj v reci vola svojim menom, nie "claude".
   model::Transcript codex;

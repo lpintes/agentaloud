@@ -728,7 +728,7 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     `kMsgQuestionByPrompt` (nie priamo z drainu — modálna slučka by v ňom
     spracovala ďalšie dávky uprostred jednej) a ponúkne **ten istý dialóg**;
     vybraté ide von cez `SendText`, teda ako prompt vo všetkom — v prepise
-    „you: Čaj", v stavovom riadku aj v reči. Zrušený dialóg nepošle nič a
+    „ja: Čaj", v stavovom riadku aj v reči. Zrušený dialóg nepošle nič a
     otázka zostane v prepise. Ťah prerušený Esc dialóg nedostane.
 
     Za volanie async otázky pripíše **panel** výsledok — vybratú odpoveď,

@@ -10,3 +10,36 @@
 // every language at once, and a language cannot ship with a hole in it.
 
 P(kLines)
+
+// model/transcript: block text.  Part of the transcript buffer, so also what
+// is heard when arrowing over it.
+S(kQuestionsMore)
+S(kQuestionMultiSelect)
+S(kFileLine)
+S(kReplaceBefore)
+S(kReplaceAfter)
+S(kReplaceEverywhere)
+S(kNewContent)
+S(kDiff)
+S(kLinesToLines)
+S(kThinkingSummary)
+S(kWritten)
+S(kCreated)
+S(kOutput)
+S(kError)
+S(kOutputEmpty)
+S(kErrorEmpty)
+S(kExpanded)
+S(kInterrupted)
+S(kToolDenied)
+// The reader as a speaker, in front of every prompt in the transcript and in
+// speech.  The agent's side is its own name ("claude: "), not translated.
+S(kSpeakerUser)
+// Block kinds, as navigation names them.
+S(kKindPrompt)
+S(kKindAnswer)
+S(kKindDenied)
+S(kKindInterrupted)
+S(kKindThinking)
+S(kKindTool)
+S(kKindOutput)

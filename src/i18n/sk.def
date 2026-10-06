@@ -11,3 +11,35 @@
 // letter, no symbol it skips.
 
 P(kLines, L"{0} riadok", L"{0} riadky", L"{0} riadkov")
+
+// model/transcript
+S(kQuestionsMore, L"{0} (+{1} ďalšie)")
+S(kQuestionMultiSelect, L"{0} (dá sa označiť viac)")
+S(kFileLine, L"súbor: {0}")
+S(kReplaceBefore, L"pôvodné:")
+S(kReplaceAfter, L"nové:")
+S(kReplaceEverywhere, L"všetky výskyty")
+S(kNewContent, L"obsah:")
+S(kDiff, L"zmena:")
+S(kLinesToLines, L"{0} na {1}")
+S(kThinkingSummary, L"premýšľanie ({0})")
+S(kWritten, L"zapísané")
+S(kCreated, L"vytvorené")
+S(kOutput, L"výstup")
+S(kError, L"chyba")
+S(kOutputEmpty, L"výstup (prázdny)")
+S(kErrorEmpty, L"chyba (prázdna)")
+S(kExpanded, L"{0}, rozbalené")
+S(kInterrupted, L"Prerušené používateľom.")
+S(kToolDenied, L"Nástroj {0} bol zamietnutý.")
+// "ja", not "ty": the transcript is the reader's own record of a
+// conversation they took part in, and the app says "Máte" elsewhere, so a
+// "ty" would also be the one place it is on first-name terms.
+S(kSpeakerUser, L"ja: ")
+S(kKindPrompt, L"prompt")
+S(kKindAnswer, L"odpoveď")
+S(kKindDenied, L"zamietnuté")
+S(kKindInterrupted, L"prerušenie")
+S(kKindThinking, L"premýšľanie")
+S(kKindTool, L"nástroj")
+S(kKindOutput, L"výstup")
