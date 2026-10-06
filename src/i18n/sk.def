@@ -39,6 +39,7 @@ S(kSpeakerUser, L"ja: ")
 // proto/
 S(kImage, L"[obrázok]")
 S(kToolDeclined, L"zamietnuté")
+S(kNoAnswer, L"bez odpovede")
 S(kReasonRule, L"pravidlo v nastaveniach alebo hook (rule)")
 S(kReasonSubcommands, L"vyhodnotenie podpríkazov (subcommandResults)")
 S(kModeNormal, L"normálny")
@@ -333,6 +334,40 @@ S(kNoRichEdit, L"Nepodarilo sa načítať Msftedit.dll.")
 S(kSessionStartFailed, L"Nepodarilo sa spustiť session.")
 S(kPackageBadPath, L"balík obsahuje neplatnú cestu {0}")
 S(kPackageMissing, L"v balíku chýba {0}")
+
+// Updates.  The errors are clauses: kUpdateFailed and
+// kInstalledButNotStarted put them after their own opening.
+S(kNetNotResolved, L"server github.com sa nenašiel. Je počítač pripojený na internet?")
+S(kNetTimeout, L"server neodpovedal včas.")
+S(kNetCannotConnect, L"spojenie so serverom github.com zlyhalo.")
+S(kNetSecureFailure, L"zabezpečené spojenie so serverom sa nepodarilo overiť.")
+S(kNetError, L"chyba siete {0}.")
+S(kServerStatus, L"server vrátil kód {0}.")
+S(kNoChecksum, L"k vydaniu chýba kontrolný súčet.")
+S(kChecksumMismatch, L"stiahnutý balík nesúhlasí s kontrolným súčtom.")
+S(kRestartFailed, L"novú verziu sa nepodarilo spustiť (chyba {0}). Spustite ju sami.")
+S(kUnpackNoFolder, L"priečinok pre nový balík sa nedá vytvoriť.")
+S(kUnpackCannotWrite, L"stiahnutý balík sa nedá zapísať.")
+S(kUnpackTarFailed, L"balík sa nedá rozbaliť: {0} sa nepodarilo spustiť (chyba {1}).")
+S(kUnpackTarExit, L"balík sa nepodarilo rozbaliť (tar skončil s kódom {0}).")
+S(kFileInUse,
+  L"niektorý súbor {0} má práve otvorený iný program. Nič sa nezmenilo; "
+  L"skúste to znova neskôr.")
+S(kFileCannotReplace, L"súbor sa nedá vymeniť (chyba {0}).")
+S(kCheckingForUpdate, L"Zisťujem, či je k dispozícii novšia verzia…")
+S(kUpdateButton, L"&Aktualizovať")
+S(kLaterButton, L"&Neskôr")
+S(kSkipButton, L"&Preskočiť túto verziu")
+S(kVersionAvailable, L"Je k dispozícii verzia {0}.")
+S(kYouHaveVersion, L"Máte verziu {0}.")
+S(kRestartsAfterUpdate, L"Po aktualizácii sa {0} spustí znova.")
+S(kWhatsNew, L"Čo je nové vo verzii {0}")
+S(kDownloading, L"Sťahujem verziu {0}…")
+S(kInstalledButNotStarted, L"Nová verzia je nainštalovaná, ale {0}")
+S(kFolderNotWritable,
+  L"Do priečinka {0} sa nedá zapisovať, preto sa {1} nemôže aktualizovať "
+  L"sám.\r\n\r\nOtvoriť stránku s novou verziou?")
+S(kUpdateFailed, L"Aktualizácia sa nepodarila: {0}")
 
 S(kKindPrompt, L"prompt")
 S(kKindAnswer, L"odpoveď")

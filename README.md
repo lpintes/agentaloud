@@ -4,7 +4,9 @@ A native Windows window for talking to coding agents — Claude Code and
 Codex — instead of a terminal. Written first for its author, and with blind
 users of the NVDA screen reader in mind throughout.
 
-**The user interface is Slovak for now.** An English translation is planned.
+**The user interface is English and Slovak.** It follows the language of
+Windows — Slovak on a Slovak system, English everywhere else — and
+`language=en` or `language=sk` in the settings file overrides that.
 
 ## Why not the terminal
 
@@ -78,6 +80,7 @@ claude.permission-mode=auto
 claude.model=opus
 codex.permission-mode=plan
 check-updates=0
+language=en
 ```
 
 The command line wins over the file. An unknown key or mode is refused at

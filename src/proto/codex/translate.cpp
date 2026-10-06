@@ -536,7 +536,7 @@ agent::ToolResult QuestionResult(const std::string& callId,
   agent::ToolResult result;
   result.callId = callId;
   if (answer.declined) {
-    result.text = "bez odpovede";
+    result.text = i18n::Utf8(i18n::Str::kNoAnswer);
     result.isError = true;
     return result;
   }

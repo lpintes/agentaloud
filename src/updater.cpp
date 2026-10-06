@@ -18,12 +18,15 @@
 #include <vector>
 
 #include "app_name.h"
+#include "i18n/i18n.h"
 #include "update.h"
 #include "version.h"
 
 namespace fs = std::filesystem;
 
 namespace updater {
+
+using i18n::Str;
 
 namespace {
 
@@ -51,16 +54,16 @@ class Internet {
 std::wstring NetworkError(DWORD code) {
   switch (code) {
     case ERROR_WINHTTP_NAME_NOT_RESOLVED:
-      return L"server github.com sa nenašiel. Ste pripojený na internet?";
+      return i18n::Text(Str::kNetNotResolved);
     case ERROR_WINHTTP_TIMEOUT:
-      return L"server neodpovedal včas.";
+      return i18n::Text(Str::kNetTimeout);
     case ERROR_WINHTTP_CANNOT_CONNECT:
     case ERROR_WINHTTP_CONNECTION_ERROR:
-      return L"spojenie so serverom github.com zlyhalo.";
+      return i18n::Text(Str::kNetCannotConnect);
     case ERROR_WINHTTP_SECURE_FAILURE:
-      return L"zabezpečené spojenie so serverom sa nepodarilo overiť.";
+      return i18n::Text(Str::kNetSecureFailure);
     default:
-      return L"chyba siete " + std::to_wstring(code) + L".";
+      return i18n::Format(Str::kNetError, {std::to_wstring(code)});
   }
 }
 
@@ -291,12 +294,12 @@ void Finish(Download& job) {
   const std::optional<std::string> expected = update::HashFor(job.sums, name);
   const std::optional<std::string> actual = Sha256(job.package);
   if (!expected) {
-    job.error = L"k vydaniu chýba kontrolný súčet.";
+    job.error = i18n::Text(Str::kNoChecksum);
     job.outcome = Download::Outcome::kFailed;
     return;
   }
   if (!actual || *actual != *expected) {
-    job.error = L"stiahnutý balík nesúhlasí s kontrolným súčtom.";
+    job.error = i18n::Text(Str::kChecksumMismatch);
     job.outcome = Download::Outcome::kFailed;
     return;
   }
@@ -330,9 +333,9 @@ void RunDownload(const std::shared_ptr<Download>& job) {
             Get(AssetPath(job->tag, update::kPackageAsset), true, 0,
                 &job->progress, package, error);
   if (ok && (sums.status != 200 || package.status != 200)) {
-    error = L"server vrátil kód " +
-            std::to_wstring(package.status != 200 ? package.status : sums.status) +
-            L".";
+    error = i18n::Format(
+        Str::kServerStatus,
+        {std::to_wstring(package.status != 200 ? package.status : sums.status)});
     ok = false;
   }
   job->package = std::move(package.body);
@@ -379,8 +382,7 @@ bool StartNew(const std::wstring& exe, std::wstring& error) {
   PROCESS_INFORMATION process = {};
   if (!CreateProcessW(exe.c_str(), commandLine.data(), nullptr, nullptr, FALSE,
                       0, nullptr, nullptr, &startup, &process)) {
-    error = L"novú verziu sa nepodarilo spustiť (chyba " +
-            std::to_wstring(GetLastError()) + L"). Spustite ju sami.";
+    error = i18n::Format(Str::kRestartFailed, {std::to_wstring(GetLastError())});
     return false;
   }
   AllowSetForegroundWindow(process.dwProcessId);
@@ -408,10 +410,10 @@ std::wstring Unpack(const std::wstring& dir, const std::string& zip) {
   std::error_code ec;
   fs::remove_all(target, ec);
   if (!fs::create_directories(target, ec)) {
-    return L"priečinok pre nový balík sa nedá vytvoriť.";
+    return i18n::Text(Str::kUnpackNoFolder);
   }
   const fs::path package = target / L"package.zip";
-  if (!WriteAll(package, zip)) return L"stiahnutý balík sa nedá zapísať.";
+  if (!WriteAll(package, zip)) return i18n::Text(Str::kUnpackCannotWrite);
 
   wchar_t system[MAX_PATH] = {};
   GetSystemDirectoryW(system, MAX_PATH);
@@ -423,8 +425,8 @@ std::wstring Unpack(const std::wstring& dir, const std::string& zip) {
   if (!CreateProcessW(tar.c_str(), commandLine.data(), nullptr, nullptr, FALSE,
                       CREATE_NO_WINDOW, nullptr, target.c_str(), &startup,
                       &process)) {
-    return L"balík sa nedá rozbaliť: " + tar + L" sa nepodarilo spustiť (chyba " +
-           std::to_wstring(GetLastError()) + L").";
+    return i18n::Format(Str::kUnpackTarFailed,
+                        {tar, std::to_wstring(GetLastError())});
   }
   WaitForSingleObject(process.hProcess, INFINITE);
   DWORD code = 1;
@@ -433,8 +435,7 @@ std::wstring Unpack(const std::wstring& dir, const std::string& zip) {
   CloseHandle(process.hProcess);
   fs::remove(package, ec);
   if (code != 0) {
-    return L"balík sa nepodarilo rozbaliť (tar skončil s kódom " +
-           std::to_wstring(code) + L").";
+    return i18n::Format(Str::kUnpackTarExit, {std::to_wstring(code)});
   }
   return {};
 }
@@ -510,11 +511,10 @@ Written Install(const std::wstring& dir, const std::wstring& exeName,
   // an editor, an antivirus scan -- gives this, and the number alone would say
   // nothing.  Trying again later is the whole remedy, and nothing has changed.
   if (failure == ERROR_SHARING_VIOLATION) {
-    error = L"niektorý súbor " APP_NAME L" má práve otvorený iný program. "
-            L"Nič sa nezmenilo; skúste to znova neskôr.";
+    error = i18n::Format(Str::kFileInUse, {L"" APP_NAME});
     return Written::kFailed;
   }
-  error = L"súbor sa nedá vymeniť (chyba " + std::to_wstring(failure) + L").";
+  error = i18n::Format(Str::kFileCannotReplace, {std::to_wstring(failure)});
   return Written::kFailed;
 }
 
@@ -531,7 +531,8 @@ Latest FetchLatest(DWORD timeoutMs) {
     if (response.status == 404) {
       result.kind = Latest::Kind::kNoRelease;
     } else {
-      result.error = L"server vrátil kód " + std::to_wstring(response.status) + L".";
+      result.error =
+          i18n::Format(Str::kServerStatus, {std::to_wstring(response.status)});
     }
     return result;
   }
@@ -555,7 +556,7 @@ Latest FetchLatestWithin(DWORD milliseconds) {
   if (future.wait_for(std::chrono::milliseconds(milliseconds)) !=
       std::future_status::ready) {
     Latest late;
-    late.error = L"server neodpovedal včas.";
+    late.error = i18n::Text(Str::kNetTimeout);
     return late;
   }
   return future.get();
@@ -580,7 +581,7 @@ Latest FetchLatestAsked(HWND owner) {
                    TDF_ALLOW_DIALOG_CANCELLATION | TDF_POSITION_RELATIVE_TO_WINDOW;
   config.dwCommonButtons = TDCBF_CANCEL_BUTTON;
   config.pszWindowTitle = kTitle;
-  config.pszMainInstruction = L"Zisťujem, či je k dispozícii novšia verzia…";
+  config.pszMainInstruction = i18n::Text(Str::kCheckingForUpdate);
   config.lpCallbackData = reinterpret_cast<LONG_PTR>(job.get());
   config.pfCallback = [](HWND dialog, UINT notification, WPARAM, LPARAM,
                          LONG_PTR data) -> HRESULT {
@@ -609,18 +610,22 @@ Choice AskToUpdate(HWND owner, const std::wstring& tag, bool restartsItself) {
   constexpr int kLater = 101;
   constexpr int kSkip = 102;
   const TASKDIALOG_BUTTON buttons[] = {
-      {kUpdate, L"&Aktualizovať"},
-      {kLater, L"&Neskôr"},
-      {kSkip, L"&Preskočiť túto verziu"},
+      {kUpdate, i18n::Text(Str::kUpdateButton)},
+      {kLater, i18n::Text(Str::kLaterButton)},
+      {kSkip, i18n::Text(Str::kSkipButton)},
   };
-  const std::wstring instruction = L"Je k dispozícii verzia " + Bare(tag) + L".";
-  const std::wstring content =
-      L"Máte verziu " + std::wstring(version::Current()) + L"." +
-      (restartsItself ? L" Po aktualizácii sa " APP_NAME L" spustí znova." : L"");
+  const std::wstring instruction =
+      i18n::Format(Str::kVersionAvailable, {Bare(tag)});
+  std::wstring content =
+      i18n::Format(Str::kYouHaveVersion, {version::Current()});
+  if (restartsItself) {
+    content += L" " + i18n::Format(Str::kRestartsAfterUpdate, {L"" APP_NAME});
+  }
   std::wstring page = update::kReleasePage;
   page.resize(page.size() - std::wcslen(L"latest"));
-  const std::wstring footer = L"<a href=\"" + page + L"tag/" + tag +
-                              L"\">Čo je nové vo verzii " + Bare(tag) + L"</a>";
+  const std::wstring footer = L"<a href=\"" + page + L"tag/" + tag + L"\">" +
+                              i18n::Format(Str::kWhatsNew, {Bare(tag)}) +
+                              L"</a>";
 
   TASKDIALOGCONFIG config = {};
   config.cbSize = sizeof(config);
@@ -660,7 +665,7 @@ Installed DownloadAndInstall(HWND owner, const std::wstring& tag, bool restart) 
   job->restart = restart;
   std::thread([job] { RunDownload(job); }).detach();
 
-  const std::wstring instruction = L"Sťahujem verziu " + Bare(tag) + L"…";
+  const std::wstring instruction = i18n::Format(Str::kDownloading, {Bare(tag)});
   TASKDIALOGCONFIG config = {};
   config.cbSize = sizeof(config);
   config.hwndParent = owner;
@@ -682,15 +687,15 @@ Installed DownloadAndInstall(HWND owner, const std::wstring& tag, bool restart) 
     case Download::Outcome::kInstalled:
       if (restart) {
         MessageBoxW(owner,
-                    (L"Nová verzia je nainštalovaná, ale " + job->restartError)
+                    i18n::Format(Str::kInstalledButNotStarted,
+                                 {job->restartError})
                         .c_str(),
                     kTitle, MB_OK | MB_ICONWARNING);
       }
       return Installed::kInstalled;
     case Download::Outcome::kNotWritable: {
       const std::wstring question =
-          L"Do priečinka " + job->dir + L" sa nedá zapisovať, preto sa " APP_NAME
-          L" nemôže aktualizovať sám.\r\n\r\nOtvoriť stránku s novou verziou?";
+          i18n::Format(Str::kFolderNotWritable, {job->dir, L"" APP_NAME});
       if (MessageBoxW(owner, question.c_str(), kTitle,
                       MB_YESNO | MB_ICONWARNING) == IDYES) {
         OpenReleasePage();
@@ -700,8 +705,9 @@ Installed DownloadAndInstall(HWND owner, const std::wstring& tag, bool restart) 
     case Download::Outcome::kFailed:
       break;
   }
-  MessageBoxW(owner, (L"Aktualizácia sa nepodarila: " + job->error).c_str(),
-              kTitle, MB_OK | MB_ICONWARNING);
+  MessageBoxW(owner,
+              i18n::Format(Str::kUpdateFailed, {job->error}).c_str(), kTitle,
+              MB_OK | MB_ICONWARNING);
   return Installed::kFailed;
 }
 

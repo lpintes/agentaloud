@@ -35,6 +35,7 @@ S(kSpeakerUser, L"you: ")
 // proto/
 S(kImage, L"[image]")
 S(kToolDeclined, L"denied")
+S(kNoAnswer, L"no answer")
 S(kReasonRule, L"a rule in the settings, or a hook (rule)")
 S(kReasonSubcommands, L"evaluation of subcommands (subcommandResults)")
 S(kModeNormal, L"normal")
@@ -328,6 +329,40 @@ S(kNoRichEdit, L"Msftedit.dll could not be loaded.")
 S(kSessionStartFailed, L"The session could not be started.")
 S(kPackageBadPath, L"the package contains an invalid path {0}")
 S(kPackageMissing, L"the package lacks {0}")
+
+// Updates.  The errors are clauses: kUpdateFailed and
+// kInstalledButNotStarted put them after their own opening.
+S(kNetNotResolved, L"the server github.com was not found. Is the computer connected to the internet?")
+S(kNetTimeout, L"the server did not answer in time.")
+S(kNetCannotConnect, L"the connection to github.com failed.")
+S(kNetSecureFailure, L"the secure connection to the server could not be verified.")
+S(kNetError, L"network error {0}.")
+S(kServerStatus, L"the server returned code {0}.")
+S(kNoChecksum, L"the release has no checksum.")
+S(kChecksumMismatch, L"the downloaded package does not match its checksum.")
+S(kRestartFailed, L"the new version could not be started (error {0}). Please start it yourself.")
+S(kUnpackNoFolder, L"the folder for the new package cannot be created.")
+S(kUnpackCannotWrite, L"the downloaded package cannot be written.")
+S(kUnpackTarFailed, L"the package cannot be unpacked: {0} could not be started (error {1}).")
+S(kUnpackTarExit, L"the package could not be unpacked (tar ended with code {0}).")
+S(kFileInUse,
+  L"another program has a file of {0} open right now. Nothing has changed; "
+  L"please try again later.")
+S(kFileCannotReplace, L"a file cannot be replaced (error {0}).")
+S(kCheckingForUpdate, L"Checking whether a newer version is available…")
+S(kUpdateButton, L"&Update")
+S(kLaterButton, L"&Later")
+S(kSkipButton, L"&Skip this version")
+S(kVersionAvailable, L"Version {0} is available.")
+S(kYouHaveVersion, L"You have version {0}.")
+S(kRestartsAfterUpdate, L"After the update {0} starts again.")
+S(kWhatsNew, L"What is new in version {0}")
+S(kDownloading, L"Downloading version {0}…")
+S(kInstalledButNotStarted, L"The new version is installed, but {0}")
+S(kFolderNotWritable,
+  L"The folder {0} cannot be written to, so {1} cannot update itself."
+  L"\r\n\r\nOpen the page with the new version?")
+S(kUpdateFailed, L"The update failed: {0}")
 
 S(kKindPrompt, L"prompt")
 S(kKindAnswer, L"answer")

@@ -1166,7 +1166,7 @@ void SessionPane::OnQuestionByPrompt() {
                                next + item.questions.size(), chosen.size()));
       result.text = AnswerText(item.questions, {first, last});
     } else {
-      result.text = "bez odpovede";
+      result.text = i18n::Utf8(Str::kNoAnswer);
       result.isError = true;
     }
     next += item.questions.size();

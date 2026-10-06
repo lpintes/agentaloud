@@ -166,10 +166,11 @@ PermissionDecision ClaudeBackend::OnPermission(
     if (answer.declined) {
       // Written for the model.  "Denied" would read as a rule refusing the
       // tool and invite a retry; this says a person declined to answer, which
-      // is a thing to stop for.
+      // is a thing to stop for.  English whatever the reader's language: it
+      // is an instruction to the model (claude-gui-lkk.52).
       decision.denyMessage =
-          "Pouzivatel na otazku neodpovedal a dialog zavrel. Neopakuj ju, "
-          "spytaj sa obycajnym textom, co dalej.";
+          "The user closed the question without answering. Do not ask it "
+          "again; ask in plain text what to do next.";
     } else {
       decision.allow = true;
       decision.updatedInput =
