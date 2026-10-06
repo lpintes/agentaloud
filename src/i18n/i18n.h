@@ -87,6 +87,7 @@ size_t PluralFormsGiven(Lang lang, Plural id);
 // For proto/, which speaks UTF-8.  The catalog is the only input, so there
 // is no malformed text to guard against.
 std::string Utf8(std::wstring_view text);
+std::string Utf8(Str id);
 
 }  // namespace i18n
 

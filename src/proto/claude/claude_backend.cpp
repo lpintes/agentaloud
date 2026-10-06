@@ -1,5 +1,6 @@
 #include "proto/claude/claude_backend.h"
 
+#include "i18n/i18n.h"
 #include "proto/claude/ask.h"
 #include "proto/claude/sessions.h"
 
@@ -30,9 +31,9 @@ std::string Ascii(const std::wstring& text) {
 // the one failure the dialog cannot afford.  Empty stays empty; the dialog
 // says that the CLI gave none.
 std::string ReasonSentence(const std::string& type) {
-  if (type == "rule") return "pravidlo v nastaveniach alebo hook (rule)";
+  if (type == "rule") return i18n::Utf8(i18n::Str::kReasonRule);
   if (type == "subcommandResults") {
-    return "vyhodnotenie podpríkazov (subcommandResults)";
+    return i18n::Utf8(i18n::Str::kReasonSubcommands);
   }
   return type;
 }

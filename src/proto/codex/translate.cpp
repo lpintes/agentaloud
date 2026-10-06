@@ -2,6 +2,8 @@
 
 #include <set>
 
+#include "i18n/i18n.h"
+
 namespace proto::codex {
 
 const char kModeReadOnly[] = "read-only";
@@ -174,7 +176,7 @@ std::string ContentText(const Json& content) {
     if (type == "text" || type == "inputText") {
       text += StringField(part, "text");
     } else if (type == "image" || type == "inputImage") {
-      text += "[obrázok]";
+      text += i18n::Utf8(i18n::Str::kImage);
     } else {
       text += part.dump();
     }
@@ -192,7 +194,7 @@ std::string UserText(const Json& item) {
     if (type == "text") {
       piece = StringField(part, "text");
     } else if (type == "image" || type == "localImage") {
-      piece = "[obrázok]";
+      piece = i18n::Utf8(i18n::Str::kImage);
     } else if (type == "skill" || type == "mention") {
       piece = "@" + StringField(part, "name");
     }
@@ -310,17 +312,19 @@ agent::Capabilities CodexCapabilities() {
   // Full access is a mode a session can be started in but the key never
   // steps onto, for the same reason Claude's bypassPermissions is off the
   // cycle: it is not a place to land on by pressing a key once too often.
+  using i18n::Str;
+  using i18n::Utf8;
   capabilities.modes = {
-      {kModeAuto, "normálny",
-       "mení súbory v projekte, na príkazy mimo neho sa pýta", true, true},
-      {kModePlan, "plánovanie", "len skúma a navrhuje, súborov sa nedotkne",
-       true, false},
-      {kModeReadOnly, "len čítanie",
-       "smie len čítať, čo chce zmeniť, musí si vypýtať", true, false},
-      {kModeFullAccess, "plný prístup", "nepýta sa na nič a siaha kamkoľvek",
-       false, false},
-      {kModeCustom, "vlastný", "nastavenie z konfigurácie Codexu", false,
+      {kModeAuto, Utf8(Str::kModeNormal), Utf8(Str::kCodexModeNormalGloss),
+       true, true},
+      {kModePlan, Utf8(Str::kModePlan), Utf8(Str::kModePlanGloss), true,
        false},
+      {kModeReadOnly, Utf8(Str::kCodexModeReadOnly),
+       Utf8(Str::kCodexModeReadOnlyGloss), true, false},
+      {kModeFullAccess, Utf8(Str::kCodexModeFullAccess),
+       Utf8(Str::kCodexModeFullAccessGloss), false, false},
+      {kModeCustom, Utf8(Str::kCodexModeCustom),
+       Utf8(Str::kCodexModeCustomGloss), false, false},
   };
   capabilities.questions = true;
   // app-server has no list of slash commands: they belong to the terminal
@@ -464,7 +468,9 @@ agent::ToolResult ToolResultFromItem(const Json& item) {
   if (status == "failed" || status == "declined") result.isError = true;
   // A declined call comes back with nothing in it -- aggregatedOutput null
   // (measured) -- and "chyba (prázdny)" would not say what happened.
-  if (status == "declined" && result.text.empty()) result.text = "zamietnuté";
+  if (status == "declined" && result.text.empty()) {
+    result.text = i18n::Utf8(i18n::Str::kToolDeclined);
+  }
   return result;
 }
 

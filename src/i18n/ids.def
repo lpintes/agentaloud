@@ -35,6 +35,32 @@ S(kToolDenied)
 // The reader as a speaker, in front of every prompt in the transcript and in
 // speech.  The agent's side is its own name ("claude: "), not translated.
 S(kSpeakerUser)
+// proto/: what the adapters say in the reader's language.  Mode labels are
+// keys as well as text -- keys_dialog drops a mode whose label it has listed
+// already, so two ids of the same mode (default, manual) must share a label.
+S(kImage)
+S(kToolDeclined)
+S(kReasonRule)
+S(kReasonSubcommands)
+S(kModeNormal)
+S(kModePlan)
+S(kModePlanGloss)
+S(kClaudeModeNormalGloss)
+S(kClaudeModeAcceptEdits)
+S(kClaudeModeAcceptEditsGloss)
+S(kClaudeModeAuto)
+S(kClaudeModeAutoGloss)
+S(kClaudeModeBypass)
+S(kClaudeModeBypassGloss)
+S(kClaudeModeDontAsk)
+S(kClaudeModeDontAskGloss)
+S(kCodexModeNormalGloss)
+S(kCodexModeReadOnly)
+S(kCodexModeReadOnlyGloss)
+S(kCodexModeFullAccess)
+S(kCodexModeFullAccessGloss)
+S(kCodexModeCustom)
+S(kCodexModeCustomGloss)
 // Block kinds, as navigation names them.
 S(kKindPrompt)
 S(kKindAnswer)

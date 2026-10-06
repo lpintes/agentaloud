@@ -1,5 +1,6 @@
 #include "proto/claude/translate.h"
 
+#include "i18n/i18n.h"
 #include "proto/claude/ask.h"
 #include "proto/claude/events.h"
 #include "proto/claude/sessions.h"
@@ -93,7 +94,7 @@ std::string ResultText(const Json& block) {
     } else if (type == "image") {
       // Nothing useful can be done with it in a RichEdit; the view offers to
       // open it instead.  See claude-gui-lkk.5.
-      text += "[obrázok]";
+      text += i18n::Utf8(i18n::Str::kImage);
     } else {
       text += part.dump();
     }
@@ -392,24 +393,28 @@ std::vector<agent::Event> TranslateHistory(const std::vector<Json>& records) {
 agent::Capabilities ClaudeCapabilities() {
   agent::Capabilities capabilities;
   capabilities.agentName = "claude";
+  using i18n::Str;
+  using i18n::Utf8;
   capabilities.modes = {
-      {"default", "normálny", "pýta sa na každú úpravu aj na príkazy", true,
-       true},
+      {"default", Utf8(Str::kModeNormal), Utf8(Str::kClaudeModeNormalGloss),
+       true, true},
       // The same mode under the name the CLI's own --help gives it: the help
       // lists "manual" and not "default", and the CLI maps the one to the other
       // and reports "default" back.  Measured on 2.1.288 (tools/
       // probe_cli_args.py, 2026-10-03).  Here so that the word the CLI
       // advertises is not refused by AgentAloud; off the cycle, so that
       // Shift+Tab never lands on it.
-      {"manual", "normálny", "pýta sa na každú úpravu aj na príkazy", false,
-       true},
-      {"acceptEdits", "automatické úpravy",
-       "súbory mení sám, na príkazy sa pýta", true, false},
-      {"plan", "plánovanie", "len skúma a navrhuje, súborov sa nedotkne", true,
-       false},
-      {"auto", "auto", "Claude sám rozhodne, čo je bezpečné", true, false},
-      {"bypassPermissions", "bez povolení", "nepýta sa na nič", false, false},
-      {"dontAsk", "bez pýtania", "riskantné rovno zamietne", false, false},
+      {"manual", Utf8(Str::kModeNormal), Utf8(Str::kClaudeModeNormalGloss),
+       false, true},
+      {"acceptEdits", Utf8(Str::kClaudeModeAcceptEdits),
+       Utf8(Str::kClaudeModeAcceptEditsGloss), true, false},
+      {"plan", Utf8(Str::kModePlan), Utf8(Str::kModePlanGloss), true, false},
+      {"auto", Utf8(Str::kClaudeModeAuto), Utf8(Str::kClaudeModeAutoGloss),
+       true, false},
+      {"bypassPermissions", Utf8(Str::kClaudeModeBypass),
+       Utf8(Str::kClaudeModeBypassGloss), false, false},
+      {"dontAsk", Utf8(Str::kClaudeModeDontAsk),
+       Utf8(Str::kClaudeModeDontAskGloss), false, false},
   };
   capabilities.questions = true;
   capabilities.slashCommands = true;

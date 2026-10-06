@@ -189,6 +189,25 @@ void TestCatalog() {
   const std::wstring wide = L"plánovanie — „x“ \U0001F50A";
   CHECK_EQ(i18n::Utf8(wide), model::Utf8FromUtf16(wide));
 
+  // Nazov rezimu je aj kluc: F1 vyhadzuje rezim, ktoreho nazov uz vypisal,
+  // takze default a manual (ten isty rezim pod dvoma slovami CLI) musia mat
+  // rovnaky nazov v kazdom jazyku.  Adapter sklada nazvy v jazyku, ktory
+  // plati v case volania.
+  for (const i18n::Lang lang : i18n::Languages()) {
+    i18n::SetLanguage(lang);
+    const agent::Capabilities claude = proto::ClaudeCapabilities();
+    const agent::Mode* normal = agent::FindMode(claude, "default");
+    const agent::Mode* manual = agent::FindMode(claude, "manual");
+    CHECK(normal != nullptr && manual != nullptr &&
+          normal->label == manual->label);
+  }
+  i18n::SetLanguage(i18n::Lang::kEnglish);
+  CHECK_EQ(agent::FindMode(proto::ClaudeCapabilities(), "plan")->label,
+           std::string("planning"));
+  CHECK_EQ(agent::FindMode(proto::codex::CodexCapabilities(), "read-only")
+               ->label,
+           std::string("read only"));
+
   i18n::SetLanguage(i18n::Lang::kSlovak);
 }
 

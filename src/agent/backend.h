@@ -31,9 +31,9 @@ namespace agent {
 // sandbox and a plan mode, and its adapter offers named presets over the three
 // -- the same thing its own terminal does.  Either way the pane sees a list.
 //
-// The label and the gloss are written by the adapter, in Slovak, because only
-// the adapter knows what the mode means; the pane says them and does not
-// translate.
+// The label and the gloss are written by the adapter, in the reader's
+// language (i18n), because only the adapter knows what the mode means; the
+// pane says them and does not translate.
 struct Mode {
   std::string id;     // what SetMode takes and ModeChanged reports
   std::string label;  // "plánovanie", said and shown in the status bar

@@ -158,4 +158,6 @@ std::string Utf8(std::wstring_view text) {
   return out;
 }
 
+std::string Utf8(Str id) { return Utf8(Text(id)); }
+
 }  // namespace i18n
