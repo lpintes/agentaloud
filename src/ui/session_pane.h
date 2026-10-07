@@ -72,6 +72,12 @@ class SessionPane {
   // The pane owns the backend from here on.
   bool Start(std::unique_ptr<agent::Backend> backend,
              const agent::StartOptions& options);
+  // Which of the sessions in this folder this one is, zero when it is the
+  // only one (app::SessionOrdinals).  The host says, and says again whenever
+  // a session in the same folder opens or closes; it goes into the title and
+  // the bar's project field, both of which would otherwise be the same for
+  // every session in the folder.
+  void SetOrdinal(int ordinal);
 
   // Called by the host for the kMsg* messages above.
   void OnDrain();
@@ -218,6 +224,8 @@ class SessionPane {
   void Announce(const std::wstring& text);
   // One field of the bar, kept and shown when there is a bar.
   void SetField(StatusBar::Field field, const std::wstring& text);
+  // The title and the project field from path_, ordinal_ and mismatch_.
+  void ShowName();
   // Puts the caret at an offset and says the line it landed on.
   void GoToOffset(size_t offset);
   // Says that the turn is over.  The answer itself was already read as it
@@ -291,6 +299,12 @@ class SessionPane {
   // The folder name, kept because the bar is rewritten field by field and the
   // project one has to be put back after anything that clears it.
   std::wstring project_;
+  // The whole path, the title's base.
+  std::wstring path_;
+  int ordinal_ = 0;
+  // Once the widget and the model have disagreed, the title says so for the
+  // rest of the session -- renumbering must not wipe it.
+  bool mismatch_ = false;
   // Everything the dialog shows, gathered as it arrives.  Kept here rather
   // than asked for when the dialog opens, because most of it comes off records
   // that have long gone past by then.

@@ -53,6 +53,7 @@
 #include "proto/claude/translate.h"
 #include "proto/codex/translate.h"
 #include "arguments.h"
+#include "session_names.h"
 #include "settings.h"
 #include "update.h"
 #include "version.h"
@@ -796,6 +797,24 @@ void TestPortModeCycleMatchesClaude() {
   CHECK(agent::FindMode(claude, "vymysleny") == nullptr);
   // Agent bez rezimov nema kam cyklovat.
   CHECK_EQ(agent::NextMode(agent::Capabilities(), "default"), std::string());
+}
+
+// Dve sessions v tom istom priecinku mali rovnake meno v titulku, v menu Okno
+// aj v tom, co NVDA povie pri Ctrl+Tab.  Cislo dostanu len tie, ktore ho
+// potrebuju, a po zatvoreni sa precisluju bez dier.
+void TestSessionOrdinals() {
+  TEST("sessions: poradie v jednom priecinku");
+  using W = std::vector<std::wstring>;
+  using I = std::vector<int>;
+  CHECK(app::SessionOrdinals(W{}) == I{});
+  CHECK(app::SessionOrdinals(W{L"a"}) == I{0});
+  CHECK(app::SessionOrdinals(W{L"a", L"b"}) == (I{0, 0}));
+  CHECK(app::SessionOrdinals(W{L"a", L"b", L"a"}) == (I{1, 0, 2}));
+  CHECK(app::SessionOrdinals(W{L"a", L"a", L"a"}) == (I{1, 2, 3}));
+  // Druha z troch zatvorena: tretia je teraz druha.
+  CHECK(app::SessionOrdinals(W{L"a", L"a"}) == (I{1, 2}));
+  // Zostala jedna: cislo zmizne.
+  CHECK(app::SessionOrdinals(W{L"b", L"a"}) == (I{0, 0}));
 }
 
 // Prikazovy riadok (invariant 16 a claude-gui-lkk.44.7).  Kazde z tychto
@@ -3364,6 +3383,7 @@ int main(int argc, char** argv) {
   TestPermissionModeSwitch();
   TestPortModeCycleMatchesClaude();
   TestArguments();
+  TestSessionOrdinals();
   TestSettings();
   TestSettingsWrite();
   TestUpdateRules();

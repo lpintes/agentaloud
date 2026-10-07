@@ -56,6 +56,10 @@ class MainWindow : public win::Window {
   void CloseSession();
   // The session the reader is in, or null when none is open.
   SessionWindow* Active() const;
+  // Numbers the sessions that share a folder, so that their titles differ.
+  // After every open and close: closing the second of three makes the third
+  // the second.
+  void Renumber();
   // Drops the sessions whose windows are gone.  Posted, never called from a
   // child's own window procedure.
   void Reap();

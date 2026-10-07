@@ -5,6 +5,7 @@
 
 #include "app_name.h"
 #include "i18n/i18n.h"
+#include "session_names.h"
 
 namespace ui {
 namespace {
@@ -116,9 +117,26 @@ bool MainWindow::OpenSession(std::unique_ptr<agent::Backend> backend,
   // window on the way out, and the reap that follows has to find it.
   sessions_.push_back(std::make_unique<SessionWindow>());
   SessionWindow* session = sessions_.back().get();
-  return session->Open(client_, instance_, &status_, std::move(backend),
-                       options,
-                       [this] { PostMessageW(hwnd_, kMsgReap, 0, 0); });
+  if (!session->Open(client_, instance_, &status_, std::move(backend), options,
+                     [this] { PostMessageW(hwnd_, kMsgReap, 0, 0); })) {
+    return false;
+  }
+  Renumber();
+  return true;
+}
+
+void MainWindow::Renumber() {
+  // Only the running ones: a session being closed has let go of its pane
+  // and is about to be reaped, and counting it would leave a gap.
+  std::vector<SessionWindow*> open;
+  std::vector<std::wstring> keys;
+  for (const auto& session : sessions_) {
+    if (session->pane() == nullptr) continue;
+    open.push_back(session.get());
+    keys.push_back(session->folderKey());
+  }
+  const std::vector<int> ordinals = app::SessionOrdinals(keys);
+  for (size_t i = 0; i < open.size(); ++i) open[i]->SetOrdinal(ordinals[i]);
 }
 
 void MainWindow::NewSession() {
@@ -180,7 +198,10 @@ void MainWindow::CloseSession() {
 void MainWindow::Reap() {
   std::erase_if(sessions_,
                 [](const auto& session) { return session->handle() == nullptr; });
-  if (!sessions_.empty()) return;
+  if (!sessions_.empty()) {
+    Renumber();
+    return;
+  }
   // The last session's facts would otherwise stay in the bar and be read on
   // NVDA+End as if it were still running.
   for (int field = 0; field < StatusBar::kFieldCount; ++field) {

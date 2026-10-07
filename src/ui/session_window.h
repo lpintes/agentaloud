@@ -13,6 +13,7 @@
 
 #include <functional>
 #include <memory>
+#include <string>
 
 #include "agent/backend.h"
 #include "ui/session_pane.h"
@@ -36,6 +37,12 @@ class SessionWindow : public win::Window {
 
   // Null once the session has been shut down.
   SessionPane* pane() const { return pane_.get(); }
+  // The folder in one spelling for every way of writing it -- case and
+  // slashes -- so that sessions in one folder can be numbered.
+  const std::wstring& folderKey() const { return folderKey_; }
+  // Which of the sessions in its folder this is (app::SessionOrdinals): into
+  // the title through the pane, and into the name NVDA says on Ctrl+Tab.
+  void SetOrdinal(int ordinal);
   // Stops the backend in the right order -- the turn first, the pipe after
   // -- while the window and its message queue are still there.
   void ShutDown() { pane_.reset(); }
@@ -51,6 +58,8 @@ class SessionWindow : public win::Window {
   void Annotate(const std::wstring& name);
 
   StatusBar* bar_ = nullptr;
+  std::wstring folder_;
+  std::wstring folderKey_;
   Closed closed_;
   std::unique_ptr<SessionPane> pane_;
 };

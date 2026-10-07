@@ -1420,6 +1420,16 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
         odmietne (invariant 14). Backend a priečinok dialóg predvyplní
         naposledy zvolenými.
 
+    **Session sa volá podľa priečinka, a dve v tom istom priečinku dostanú
+    číslo** — „cesta (2)" v titulku (teda aj v ráme a v menu Okno), v mene
+    z anotácie aj v poli projektu stavového riadku. Číslo má len priečinok
+    s viac než jednou session a ide 1..n v poradí otvorenia **bez dier**:
+    zatvorenie druhej z troch spraví z tretej druhú, posledná zostávajúca
+    číslo stratí. Číslo teda hovorí „ktorá z tých v tomto priečinku", nie
+    „koľkú som otvoril". Pravidlo je `app::SessionOrdinals`, prečísluje
+    `MainWindow::Renumber` po každom otvorení a zatvorení, a priečinok sa
+    porovnáva bez ohľadu na veľkosť písmen a lomky (`SessionWindow::FolderKey`).
+
     Klávesa rámu, ktorá nemá čo urobiť (Ctrl+Tab pri jednej session, čokoľvek
     bez session), to povie vlastnou `Speech` rámu — panel, cez ktorý by
     hovoril, nemusí existovať. Zatvorením poslednej session appka nekončí;

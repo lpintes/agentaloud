@@ -338,13 +338,38 @@ void SessionPane::Apply(const model::Edit& edit) {
   // it normalises, a character it substitutes -- navigation would land in the
   // wrong place and nothing else would say so.  Loud, in the title, because a
   // quiet log is a thing nobody reads.
-  if (TextLength(transcript_) != static_cast<int>(model_.Text().size())) {
+  if (!mismatch_ &&
+      TextLength(transcript_) != static_cast<int>(model_.Text().size())) {
     // The session's own title, which the frame shows beside its name: the
     // mismatch is this session's, and the folder says which one that is.
-    const std::wstring title =
-        details_.project + L" — " + i18n::Text(Str::kTitleRangeMismatch);
-    SetWindowTextW(host_, title.c_str());
+    mismatch_ = true;
+    ShowName();
   }
+}
+
+void SessionPane::SetOrdinal(int ordinal) {
+  if (ordinal == ordinal_) return;
+  ordinal_ = ordinal;
+  ShowName();
+}
+
+void SessionPane::ShowName() {
+  const auto numbered = [this](const std::wstring& name) {
+    return ordinal_ == 0 ? name
+                         : i18n::Format(Str::kSessionOrdinal,
+                                        {name, std::to_wstring(ordinal_)});
+  };
+  SetField(StatusBar::kProject,
+           i18n::Format(Str::kStatusProject, {numbered(project_)}));
+  // The path alone, numbered: the frame puts its own name in front of the
+  // active session's title, and the window list in the menu names sessions
+  // by it.
+  std::wstring title = numbered(path_);
+  if (mismatch_) {
+    title += L" — ";
+    title += i18n::Text(Str::kTitleRangeMismatch);
+  }
+  SetWindowTextW(host_, title.c_str());
 }
 
 bool SessionPane::Start(std::unique_ptr<agent::Backend> backend,
@@ -375,10 +400,8 @@ bool SessionPane::Start(std::unique_ptr<agent::Backend> backend,
   // question, and it answers it with the real id.
   details_.model = options.model;
   details_.requestedModel = options.model;
-  SetField(StatusBar::kProject, i18n::Format(Str::kStatusProject, {project_}));
-  // The path alone: the frame puts its own name in front of the active
-  // session's title, and the window list in the menu names sessions by it.
-  SetWindowTextW(host_, path.c_str());
+  path_ = path;
+  ShowName();
 
   agent::Backend::Callbacks callbacks;
   callbacks.onEvents = [this](std::vector<agent::Event> batch) {

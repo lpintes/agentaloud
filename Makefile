@@ -115,9 +115,11 @@ PROTO_SRCS := $(PROTO_PURE_SRCS) src/proto/claude/session.cpp \
               src/proto/claude/claude_backend.cpp \
               src/proto/codex/codex_backend.cpp
 
-# Prikazovy riadok, subor nastaveni a pravidla aktualizacii: ciste, bez
+# Prikazovy riadok, subor nastaveni, pravidla aktualizacii a cislovanie
+# sessions v jednom priecinku: ciste, bez
 # windows.h a bez siete, aby ich testy videli.
-APP_PURE_SRCS := src/arguments.cpp src/settings.cpp src/version.cpp src/update.cpp
+APP_PURE_SRCS := src/arguments.cpp src/settings.cpp src/version.cpp src/update.cpp \
+                 src/session_names.cpp
 
 # Transkript a jeho mapa rozsahov.  Nevie o windows.h, a prave preto sa da
 # testovat bez okna -- co je vacsina toho, preco maju tie testy cenu.

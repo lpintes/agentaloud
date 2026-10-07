@@ -27,3 +27,4 @@ next-task.md
 
 # Vznikne, ked sa tools/ importuje ako modul (rucne skusanie Scrubbera).
 tools/__pycache__/
+SESSION.md
