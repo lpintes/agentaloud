@@ -105,6 +105,9 @@ S(kClipboardFailed, L"schránku sa nepodarilo otvoriť, id skopírované nebolo"
 S(kIdCopied, L"id skopírované")
 S(kNoCommandList, L"tento agent zoznam príkazov neposiela")
 S(kCommandsNotYet, L"zoznam príkazov ešte neprišiel, skúste o chvíľu")
+S(kSearchNotFound, L"nenájdené: {0}")
+S(kSearchWrappedTop, L"od začiatku: {0}")
+S(kSearchWrappedBottom, L"od konca: {0}")
 
 // ui/keys_dialog
 S(kKeysSending,
@@ -134,6 +137,12 @@ S(kKeysMoving,
   L"Ctrl+1 až Ctrl+9 — vráti kurzor na označený blok.\n"
   L"Ctrl+0 — späť tam, kde kurzor stál, kým naposledy niečo pribudlo.\n"
   L"Nultú záložku píše aplikácia sama, nastaviť sa nedá.\n"
+  L"\n"
+  L"Hľadanie, z oboch polí:\n"
+  L"Ctrl+F — hľadá text v prepise. Veľkosť písmen nerozhoduje.\n"
+  L"Dialóg zostane otvorený: Enter nájde ďalší výskyt, Esc ho zavrie.\n"
+  L"F3 — ďalší výskyt, Shift+F3 — predchádzajúci.\n"
+  L"Hľadá aj vo zbalených blokoch; blok s výskytom sa rozbalí.\n"
   L"\n"
   L"Dialógy a schránka, z oboch polí:\n"
   L"F1 — tento zoznam.\n"
@@ -202,6 +211,9 @@ S(kDlgNewProject, L"&Priečinok:")
 S(kDlgNewBrowse, L"&Vybrať…")
 S(kDlgNewStart, L"&Spustiť")
 S(kDlgNewCancel, L"&Zrušiť")
+S(kDlgFindCaption, L"hľadať")
+S(kDlgFindText, L"&Hľadať:")
+S(kDlgFindOk, L"&Nájsť")
 
 // Dialogs at run time.  The reader is addressed formally (vykanie), as
 // everywhere else in the application.

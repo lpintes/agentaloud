@@ -102,6 +102,9 @@ S(kClipboardFailed, L"the clipboard could not be opened, the id was not copied")
 S(kIdCopied, L"id copied")
 S(kNoCommandList, L"this agent sends no list of commands")
 S(kCommandsNotYet, L"the list of commands has not arrived yet, try again in a moment")
+S(kSearchNotFound, L"not found: {0}")
+S(kSearchWrappedTop, L"from the top: {0}")
+S(kSearchWrappedBottom, L"from the bottom: {0}")
 
 // ui/keys_dialog
 S(kKeysSending,
@@ -132,6 +135,12 @@ S(kKeysMoving,
   L"Ctrl+1 to Ctrl+9 — returns the cursor to the marked block.\n"
   L"Ctrl+0 — back to where the cursor was when something last arrived.\n"
   L"Bookmark zero is written by the application, it cannot be set.\n"
+  L"\n"
+  L"Searching, from either field:\n"
+  L"Ctrl+F — finds text in the transcript. Case does not matter.\n"
+  L"The dialog stays open: Enter finds the next match, Esc closes it.\n"
+  L"F3 — next match, Shift+F3 — previous.\n"
+  L"Collapsed blocks are searched too; the block with the match is expanded.\n"
   L"\n"
   L"Dialogs and the clipboard, from either field:\n"
   L"F1 — this list.\n"
@@ -199,6 +208,9 @@ S(kDlgNewProject, L"&Folder:")
 S(kDlgNewBrowse, L"Bro&wse…")
 S(kDlgNewStart, L"&Start")
 S(kDlgNewCancel, L"&Cancel")
+S(kDlgFindCaption, L"find")
+S(kDlgFindText, L"&Search for:")
+S(kDlgFindOk, L"&Find")
 
 // Dialogs at run time.
 S(kAskOtherItem, L"Other — your own answer, type it in the field below")

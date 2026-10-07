@@ -241,3 +241,18 @@ BEGIN
     DEFPUSHBUTTON   "&Spustiť", IDOK, 176, 66, 56, 14
     PUSHBUTTON      "&Zrušiť", IDCANCEL, 236, 66, 56, 14
 END
+
+// Hľadanie v prepise.  One field: case does not matter and the direction is
+// F3 against Shift+F3, so there is nothing to tick and nothing to read past
+// on the way to the button.
+IDD_FIND DIALOGEX 0, 0, 260, 52
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION APP_NAME " — hľadať"
+FONT 9, "Segoe UI", 400, 0, 1
+BEGIN
+    LTEXT           "&Hľadať:", IDC_FIND_TEXT_LABEL, 8, 10, 48, 8
+    EDITTEXT        IDC_FIND_TEXT, 60, 8, 192, 12, ES_AUTOHSCROLL
+
+    DEFPUSHBUTTON   "&Nájsť", IDOK, 136, 30, 56, 14
+    PUSHBUTTON      "&Zavrieť", IDCANCEL, 196, 30, 56, 14
+END

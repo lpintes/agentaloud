@@ -145,6 +145,11 @@ class SessionPane {
   // written for.  A function key is positional, produces no WM_CHAR, and sits
   // beside F2, which already opens the other dialog.
   void ShowCommands();
+  // Ctrl+F: what to look for, in a dialog that stays open, each Enter the
+  // next match forwards from the caret.  F3 and Shift+F3 repeat it either way
+  // without the dialog, and open it when nothing has been searched for yet.
+  void ShowFind();
+  void FindNext(bool backwards);
   // Ctrl+Shift+C: the session id onto the clipboard, so that `claude -r <id>`
   // in a terminal reaches the same conversation.  Its own key and not just a
   // button in the dialog, because it is the one thing in there that is never
@@ -243,6 +248,13 @@ class SessionPane {
   // Says what the turn is doing, in the order it does it: the text, the tool
   // calls and the tool results made since the given block id.
   void AnnounceProgress(size_t firstNewId);
+  // The caret onto the next match, expanding the block it is in.  Says
+  // nothing: the two callers say different things, or nothing at all.
+  std::optional<model::SearchHit> FindText(const std::wstring& text,
+                                           bool backwards);
+  // FindText, and then the line with the match or that there was none.
+  // Shared by F3 and the dialog, which stays open so that this can be heard.
+  bool SearchAndSay(const std::wstring& text, bool backwards);
 
   HWND host_ = nullptr;
   HWND transcriptLabel_ = nullptr;
@@ -253,6 +265,8 @@ class SessionPane {
   // Kept by the two subclass procedures, read by RestoreFocus.  A window
   // handle and not a flag, so that a third box later needs nothing here.
   HWND lastFocus_ = nullptr;
+  // The last thing Ctrl+F looked for, for F3 and for the dialog next time.
+  std::wstring searchText_;
 
   StatusBar* statusBar_ = nullptr;
   std::wstring fields_[StatusBar::kFieldCount];

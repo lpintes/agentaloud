@@ -238,7 +238,9 @@ procedúra (F1, F2, F4, chordy), je to plnohodnotné overenie — obsluhuje ju t
 istá procedúra, do ktorej by prišla aj skutočná správa. Pre klávesu, o ktorej
 rozhoduje až dialógová slučka, nedokazuje nič. A `SendMessage` do modálneho
 dialógu zablokuje volajúci shell, kým sa dialóg nezavrie; na otvorenie dialógu
-teda `PostMessage`.
+teda `PostMessage`. Ten zase dorazí aj do okna, ktoré modál zakázal, takže
+klávesa poslaná pod otvoreným dialógom spraví niečo, čo skutočná klávesa
+nedokáže (napríklad otvorí druhý dialóg). Tlačidlo OK v `MessageBox` nemá id 1.
 
 **Chord s Ctrl alebo Shift — a teda aj odoslanie promptu — sa poslať dá**, a
 tiež bez popredia: `Set-LensText` dá text do promptu a `Send-LensChord $prompt
@@ -488,6 +490,13 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    Preto `ShowCommands` po vložení príkazu mlčí, hoci pôvodne hovoril; hláška
    „vložené /x, argumenty: …" sa nestratila v kóde, stratila sa v uchu, a našlo
    sa to používaním (7. 9. 2026).
+
+   Dialóg, ktorého odpoveď je veta, sa preto **nezatvára**. Ctrl+F sa najprv
+   na Enter zatváral a odpoveďou bolo ohlásenie návratu fokusu — titulok rámu,
+   session, „Prepis" a až potom riadok so zhodou; autor to používaním nazval
+   ukecaným (7. 10. 2026). Teraz zostane otvorený ako v Poznámkovom bloku,
+   Enter povie riadok (`SessionPane::SearchAndSay`) a dlhé ohlásenie zaznie
+   len na Esc, keď odchádza čitateľ sám.
 
    **Načasovať sa to proti čítačke nedá.** Odložiť vetu za cudzie ohlásenie
    a potom ju pretlačiť `cancelSpeech`om **technicky funguje** — odskúšané

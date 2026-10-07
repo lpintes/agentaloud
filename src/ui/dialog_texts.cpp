@@ -72,6 +72,11 @@ const std::vector<Template>& Templates() {
         {IDC_NEW_BROWSE, Str::kDlgNewBrowse},
         {IDOK, Str::kDlgNewStart},
         {IDCANCEL, Str::kDlgNewCancel}}},
+      {IDD_FIND,
+       Str::kDlgFindCaption,
+       {{IDC_FIND_TEXT_LABEL, Str::kDlgFindText},
+        {IDOK, Str::kDlgFindOk},
+        {IDCANCEL, Str::kDlgClose}}},
   };
   return templates;
 }

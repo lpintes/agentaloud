@@ -15,6 +15,7 @@
 #define IDD_COMMANDS        103
 #define IDD_KEYS            104
 #define IDD_NEW_SESSION     105
+#define IDD_FIND            106
 
 #define IDC_DETAILS_ID          1000
 #define IDC_DETAILS_MODEL       1001
@@ -92,5 +93,9 @@
 #define IDC_NEW_BACKEND_LABEL   1110
 #define IDC_NEW_MODEL_LABEL     1111
 #define IDC_NEW_PROJECT_LABEL   1112
+
+// Hľadanie v prepise.  See ui/find_dialog.h.
+#define IDC_FIND_TEXT           1120
+#define IDC_FIND_TEXT_LABEL     1130
 
 #endif

@@ -12,6 +12,7 @@
 #include "model/utf.h"
 #include "ui/ask_dialog.h"
 #include "ui/command_dialog.h"
+#include "ui/find_dialog.h"
 #include "ui/keys_dialog.h"
 #include "ui/permission_dialog.h"
 #include "ui/resource.h"
@@ -184,6 +185,23 @@ bool IsJumpChord(WPARAM key) {
 bool IsCopyIdChord(WPARAM key) {
   if (GetKeyState(VK_CONTROL) >= 0 || GetKeyState(VK_SHIFT) >= 0) return false;
   return key == 'C';
+}
+
+// Ctrl+F, without Shift: Ctrl+Shift+F is free for something else later, and
+// taking it here as well would be taking it for nothing.
+bool IsFindChord(WPARAM key) {
+  return key == 'F' && GetKeyState(VK_CONTROL) < 0 &&
+         GetKeyState(VK_SHIFT) >= 0;
+}
+
+// Case-blind in the reader's language.  CharLowerBuffW keeps the length,
+// which Transcript::Find needs: its offsets are into the unfolded text.
+std::wstring FoldCase(const std::wstring& text) {
+  std::wstring folded = text;
+  if (!folded.empty()) {
+    CharLowerBuffW(folded.data(), static_cast<DWORD>(folded.size()));
+  }
+  return folded;
 }
 
 // Ctrl+<digit> and Ctrl+Shift+<digit>, read as keys for the same reason -- and
@@ -1422,6 +1440,56 @@ void SessionPane::ShowCommands() {
   // the description box both.
 }
 
+std::optional<model::SearchHit> SessionPane::FindText(const std::wstring& text,
+                                                      bool backwards) {
+  const std::optional<model::SearchHit> hit =
+      model_.Find(text, CaretOffset(transcript_), backwards, FoldCase);
+  if (!hit.has_value()) return std::nullopt;
+  const model::Block& block = model_.blocks()[hit->index];
+  if (block.collapsed && block.collapsible) {
+    Apply(model_.SetCollapsed(hit->index, false));
+  }
+  // anchor_ is left alone, as in GoToBlock: a search is the reader reading.
+  PutCaret(transcript_, model_.blocks()[hit->index].start + hit->offset);
+  return hit;
+}
+
+bool SessionPane::SearchAndSay(const std::wstring& text, bool backwards) {
+  const std::optional<model::SearchHit> hit = FindText(text, backwards);
+  if (!hit.has_value()) {
+    Announce(i18n::Format(Str::kSearchNotFound, {text}));
+    return false;
+  }
+  const std::wstring line = model_.LineAt(CaretOffset(transcript_));
+  Announce(hit->wrapped
+               ? i18n::Format(backwards ? Str::kSearchWrappedBottom
+                                        : Str::kSearchWrappedTop,
+                              {line})
+               : line);
+  return true;
+}
+
+void SessionPane::ShowFind() {
+  bool found = false;
+  FindDialog(&searchText_,
+             [this, &found](const std::wstring& text) {
+               if (SearchAndSay(text, false)) found = true;
+             })
+      .ShowModal(host_, IDD_FIND);
+  // Into the transcript only when the caret there was moved, so that what
+  // was found is where the reader lands.  Otherwise the focus goes back to
+  // wherever it came from, and a half-typed prompt is not left behind.
+  if (found) SetFocus(transcript_);
+}
+
+void SessionPane::FindNext(bool backwards) {
+  if (searchText_.empty()) {
+    ShowFind();
+    return;
+  }
+  SearchAndSay(searchText_, backwards);
+}
+
 LRESULT CALLBACK SessionPane::PromptProc(HWND window, UINT message,
                                          WPARAM wParam, LPARAM lParam,
                                          UINT_PTR id, DWORD_PTR data) {
@@ -1459,6 +1527,14 @@ LRESULT CALLBACK SessionPane::PromptProc(HWND window, UINT message,
       pane->ShowCommands();
       return 0;
     }
+    if (IsFindChord(wParam)) {
+      pane->ShowFind();
+      return 0;
+    }
+    if (wParam == VK_F3) {
+      pane->FindNext(GetKeyState(VK_SHIFT) < 0);
+      return 0;
+    }
     if (IsCopyIdChord(wParam)) {
       pane->CopySessionId();
       return 0;
@@ -1493,7 +1569,12 @@ LRESULT CALLBACK SessionPane::PromptProc(HWND window, UINT message,
   // send that goes through, the box is cleared and nobody sees it; on one that
   // is refused -- a turn already running, an empty prompt -- the line break
   // stays and is carried into the next prompt.
-  if (message == WM_CHAR && (wParam == VK_TAB || wParam == 0x0A)) return 0;
+  // Ctrl+F arrives as 0x06 the same way.  A cancelled search dialog leaves
+  // the box as it was, and that character would not.
+  if (message == WM_CHAR &&
+      (wParam == VK_TAB || wParam == 0x0A || wParam == 0x06)) {
+    return 0;
+  }
   if (message == WM_DESTROY) RemoveWindowSubclass(window, PromptProc, id);
   return DefSubclassProc(window, message, wParam, lParam);
 }
@@ -1548,6 +1629,17 @@ LRESULT CALLBACK SessionPane::TranscriptProc(HWND window, UINT message,
     pane->CopySessionId();
     return 0;
   }
+  if (message == WM_KEYDOWN && IsFindChord(wParam)) {
+    pane->ShowFind();
+    return 0;
+  }
+  if (message == WM_KEYDOWN && wParam == VK_F3) {
+    pane->FindNext(GetKeyState(VK_SHIFT) < 0);
+    return 0;
+  }
+  // The 0x06 Ctrl+F leaves behind, which a read-only box would answer with
+  // a beep after the dialog has closed.
+  if (message == WM_CHAR && wParam == 0x06) return 0;
   // Bookmarks reach the transcript the same way, and for the same reason: the
   // reader should not have to know which box has the focus.
   if (message == WM_KEYDOWN) {

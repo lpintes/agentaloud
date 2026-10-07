@@ -104,6 +104,9 @@ S(kClipboardFailed)
 S(kIdCopied)
 S(kNoCommandList)
 S(kCommandsNotYet)
+S(kSearchNotFound)
+S(kSearchWrappedTop)
+S(kSearchWrappedBottom)
 // ui/keys_dialog: the F1 list (invariant 19).  Whole blocks, because a
 // translation rewrites the wording, not the line breaks.  Keys are written as
 // shortcuts -- "T" and "Shift+T" -- in every language: the letters are the
@@ -170,6 +173,9 @@ S(kDlgNewProject)
 S(kDlgNewBrowse)
 S(kDlgNewStart)
 S(kDlgNewCancel)
+S(kDlgFindCaption)
+S(kDlgFindText)
+S(kDlgFindOk)
 
 // What the dialogs say at run time.
 S(kAskOtherItem)
