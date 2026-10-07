@@ -2723,38 +2723,62 @@ void TestCodexModes() {
   // Kazda predvolba sa da nastavit a z nastavenia sa precita spat ako ona.
   // Tvar sandboxPolicy je ten, ktory vracia thread/settings/updated
   // (odmerane, c:/b/codex-probe/logs/noturn.log).
-  for (const char* mode : {kModeAuto, kModeReadOnly, kModeFullAccess}) {
+  for (const char* mode :
+       {kModeDefault, kModeAuto, kModeReadOnly, kModeFullAccess}) {
     ModeSettings settings;
     CHECK(SettingsForMode(mode, &settings));
     CHECK(settings.permissions);
     CHECK_EQ(ModeFromSettings(settings.approvalPolicy, settings.sandboxPolicy,
-                              settings.collaboration),
+                              settings.reviewer, settings.collaboration),
              std::string(mode));
     CHECK(agent::FindMode(capabilities, mode) != nullptr);
+    // Recenzent sa posiela vzdy: vynechany zostane z predosleho rezimu
+    // (odmerane, never-settings.log), takze odchod z auto by ho vzal so sebou.
+    CHECK(!settings.reviewer.empty());
   }
+  // Auto sa od normalneho lisi len recenzentom.
+  ModeSettings normal, automatic;
+  CHECK(SettingsForMode(kModeDefault, &normal));
+  CHECK(SettingsForMode(kModeAuto, &automatic));
+  CHECK_EQ(normal.reviewer, std::string("user"));
+  CHECK_EQ(automatic.reviewer, std::string("auto_review"));
+  CHECK_EQ(automatic.approvalPolicy, normal.approvalPolicy);
+  CHECK_EQ(automatic.sandbox, normal.sandbox);
+  // Nehlaseny recenzent je predvoleny "user" -- tak to hovori schema.
+  CHECK_EQ(ModeFromSettings("on-request", {{"type", "workspaceWrite"}}, "",
+                            "default"),
+           std::string(kModeDefault));
+  // Recenzent pri read-only nie je ziadna predvolba.
+  CHECK_EQ(ModeFromSettings("on-request", {{"type", "readOnly"}}, "auto_review",
+                            "default"),
+           std::string(kModeCustom));
   ModeSettings plan;
   CHECK(SettingsForMode(kModePlan, &plan));
   CHECK(!plan.permissions);
   CHECK_EQ(plan.collaboration, std::string("plan"));
-  // Plan prebije ostatne dve osi: je to sposob prace, nie povolenie.
-  CHECK_EQ(ModeFromSettings("never", {{"type", "dangerFullAccess"}}, "plan"),
+  // Plan prebije ostatne osi: je to sposob prace, nie povolenie.
+  CHECK_EQ(ModeFromSettings("never", {{"type", "dangerFullAccess"}}, "user",
+                            "plan"),
            std::string(kModePlan));
   // Sondy bezali v untrusted + read-only, co ziadna predvolba nie je.
-  CHECK_EQ(ModeFromSettings("untrusted", {{"type", "readOnly"}}, "default"),
+  CHECK_EQ(ModeFromSettings("untrusted", {{"type", "readOnly"}}, "user",
+                            "default"),
            std::string(kModeCustom));
   ModeSettings custom;
   CHECK(!SettingsForMode(kModeCustom, &custom));
   CHECK(agent::FindMode(capabilities, kModeCustom) != nullptr);
 
-  // Shift+Tab: normalny -> planovanie -> len citanie -> normalny.  Plny
-  // pristup v cykle nie je a z neho sa ide na druhy rezim cyklu.
+  // Shift+Tab: normalny -> auto -> planovanie -> len citanie -> normalny.
+  // Plny pristup v cykle nie je a z neho sa ide na druhy rezim cyklu.
+  CHECK_EQ(agent::NextMode(capabilities, kModeDefault),
+           std::string(kModeAuto));
   CHECK_EQ(agent::NextMode(capabilities, kModeAuto), std::string(kModePlan));
   CHECK_EQ(agent::NextMode(capabilities, kModePlan),
            std::string(kModeReadOnly));
   CHECK_EQ(agent::NextMode(capabilities, kModeReadOnly),
-           std::string(kModeAuto));
+           std::string(kModeDefault));
   CHECK_EQ(agent::NextMode(capabilities, kModeFullAccess),
-           std::string(kModePlan));
+           std::string(kModeAuto));
 
   // Poradie sprav pri zmene: odpoved {} pride PRED thread/settings/updated
   // (odmerane, noturn.log).  Dve rychle stlacenia nesmu cuvnut na hlasenie,
@@ -3053,6 +3077,70 @@ void TestCodexElicitation() {
                R"({"action":"decline","content":null,"_meta":null})"));
 }
 
+// Nie fixtura: zamietnutie recenzentom sa da vyvolat len politikou
+// recenzenta, ktora zamietne vsetko.  Tvary su skratene, ale doslova zo
+// sondy (tools/probe_codex_never.py, never-review-deny-1.log, 7. 10. 2026).
+void TestCodexReviewerDenial() {
+  TEST("codex auto: zamietnutie recenzentom povie kto a preco");
+  proto::codex::Translator translator;
+  std::vector<agent::Event> events;
+  for (const char* line : {
+           R"({"method":"item/started","params":{"item":{
+               "type":"commandExecution","id":"exec-cb02",
+               "command":"pwsh -Command 'curl.exe https://example.com'",
+               "source":"agent","status":"inProgress",
+               "aggregatedOutput":null,"exitCode":null}}})",
+           R"({"method":"item/autoApprovalReview/started","params":{
+               "targetItemId":"exec-cb02","review":{"status":"inProgress",
+               "riskLevel":null,"userAuthorization":null,"rationale":null},
+               "action":{"type":"command","source":"unifiedExec"}}})",
+           R"({"method":"guardianWarning","params":{"threadId":"t",
+               "message":"Automatic approval review denied (risk: critical, authorization: high): Policy says no."}})",
+           R"({"method":"item/autoApprovalReview/completed","params":{
+               "targetItemId":"exec-cb02","decisionSource":"agent",
+               "review":{"status":"denied","riskLevel":"critical",
+                         "userAuthorization":"high",
+                         "rationale":"Policy says no."},
+               "action":{"type":"command","source":"unifiedExec"}}})",
+           R"({"method":"item/completed","params":{"item":{
+               "type":"commandExecution","id":"exec-cb02",
+               "command":"pwsh -Command 'curl.exe https://example.com'",
+               "source":"agent","status":"declined",
+               "aggregatedOutput":null,"exitCode":null}}})",
+       }) {
+    for (agent::Event& event : translator.Translate(proto::Json::parse(line))) {
+      events.push_back(std::move(event));
+    }
+  }
+  // Recenzent nie je neznama sprava: started a warning su zamerne ticho.
+  CHECK(EventsOf<agent::Unrecognised>(events).empty());
+  const auto results = EventsOf<agent::ToolCallFinished>(events);
+  CHECK_EQ(results.size(), size_t{1});
+  if (!results.empty()) {
+    const agent::ToolResult& result = results[0].result;
+    CHECK(result.isError);
+    CHECK_EQ(result.text, i18n::Utf8(i18n::Str::kAutoReviewDenied) +
+                              ": Policy says no.");
+  }
+
+  // Schvalenie nic neprida: vysledok je vystup prikazu, ako po ano citatela.
+  proto::codex::Translator approving;
+  approving.Translate(proto::Json::parse(
+      R"({"method":"item/autoApprovalReview/completed","params":{
+          "targetItemId":"exec-ok","review":{"status":"approved",
+          "rationale":"Fine."}}})"));
+  const auto approved = approving.Translate(proto::Json::parse(
+      R"({"method":"item/completed","params":{"item":{
+          "type":"commandExecution","id":"exec-ok","status":"completed",
+          "aggregatedOutput":"200","exitCode":0}}})"));
+  const auto approvedResults = EventsOf<agent::ToolCallFinished>(approved);
+  CHECK_EQ(approvedResults.size(), size_t{1});
+  if (!approvedResults.empty()) {
+    CHECK_EQ(approvedResults[0].result.text, std::string("200"));
+    CHECK(!approvedResults[0].result.isError);
+  }
+}
+
 void TestCodexFixtureAsk(const std::string& dir) {
   TEST("codex fixtura ask: otazka je klucovana id, odpoved je pole");
   CodexReplay replay;
@@ -3254,6 +3342,7 @@ void TestCodexFixtureResume(const std::string& dir) {
   const proto::Json& result = (*resumed)["result"];
   CHECK_EQ(proto::codex::ModeFromSettings(
                result["approvalPolicy"], result["sandbox"],
+               result.value("approvalsReviewer", std::string()),
                result["collaborationMode"].value("mode", std::string())),
            std::string(proto::codex::kModeCustom));
 }
@@ -3307,6 +3396,7 @@ int main(int argc, char** argv) {
   TestFixtureDisk(fixtures);
   TestCodexModes();
   TestCodexElicitation();
+  TestCodexReviewerDenial();
   TestClaudeSessionPermissions();
   TestCodexFixtureMulti(fixtures);
   TestCodexFixtureEdit(fixtures);

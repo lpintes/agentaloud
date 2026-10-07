@@ -424,7 +424,7 @@ agent::Capabilities ClaudeCapabilities() {
       {"acceptEdits", Utf8(Str::kClaudeModeAcceptEdits),
        Utf8(Str::kClaudeModeAcceptEditsGloss), true, false},
       {"plan", Utf8(Str::kModePlan), Utf8(Str::kModePlanGloss), true, false},
-      {"auto", Utf8(Str::kClaudeModeAuto), Utf8(Str::kClaudeModeAutoGloss),
+      {"auto", Utf8(Str::kModeAuto), Utf8(Str::kClaudeModeAutoGloss),
        true, false},
       {"bypassPermissions", Utf8(Str::kClaudeModeBypass),
        Utf8(Str::kClaudeModeBypassGloss), false, false},

@@ -13,6 +13,8 @@
 #                                    (-c auto_review.extra_policy zakaze example.com) + approveGuardianDeniedAction
 #   probe_codex_never.py review-mcp  auto_review; nastroj MCP fakecu
 #   probe_codex_never.py review-switch  approvalsReviewer cez turn/start: auto_review, potom user
+#   probe_codex_never.py settings    bez tahu: thread/settings/update a thread/resume s approvalsReviewer
+#                                    (RESUME_ID=<vlakno s tahom> pre resume)
 #
 # Na kazdu serverovu poziadavku sonda odpovie "prijmi" (elicitacia accept,
 # schvalenie prikazu decline -- aby nic mimo sandboxu naozaj neprebehlo),
@@ -160,6 +162,8 @@ def main(mode):
         prompt = ESC_PROMPT if mode == "review-deny" else MCP_PROMPT
     elif mode == "review-switch":
         return switch_main(c, seen)
+    elif mode == "settings":
+        return settings_main(c)
     else:
         raise SystemExit("unknown mode " + mode)
 
@@ -246,6 +250,62 @@ def switch_main(c, seen):
             "approvalsReviewer": reviewer})
         report(c, seen[before:], start)
     c.close()
+
+
+def settings_main(c):
+    # Bez tahu, bez kreditu: thread/settings/update s approvalsReviewer a bez
+    # neho, potom thread/resume s approvalsReviewer v novom procese.
+    r = c.request("thread/start", dict(
+        cwd=REPO, model=MODEL, approvalPolicy="on-request",
+        sandbox="workspace-write"), wait=60)
+    tid = r["result"]["thread"]["id"]
+    print("thread/start reviewer:", r["result"].get("approvalsReviewer"))
+    collab = {"mode": "default", "settings": {
+        "model": MODEL, "reasoning_effort": None,
+        "developer_instructions": None}}
+    steps = (("auto_review", "auto_review"), ("omitted", None),
+             ("auto_review after omitted", "auto_review"),
+             ("user", "user"), ("omitted after user", None),
+             ("user after omitted", "user"),
+             ("auto_review again", "auto_review"),
+             ("explicit null", "NULL"),
+             ("auto_review after null", "auto_review"))
+    for label, reviewer in steps:
+        params = {"threadId": tid, "approvalPolicy": "on-request",
+                  "sandboxPolicy": WW_POLICY, "collaborationMode": collab}
+        if reviewer == "NULL":
+            params["approvalsReviewer"] = None
+        elif reviewer:
+            params["approvalsReviewer"] = reviewer
+        mark = len(c.notes)
+        r = c.request("thread/settings/update", params, wait=20)
+        time.sleep(1.0)
+        print(f"== update [{label}] ->", short(r, 600))
+        for _, m in c.notes[mark:]:
+            if m.get("method") == "thread/settings/updated":
+                print("   updated approvalsReviewer:",
+                      m["params"]["threadSettings"].get("approvalsReviewer"))
+    c.close()
+
+    # Resume: vlakno s tahom z review-switch (vlakno bez tahu sa nemusi dat
+    # obnovit, lebo rollout nema obsah).
+    resume_id = os.environ.get("RESUME_ID", tid)
+    for reviewer in ("auto_review", "user"):
+        c2 = Client(f"never-settings-resume-{reviewer}")
+        c2.initialize(experimental=True)
+        r = c2.request("thread/resume", {
+            "threadId": resume_id, "approvalsReviewer": reviewer,
+            "approvalPolicy": "on-request", "sandbox": "workspace-write"},
+            wait=60)
+        res = (r or {}).get("result")
+        print(f"== resume {resume_id} reviewer={reviewer} ->",
+              res.get("approvalsReviewer") if res else short(r, 600))
+        time.sleep(1.0)
+        for _, m in c2.notes:
+            if m.get("method") == "thread/settings/updated":
+                print("   updated approvalsReviewer:",
+                      m["params"]["threadSettings"].get("approvalsReviewer"))
+        c2.close()
 
 
 def report(c, seen, start):

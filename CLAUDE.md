@@ -1273,7 +1273,11 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     nevytvára, lebo zapnúť sa má vedome). Kľúče sú anglické a ploché,
     s backendom ako prefixom: `backend`, `claude.permission-mode`,
     `codex.model`. Prefix nie je kozmetika — slová režimov sa medzi CLI líšia
-    a `auto` znamená u každého niečo iné (claude-gui-lkk.55).
+    (claude-gui-lkk.55): Claude nemá `read-only`, Codex nemá `acceptEdits`.
+    `auto` kedysi znamenalo u každého niečo iné; od claude-gui-lkk.44.15 je
+    to pri oboch „o povolení rozhoduje model" (pri Codexe `approvalsReviewer:
+    auto_review`, sandbox platí ďalej) a bežný režim Codexu sa volá
+    `default`.
 
     **Shift+Tab sa neukladá.** Mení bežiacu session a nič viac. Režim
     zapamätaný za čitateľovým chrbtom by preniesol jedno stlačenie navyše —

@@ -41,14 +41,22 @@ MessageKind KindOf(const Json& message);
 // ---- Modes ----------------------------------------------------------------
 //
 // Codex has no single mode.  It has an approval policy (when to ask), a
-// sandbox (what a command may touch at all) and a collaboration mode (plan or
-// not), and approving a command does NOT widen the sandbox -- read-only plus
-// "accept" is still "Access denied" (measured).  The terminal Codex offers
-// presets over the first two (/approvals) and toggles plan on its own; the
-// adapter offers the same presets as agent::Modes, and plan as one more.
+// sandbox (what a command may touch at all), a reviewer (who is asked) and a
+// collaboration mode (plan or not), and approving a command does NOT widen
+// the sandbox -- read-only plus "accept" is still "Access denied" (measured).
+// The terminal Codex offers presets over the first three (/approvals) and
+// toggles plan on its own; the adapter offers the same presets as
+// agent::Modes, and plan as one more.
+//
+// "auto" is the preset in which a reviewer model answers what would have
+// been put to the reader (approvalsReviewer "auto_review", the terminal's
+// "Approve for me"), the same thing the word means for Claude.  Until
+// claude-gui-lkk.44.15 the word named the ordinary preset, which is "default"
+// now: a settings line written for the old meaning gets the reviewer.
 
 // The ids, for the code that sets them.
 extern const char kModeReadOnly[];
+extern const char kModeDefault[];
 extern const char kModeAuto[];
 extern const char kModePlan[];
 extern const char kModeFullAccess[];
@@ -58,13 +66,15 @@ extern const char kModeCustom[];
 
 agent::Capabilities CodexCapabilities();
 
-// Which preset the three settings are.  `approvalPolicy` is a string or the
+// Which preset the four settings are.  `approvalPolicy` is a string or the
 // {granular: ...} object, `sandboxPolicy` the {type: ...} object as
 // thread/settings/updated and the answer to thread/start carry them,
-// `collaboration` the collaborationMode's "mode" ("plan", "default"), empty
-// when not stated.
+// `reviewer` the approvalsReviewer ("user", "auto_review"), empty when not
+// stated, which is Codex's default "user", `collaboration` the
+// collaborationMode's "mode" ("plan", "default"), empty when not stated.
 std::string ModeFromSettings(const Json& approvalPolicy,
                              const Json& sandboxPolicy,
+                             const std::string& reviewer,
                              const std::string& collaboration);
 
 // The mode out of a thread/settings/updated notification's threadSettings.
@@ -78,6 +88,7 @@ struct ModeSettings {
   std::string approvalPolicy;  // "on-request", "never"
   std::string sandbox;         // "read-only", "workspace-write", ...
   Json sandboxPolicy;          // {type: readOnly}, ...
+  std::string reviewer;        // "user" or "auto_review"
   std::string collaboration;   // "plan" or "default"
   // Plan mode changes only the collaboration mode and leaves the other two
   // as they were: it is a way of working, not a permission.
@@ -194,6 +205,8 @@ class Translator {
   void ReportModel(const std::string& model, std::vector<agent::Event>* out);
 
   std::map<std::string, agent::ToolCall> running_;
+  // Why the reviewer said no, by the item it judged, until that item ends.
+  std::map<std::string, std::string> deniedByReviewer_;
   std::string model_;
 };
 

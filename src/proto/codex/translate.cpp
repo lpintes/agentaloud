@@ -7,6 +7,7 @@
 namespace proto::codex {
 
 const char kModeReadOnly[] = "read-only";
+const char kModeDefault[] = "default";
 const char kModeAuto[] = "auto";
 const char kModePlan[] = "plan";
 const char kModeFullAccess[] = "full-access";
@@ -69,6 +70,11 @@ const std::set<std::string>& IgnoredMethods() {
       "account/updated",
       "skills/changed",
       "deprecationNotice",
+      // The reviewer of the auto mode.  started has nothing yet, and the
+      // warning repeats completed's verdict as a sentence -- for a yes as
+      // well as for a no (measured).
+      "item/autoApprovalReview/started",
+      "guardianWarning",
       // A turn that fails says so in its own turn/completed, which is what
       // ends it; the error notification before it may be retried and is not
       // an end.
@@ -307,16 +313,22 @@ MessageKind KindOf(const Json& message) {
 agent::Capabilities CodexCapabilities() {
   agent::Capabilities capabilities;
   capabilities.agentName = "codex";
-  // Shift+Tab order.  The ordinary preset first, then plan, which is what
-  // the terminal Codex's own Shift+Tab toggles, then the stricter one.
-  // Full access is a mode a session can be started in but the key never
-  // steps onto, for the same reason Claude's bypassPermissions is off the
-  // cycle: it is not a place to land on by pressing a key once too often.
+  // Shift+Tab order.  The ordinary preset first, then the reviewer -- the
+  // step past it that still keeps the sandbox, as Claude's auto is a step
+  // past its normal mode -- then plan, which is what the terminal Codex's
+  // own Shift+Tab toggles, then the stricter one.  The reviewer can be
+  // switched on and off between turns (measured, never-review-switch.log),
+  // so it is on the cycle.  Full access is a mode a session can be started
+  // in but the key never steps onto, for the same reason Claude's
+  // bypassPermissions is off the cycle: it is not a place to land on by
+  // pressing a key once too often.
   using i18n::Str;
   using i18n::Utf8;
   capabilities.modes = {
-      {kModeAuto, Utf8(Str::kModeNormal), Utf8(Str::kCodexModeNormalGloss),
+      {kModeDefault, Utf8(Str::kModeNormal), Utf8(Str::kCodexModeNormalGloss),
        true, true},
+      {kModeAuto, Utf8(Str::kModeAuto), Utf8(Str::kCodexModeAutoGloss), true,
+       false},
       {kModePlan, Utf8(Str::kModePlan), Utf8(Str::kModePlanGloss), true,
        false},
       {kModeReadOnly, Utf8(Str::kCodexModeReadOnly),
@@ -340,13 +352,23 @@ agent::Capabilities CodexCapabilities() {
 
 std::string ModeFromSettings(const Json& approvalPolicy,
                              const Json& sandboxPolicy,
+                             const std::string& reviewer,
                              const std::string& collaboration) {
   if (collaboration == "plan") return kModePlan;
   const std::string approval =
       approvalPolicy.is_string() ? approvalPolicy.get<std::string>() : "";
   const std::string sandbox = StringField(sandboxPolicy, "type");
-  if (approval == "on-request" && sandbox == "workspaceWrite") return kModeAuto;
-  if (approval == "on-request" && sandbox == "readOnly") return kModeReadOnly;
+  // The reviewer matters only where something is asked.  Under "never"
+  // nothing is put to anyone, so full access is full access whoever would
+  // have answered.
+  const bool user = reviewer.empty() || reviewer == "user";
+  if (approval == "on-request" && sandbox == "workspaceWrite") {
+    if (user) return kModeDefault;
+    if (reviewer == "auto_review") return kModeAuto;
+  }
+  if (approval == "on-request" && sandbox == "readOnly" && user) {
+    return kModeReadOnly;
+  }
   if (approval == "never" && sandbox == "dangerFullAccess") {
     return kModeFullAccess;
   }
@@ -357,13 +379,18 @@ std::string ModeFromThreadSettings(const Json& threadSettings) {
   return ModeFromSettings(
       Field(threadSettings, "approvalPolicy"),
       Field(threadSettings, "sandboxPolicy"),
+      StringField(threadSettings, "approvalsReviewer"),
       StringField(Field(threadSettings, "collaborationMode"), "mode"));
 }
 
 bool SettingsForMode(const std::string& mode, ModeSettings* out) {
   ModeSettings settings;
   settings.collaboration = "default";
-  if (mode == kModeAuto) {
+  // Every preset names its reviewer, the ones that do not use it too: one
+  // left out keeps whatever the mode before it set, so leaving auto for
+  // read-only would take the reviewer along.
+  settings.reviewer = mode == kModeAuto ? "auto_review" : "user";
+  if (mode == kModeDefault || mode == kModeAuto) {
     settings.approvalPolicy = "on-request";
     settings.sandbox = "workspace-write";
     settings.sandboxPolicy = {{"type", "workspaceWrite"},
@@ -648,10 +675,32 @@ std::vector<agent::Event> Translator::Translate(const Json& message) {
       } else {
         running_.erase(found);
       }
-      events.push_back(agent::ToolCallFinished{ToolResultFromItem(item)});
+      agent::ToolResult result = ToolResultFromItem(item);
+      auto denied = deniedByReviewer_.find(id);
+      if (denied != deniedByReviewer_.end()) {
+        // A call the reviewer refused comes back "declined" and empty, the
+        // same as one the reader refused, and "denied" alone would say the
+        // reader did it.  Who said no and why is the whole result.
+        result.text = i18n::Utf8(i18n::Str::kAutoReviewDenied);
+        if (!denied->second.empty()) result.text += ": " + denied->second;
+        result.isError = true;
+        deniedByReviewer_.erase(denied);
+      }
+      events.push_back(agent::ToolCallFinished{std::move(result)});
     } else if (!TranslateMessageItem(item, &events, true)) {
       events.push_back(
           agent::Unrecognised{"item/" + StringField(item, "type")});
+    }
+  } else if (method == "item/autoApprovalReview/completed") {
+    // The reviewer of the auto mode answered what would have been put to the
+    // reader.  A yes says nothing: the call runs and its result says the
+    // rest, as after the reader's own yes.  A no is kept for the item it
+    // judged -- targetItemId is that item's id (measured, never-review-*.log)
+    // -- and told there, because the item ends with no output at all.
+    const Json& review = Field(params, "review");
+    if (StringField(review, "status") == "denied") {
+      deniedByReviewer_[StringField(params, "targetItemId")] =
+          StringField(review, "rationale");
     }
   } else if (method == "turn/completed") {
     // A call still running is NOT forgotten here.  Interrupting the turn does

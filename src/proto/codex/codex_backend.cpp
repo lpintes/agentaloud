@@ -120,6 +120,7 @@ Json CodexBackend::ThreadParams(const std::string& mode) const {
   if (SettingsForMode(mode, &settings) && settings.permissions) {
     params["approvalPolicy"] = settings.approvalPolicy;
     params["sandbox"] = settings.sandbox;
+    params["approvalsReviewer"] = settings.reviewer;
   }
   return params;
 }
@@ -138,6 +139,9 @@ bool CodexBackend::SendSettings(const std::string& mode) {
   if (settings.permissions) {
     params["approvalPolicy"] = settings.approvalPolicy;
     params["sandboxPolicy"] = settings.sandboxPolicy;
+    // Left out, the reviewer stays what it was (measured,
+    // never-settings.log), so every preset sends its own.
+    params["approvalsReviewer"] = settings.reviewer;
   }
   // Every preset says plan or not: leaving plan is part of moving to any of
   // them.  The collaboration mode has to name a model; the thread's own is
@@ -444,6 +448,7 @@ void CodexBackend::OnThreadOpened(const Json& result, bool resumed) {
     if (!model.empty()) model_ = model;
     mode_.Reported(ModeFromSettings(
         Field(result, "approvalPolicy"), Field(result, "sandbox"),
+        StringField(result, "approvalsReviewer"),
         StringField(Field(result, "collaborationMode"), "mode")));
     ready_ = true;
     modeAfterOpen.swap(modeAfterOpen_);

@@ -135,7 +135,19 @@ Logy: C:/b/codex-probe/logs/never-*.log. ~/.codex sa nemeni (len -c a parametre 
   commandExecution status "declined", model: "Rejected(\"rejected by user\")".
 - Teda: turn/start prepina recenzenta oboma smermi a thread/settings/updated to ohlasi.
 
+### approvalsReviewer v thread/settings/update a thread/resume (never-settings*.log, bez tahu)
+- thread/settings/update (threadId, approvalPolicy, sandboxPolicy, collaborationMode ako appka
+  v SendSettings) + `approvalsReviewer` "auto_review" / "user" -> result {} a
+  thread/settings/updated s novou hodnotou. (Metoda v generate-ts chyba, ale funguje.)
+- thread/settings/updated chodi LEN pri zmene: ten isty reviewer poslany znova notifikaciu nema.
+- Pole VYNECHANE alebo `null` -> hodnota ZOSTANE (nie navrat na "user"): po vynechani aj po null
+  nasledne poslanie predchadzajucej hodnoty nevyvolalo ziadnu notifikaciu (= bez zmeny), kym
+  poslanie inej hodnoty ju vyvolalo. Odmerane oboma smermi (auto_review aj user).
+- thread/resume {threadId, approvalsReviewer, approvalPolicy, sandbox} v novom procese prijme
+  "auto_review" aj "user"; odpoved nesie approvalsReviewer s poslanou hodnotou. thread/settings/updated
+  pri resume neprislo (hodnota je v odpovedi). Obnovene vlakno 01a1154c-04bd... (z review-switch).
+
 ## Stav na konci (7. 10. 2026)
 Vsetky tri otazky zodpovedane. ~/.codex nezmeneny (len -c a parametre RPC).
-Neodskusane (po 2. kole): granular approvalPolicy, zamietnutie MCP recenzentom, thread/settings/update s approvalsReviewer,
+Neodskusane (po 2. kole): granular approvalPolicy, zamietnutie MCP recenzentom,
 `guardian_subagent`, never + MCP s ineho nastroja nez fakecu (skutocny computer use plugin tu nie je).
