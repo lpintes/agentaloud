@@ -31,6 +31,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <cwctype>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -605,6 +606,82 @@ void TestBookmarksSurviveCollapsing() {
   bookmarks.Set(5, mark);
   CHECK(bookmarks.Get(5).set);
   CHECK_EQ(bookmarks.Get(5).blockId, transcript.blocks()[2].id);
+}
+
+void TestFindSearchesCollapsedBlocks() {
+  TEST("transcript: hladanie vidi aj do zbaleneho bloku a pretoci sa");
+  model::Transcript transcript;
+  transcript.AppendUserPrompt(L"prompt");
+  proto::Json assistant = proto::Json::parse(R"({
+    "type": "assistant",
+    "message": {"content": [
+      {"type": "thinking", "thinking": "riadok jeden\nIHLA v kope\nriadok tri"},
+      {"type": "text", "text": "odpoved bez nej\na ihla na konci"}
+    ]}
+  })");
+  transcript.Append(proto::TranslateRecord(assistant));
+  CHECK_EQ(transcript.blocks().size(), size_t{3});
+  CHECK(transcript.blocks()[1].collapsed);
+
+  // Model nesmie tahat windows.h, takze test sklada velkost pismen sam.
+  const model::Transcript::Fold fold = [](const std::wstring& text) {
+    std::wstring folded = text;
+    for (wchar_t& c : folded) c = static_cast<wchar_t>(std::towlower(c));
+    return folded;
+  };
+  auto offsetOf = [&transcript](const model::SearchHit& hit) {
+    return transcript.blocks()[hit.index].start + hit.offset;
+  };
+
+  // Vyskyt je za zbalenym riadkom: najde sa a po rozbaleni sedi offset.
+  auto hit = transcript.Find(L"ihla", 0, false, fold);
+  CHECK(hit.has_value());
+  CHECK_EQ(hit->index, size_t{1});
+  CHECK(!hit->wrapped);
+  std::string problem;
+  CHECK(!transcript.SetCollapsed(1, false).empty());
+  CHECK(transcript.CheckInvariants(&problem));
+  const size_t first = offsetOf(*hit);
+  CHECK_EQ(transcript.LineAt(first), std::wstring(L"IHLA v kope"));
+
+  // Dalej od nalezu, nie od zaciatku bloku.
+  hit = transcript.Find(L"ihla", first, false, fold);
+  CHECK(hit.has_value());
+  CHECK_EQ(hit->index, size_t{2});
+  CHECK(!hit->wrapped);
+  const size_t second = offsetOf(*hit);
+  CHECK_EQ(transcript.LineAt(second), std::wstring(L"a ihla na konci"));
+
+  // Za poslednym sa pretoci a musi to povedat.
+  hit = transcript.Find(L"ihla", second, false, fold);
+  CHECK(hit.has_value());
+  CHECK(hit->wrapped);
+  CHECK_EQ(offsetOf(*hit), first);
+
+  // Dozadu to iste zrkadlovo.
+  hit = transcript.Find(L"ihla", second, true, fold);
+  CHECK(hit.has_value());
+  CHECK(!hit->wrapped);
+  CHECK_EQ(offsetOf(*hit), first);
+  hit = transcript.Find(L"ihla", first, true, fold);
+  CHECK(hit.has_value());
+  CHECK(hit->wrapped);
+  CHECK_EQ(offsetOf(*hit), second);
+
+  // Jediny vyskyt sa najde znova, s pretocenim -- inak by F3 znelo ako nic.
+  CHECK(!transcript.SetCollapsed(1, true).empty());
+  hit = transcript.Find(L"kope", transcript.blocks()[1].start, false, fold);
+  CHECK(hit.has_value());
+  CHECK_EQ(hit->index, size_t{1});
+  hit = transcript.Find(L"konci", offsetOf(*transcript.Find(L"konci", 0, false,
+                                                             fold)),
+                        false, fold);
+  CHECK(hit.has_value());
+  CHECK(hit->wrapped);
+  CHECK_EQ(hit->index, size_t{2});
+
+  CHECK(!transcript.Find(L"seno", 0, false, fold).has_value());
+  CHECK(!transcript.Find(L"", 0, false, fold).has_value());
 }
 
 void TestRateLimitParsing() {
@@ -3378,6 +3455,7 @@ int main(int argc, char** argv) {
   TestInterruptLeavesAMark();
   TestToolResultsSitBehindTheirCall();
   TestBookmarksSurviveCollapsing();
+  TestFindSearchesCollapsedBlocks();
   TestRateLimitParsing();
   TestInitializeResponseParsing();
   TestPermissionModeSwitch();

@@ -102,6 +102,15 @@ struct Edit {
   bool empty() const { return removed == 0 && inserted.empty(); }
 };
 
+// Where Transcript::Find landed.  The offset is into the block's text as it
+// reads EXPANDED, which is the text in the buffer only when the block is not
+// collapsed -- the caller expands it first and then adds the block's start.
+struct SearchHit {
+  size_t index = 0;
+  size_t offset = 0;
+  bool wrapped = false;  // went past the end (or the start) to get here
+};
+
 class Transcript {
  public:
   // Added when the prompt is sent, not when the stream echoes it back: the
@@ -181,6 +190,24 @@ class Transcript {
   // nothing about a caret it did not move, every jump has to say it instead.
   std::wstring FirstLine(size_t index) const;
 
+  // Ctrl+F and F3.  Searches the blocks, not the buffer: a collapsed block
+  // shows one line, and the tool output folded behind it is exactly what gets
+  // searched for most.  Each block is searched as it would read expanded, so
+  // a hit there means the caller has to expand it to show it.
+  //
+  // Starts just past the caret (just before it, backwards) and wraps round
+  // once, so a single match is found again from anywhere -- with wrapped set,
+  // because the reader has to hear that the search went round.  A match does
+  // not span two blocks.
+  //
+  // `fold` makes the comparison case-blind, and must keep the length of the
+  // text: the offsets it returns are offsets into the unfolded text.  It is
+  // passed in because the only fold that knows Slovak is CharLowerBuffW, and
+  // model/ does not pull in windows.h.
+  using Fold = std::function<std::wstring(const std::wstring&)>;
+  std::optional<SearchHit> Find(const std::wstring& needle, size_t caret,
+                                bool backwards, const Fold& fold) const;
+
   // Records we did not recognise.  Not an error and not shown: Claude Code
   // gains record types between releases, and an application that stopped at
   // the first one would break on somebody else's schedule.  The soak tests
@@ -206,6 +233,8 @@ class Transcript {
   // the result is rendered as any tool's would be.
   const Block* CallFor(const std::string& toolUseId) const;
   std::wstring Render(const Block& block) const;
+  // What a block reads as once expanded; its text in the buffer otherwise.
+  std::wstring ExpandedText(size_t index) const;
   void NoteUnknown(const std::string& type);
 
   std::wstring text_;

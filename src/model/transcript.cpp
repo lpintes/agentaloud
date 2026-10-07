@@ -825,6 +825,55 @@ std::wstring Transcript::FirstLine(size_t index) const {
   return LineAt(blocks_[index].start);
 }
 
+std::wstring Transcript::ExpandedText(size_t index) const {
+  const Block& block = blocks_[index];
+  if (!block.collapsed || !block.collapsible) {
+    return text_.substr(block.start, block.length);
+  }
+  Block open = block;
+  open.collapsed = false;
+  return Render(open);
+}
+
+std::optional<SearchHit> Transcript::Find(const std::wstring& needle,
+                                          size_t caret, bool backwards,
+                                          const Fold& fold) const {
+  if (needle.empty() || blocks_.empty()) return std::nullopt;
+  const std::wstring folded = fold(needle);
+  const size_t count = blocks_.size();
+  const size_t here = *BlockAt(caret);
+  const Block& block = blocks_[here];
+  const size_t inside = caret > block.start ? caret - block.start : 0;
+  // The caret in the expanded text of its own block.  In an expanded block
+  // that is the same offset; in a collapsed one the line on screen is not the
+  // text searched, so the caret counts as standing at the block's start, or,
+  // anywhere past it, at its end.
+  size_t at = inside;
+  if (block.collapsed && block.collapsible && inside > 0) {
+    at = backwards ? std::wstring::npos : 0;
+  }
+
+  // count + 1 steps: the last one is the caret's own block again, for the
+  // part of it the first step skipped.
+  for (size_t step = 0; step <= count; ++step) {
+    const size_t index = backwards ? (here + count - step % count) % count
+                                   : (here + step) % count;
+    const std::wstring hay = fold(ExpandedText(index));
+    size_t pos = std::wstring::npos;
+    if (step != 0) {
+      pos = backwards ? hay.rfind(folded) : hay.find(folded);
+    } else if (backwards) {
+      if (at != 0) pos = hay.rfind(folded, at == std::wstring::npos ? at : at - 1);
+    } else {
+      pos = hay.find(folded, at + 1);
+    }
+    if (pos == std::wstring::npos) continue;
+    const bool wrapped = backwards ? step > here : here + step >= count;
+    return SearchHit{index, pos, wrapped};
+  }
+  return std::nullopt;
+}
+
 bool Transcript::CheckInvariants(std::string* problem) const {
   size_t expected = 0;
   for (size_t i = 0; i < blocks_.size(); ++i) {
