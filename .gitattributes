@@ -1,0 +1,8 @@
+# Konce riadkov su v indexe LF, vsade a pre kazdy nastroj. Zmiesany stav
+# (par suborov CRLF, zvysok LF) znamenal, ze sed -i z Git Bash ticho prepisal
+# CRLF subor na LF a commit potom zmenil kazdy jeho riadok (claude-gui-lkk.64).
+* text=auto eol=lf
+
+# Cudzi kod a artefakty: bajty sa nemenia nikdy, ani pri checkoute.
+vendor/** -text
+tests/fixtures/** -text
