@@ -28,6 +28,11 @@ struct Mark {
   bool set = false;
   size_t blockId = 0;
   size_t offset = 0;  // characters from the start of that block
+  // Which form of the block that distance was measured in.  The collapsed
+  // and the expanded form share no line but the first, and even that one
+  // reads differently (the expanded one carries a heading), so a distance
+  // means something only in the form it was taken in.
+  bool collapsed = false;
 };
 
 class Bookmarks {
@@ -51,6 +56,15 @@ Mark MarkAt(const Transcript& transcript, size_t offset);
 // restoring a session (claude-gui-lkk.7) will make it possible.  The block is
 // looked up by id, so an insertion anywhere above it changes nothing here.
 std::optional<size_t> OffsetOf(const Transcript& transcript, const Mark& mark);
+
+// The block to expand before OffsetOf, when the mark sits past the first line
+// of a block that has been collapsed since (claude-gui-lkk.5.30).  Without it
+// the mark is clamped onto the summary and the reader has to expand and press
+// the key a second time.  A mark on the first line expands nothing: that line
+// is the summary in either form, and expanding a block the reader did not ask
+// into would put hundreds of lines under them for nothing.
+std::optional<size_t> BlockToExpand(const Transcript& transcript,
+                                    const Mark& mark);
 
 }  // namespace model
 

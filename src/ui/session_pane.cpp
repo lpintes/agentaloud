@@ -928,7 +928,13 @@ void SessionPane::GoToBookmark(size_t slot) {
                                       {std::to_wstring(slot)}));
     return;
   }
-  GoToOffset(*offset);
+  // Expanded the way a search expands its hit, and through Apply for the same
+  // reason (invariant 3).  The line said is the marked one, and the heading
+  // above it says the block is open to anyone who reads up.
+  if (const std::optional<size_t> index = model::BlockToExpand(model_, mark)) {
+    Apply(model_.SetCollapsed(*index, false));
+  }
+  GoToOffset(*model::OffsetOf(model_, mark));
 }
 
 void SessionPane::GoToOffset(size_t offset) {

@@ -608,6 +608,58 @@ void TestBookmarksSurviveCollapsing() {
   CHECK_EQ(bookmarks.Get(5).blockId, transcript.blocks()[2].id);
 }
 
+void TestBookmarkIntoCollapsedBlock() {
+  TEST("bookmarks: znacka vo vnutri zbaleneho bloku ho rozbali (lkk.5.30)");
+  model::Transcript transcript;
+  transcript.AppendUserPrompt(L"prompt");
+  proto::Json assistant = proto::Json::parse(R"({
+    "type": "assistant",
+    "message": {"content": [
+      {"type": "thinking", "thinking": "riadok jeden\nriadok dva\nriadok tri"}
+    ]}
+  })");
+  transcript.Append(proto::TranslateRecord(assistant));
+  CHECK_EQ(transcript.blocks().size(), size_t{2});
+  CHECK(transcript.blocks()[1].collapsed);
+  std::string problem;
+
+  // Rozbaleny blok, znacka na riadku "riadok dva", potom sa blok zbali.
+  transcript.SetCollapsed(1, false);
+  const std::wstring& text = transcript.Text();
+  const size_t start = transcript.blocks()[1].start;
+  const size_t two = text.find(L"riadok dva", start);
+  const model::Mark deep = model::MarkAt(transcript, two);
+  CHECK(!deep.collapsed);
+  const model::Mark heading = model::MarkAt(transcript, start + 2);
+  transcript.SetCollapsed(1, true);
+
+  // Hlboka znacka chce blok rozbalit a po rozbaleni pristane na svojom riadku.
+  const auto expand = model::BlockToExpand(transcript, deep);
+  CHECK(expand.has_value());
+  CHECK_EQ(*expand, size_t{1});
+  // Bez rozbalenia nie je kam inam nez na zaciatok bloku.
+  CHECK_EQ(*model::OffsetOf(transcript, deep), start);
+  transcript.SetCollapsed(1, false);
+  CHECK(transcript.CheckInvariants(&problem));
+  CHECK_EQ(transcript.LineAt(*model::OffsetOf(transcript, deep)),
+           std::wstring(L"riadok dva"));
+  CHECK(!model::BlockToExpand(transcript, deep).has_value());
+
+  // Znacka na nadpise rozbaleneho bloku nic nerozbaluje: prvy riadok je
+  // suhrn v oboch tvaroch.
+  transcript.SetCollapsed(1, true);
+  CHECK(!model::BlockToExpand(transcript, heading).has_value());
+  CHECK_EQ(*model::OffsetOf(transcript, heading), start);
+
+  // Znacka na zbalenom suhrne po rozbaleni pristane na nadpise, nie o kus
+  // nizsie -- jej odstup bol merany v inom texte.
+  const model::Mark onSummary = model::MarkAt(transcript, start + 5);
+  CHECK(onSummary.collapsed);
+  transcript.SetCollapsed(1, false);
+  CHECK(!model::BlockToExpand(transcript, onSummary).has_value());
+  CHECK_EQ(*model::OffsetOf(transcript, onSummary), start);
+}
+
 void TestFindSearchesCollapsedBlocks() {
   TEST("transcript: hladanie vidi aj do zbaleneho bloku a pretoci sa");
   model::Transcript transcript;
@@ -3455,6 +3507,7 @@ int main(int argc, char** argv) {
   TestInterruptLeavesAMark();
   TestToolResultsSitBehindTheirCall();
   TestBookmarksSurviveCollapsing();
+  TestBookmarkIntoCollapsedBlock();
   TestFindSearchesCollapsedBlocks();
   TestRateLimitParsing();
   TestInitializeResponseParsing();

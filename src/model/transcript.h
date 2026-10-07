@@ -190,6 +190,11 @@ class Transcript {
   // nothing about a caret it did not move, every jump has to say it instead.
   std::wstring FirstLine(size_t index) const;
 
+  // What a block reads as once expanded; its text in the buffer otherwise.
+  // Find searches this, and a bookmark measured in the expanded form asks it
+  // where the first line ends.
+  std::wstring ExpandedText(size_t index) const;
+
   // Ctrl+F and F3.  Searches the blocks, not the buffer: a collapsed block
   // shows one line, and the tool output folded behind it is exactly what gets
   // searched for most.  Each block is searched as it would read expanded, so
@@ -233,8 +238,6 @@ class Transcript {
   // the result is rendered as any tool's would be.
   const Block* CallFor(const std::string& toolUseId) const;
   std::wstring Render(const Block& block) const;
-  // What a block reads as once expanded; its text in the buffer otherwise.
-  std::wstring ExpandedText(size_t index) const;
   void NoteUnknown(const std::string& type);
 
   std::wstring text_;
