@@ -1,0 +1,6 @@
+# Commity, ktore git blame preskoci:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# GitHub ho cita sam.
+
+# repo: konce riadkov LF cez .gitattributes, jednorazova renormalizacia
+104b5dbf37babbed7488a6c6d90686d74389e9ef

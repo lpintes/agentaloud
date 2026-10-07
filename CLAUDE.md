@@ -277,11 +277,19 @@ značky je to `0.0.0-<hash>` alebo `<značka>-N-g<hash>`, s `-dirty` pri
 necommitnutých zmenách. Hlavička sa prepíše len pri zmene obsahu, takže
 preklad bez nového commitu neprekladá nič.
 
-Runner má `core.autocrlf=true`, a preto ho workflow pred checkoutom vypína:
-`build.sh` s CRLF bash zhodí a fixtúry by sa zmenili pod testami. Riešenie cez
-`.gitattributes` `eol=lf` zamietnuté — pár súborov (CLAUDE.md, AGENTS.md,
-`transcript.cpp`, `test_main.cpp`) je v indexe CRLF a renormalizácia by ich
-prepísala celé.
+**Konce riadkov sú LF, a drží ich `.gitattributes`** (`* text=auto eol=lf`;
+`vendor/` a `tests/fixtures/` sú `-text`, ich bajty sa nemenia). Kým tam
+nebol, mal index pár súborov CRLF a zvyšok LF, a `sed -i` z Git Bash — ktorý
+CR zahadzuje, kým nedostane `-b` — taký súbor ticho prepísal celý; commit
+potom zmenil každý riadok (claude-gui-lkk.64). Renormalizácia bola kedysi
+zamietnutá práve preto, že tie súbory prepíše celé — no to je cena raz,
+zmiešaný stav sa platil pri každej úprave. Commit renormalizácie je
+v `.git-blame-ignore-revs`; `git blame` ho preskočí s
+`git config blame.ignoreRevsFile .git-blame-ignore-revs`.
+
+Runner má `core.autocrlf=true` a workflow ho pred checkoutom stále vypína:
+`build.sh` s CRLF bash zhodí a fixtúry by sa zmenili pod testami. Odkedy je
+`.gitattributes`, je to len poistka.
 
 Repozitár je od 5. 10. 2026 verejný, a na tom stojí updater: súbor
 z vydania súkromného repozitára sa bez prihlásenia stiahnuť nedá

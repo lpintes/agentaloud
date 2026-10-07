@@ -40,9 +40,8 @@ jobs:
       # Strom ma byt po bajtoch ten isty ako u autora, kde je autocrlf false.
       # Windowsovy runner ma true, takze by build.sh dostal CRLF (bash na nom
       # zlyha az za behu, na `\r` v premennej) a fixtury aj raw literaly
-      # v testoch by sa zmenili pod testami.  .gitattributes s eol=lf by to
-      # vyriesilo tiez, ale par suborov je v indexe CRLF a renormalizacia by
-      # ich prepisala cele.
+      # v testoch by sa zmenili pod testami.  Od claude-gui-lkk.64 to drzi
+      # .gitattributes (eol=lf), takze tento krok je uz len poistka.
       - name: Konce riadkov
         shell: pwsh
         run: git config --global core.autocrlf false
