@@ -616,8 +616,11 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     nečaká, je ten istý priestupok z druhej strany, a rozhoduje o tom
     `ui::SessionPane::WantsProgressSpeech`:
 
-      1. **Okno nie je v popredí.** Čokoľvek čitateľ práve robí, nie je to
-         toto. Mlčí sa. Koniec ťahu je výnimka, ale **zvukom, nie vetou** —
+      1. **Okno nie je v popredí — alebo session nie je aktívna.** Čokoľvek
+         čitateľ práve robí, nie je to toto. Session za inou session (MDI,
+         invariant 24) je na tom rovnako ako okno za inou aplikáciou; panel
+         sa to dozvie od hostiteľa (`SessionPane::SetActive`), sám sa pýtať
+         nesmie. Mlčí sa. Koniec ťahu je výnimka, ale **zvukom, nie vetou** —
          kto medzitým píše mail, zruší našu vetu prvým stlačením klávesy, lebo
          NVDA pri písaní reč ruší, a „hotovo" zanikne uprostred. Reč je na
          pozadí nespoľahlivý nosič z princípu, nie kvôli nášmu kódu. Zvuk vo
@@ -1377,10 +1380,57 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     čo appka berie ako „nie je vydanie" a mlčí. Naostro sa to dá overiť až
     s dvoma vydaniami.
 
+24. **Viac sessions je MDI, a session nevie, čo ju hostí.** Rám
+    (`ui::MainWindow`) má menu Súbor a Okno, MDICLIENT a jeden stavový
+    riadok; každá session je MDI child (`ui::SessionWindow`) s jedným
+    `SessionPane` (claude-gui-lkk.7.9). MDI a nie taby:
+    Ctrl+Tab, Ctrl+F4 a zoznam okien v menu čitateľ pozná a NVDA ich číta
+    dobre. Panel sa ďalej nepýta na rodiča; čo potrebuje vedieť, mu povie
+    hostiteľ — `SetActive` (reč, invariant 11) a `SetStatusBar` (bar dostane
+    len aktívna session a panel mu pri tom odovzdá všetky štyri polia, ktoré
+    si drží sám, aj prázdne).
+
+    Štyri veci na tom zlyhávajú ticho:
+
+      • **Child bez `WS_MAXIMIZEBOX` sa nedá maximalizovať.** Prvý vznikne
+        maximalizovaný (`WS_MAXIMIZE`), ale Ctrl+Tab, Ctrl+F4 aj
+        `WM_MDIMAXIMIZE` nechajú ďalší obnovený a rám stratí cestu
+        z titulku. Odmerané 7. 10. 2026; s tým bitom prenáša maximalizáciu
+        MDI klient sám.
+      • **Holý MDI child NVDA neohlási.** Pri zmene fokusu hovorí
+        kontajnery, do ktorých fokus vošiel, ale klientsku oblasť obyčajného
+        okna len vtedy, keď má okno `WS_SYSMENU` (`isPresentableFocusAncestor`
+        v `NVDAObjects/IAccessible`) — a ten MDI klient maximalizovanému
+        childu **berie** (odmerané). Ctrl+Tab aj Ctrl+F4 preto povedali len
+        „prompt" a do ktorej session sa prešlo, nebolo počuť (7. 10. 2026,
+        používaním). `SessionWindow::Annotate` preto dá klientskej oblasti
+        cez Dynamic Annotation (`IAccPropServices`) rolu zoskupenia a meno
+        priečinka; zoskupenie s menom NVDA hovorí vždy. `WS_SYSMENU` child
+        nemá: v menu bare by pribudla ikona bez mena pred „Súbor" a tri
+        tlačidlá, a NVDA by to aj tak nepomohlo. Overiť naostro sa to dá
+        `AccessibleObjectFromWindow(OBJID_CLIENT)`; UI Automation okno
+        a klienta zlúči a anotáciu neukáže.
+      • **Klávesy rámu sú v jeho tabuľke akcelerátorov, nie
+        v `TranslateMDISysAccel`.** Ten chodí cez systémové menu childu,
+        ktoré nie je. Ctrl+N, Ctrl+Tab/Ctrl+F6 (aj so Shiftom) a Ctrl+F4
+        chytá `TranslateAcceleratorW` v `win::RunMdiMessageLoop`, teda skôr,
+        než ich uvidí prompt — Ctrl+Tab predtým prompt bral ako Tab.
+      • **Session z menu nepokračuje v rozhovore.** `--resume`, `-c` aj
+        slová za `--` platia len pre prvú: druhé použitie toho istého id CLI
+        odmietne (invariant 14). Backend a priečinok dialóg predvyplní
+        naposledy zvolenými.
+
+    Klávesa rámu, ktorá nemá čo urobiť (Ctrl+Tab pri jednej session, čokoľvek
+    bez session), to povie vlastnou `Speech` rámu — panel, cez ktorý by
+    hovoril, nemusí existovať. Zatvorením poslednej session appka nekončí;
+    rám zostane prázdny so zmazaným stavovým riadkom, a ten treba zmazať, inak
+    by NVDA+End čítal fakty session, ktorá už nebeží.
+
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa
-rozídu, titulok okna sa zmení na **„AgentAloud — NESÚLAD MAPY ROZSAHOV"**
-(po anglicky „RANGE MAP MISMATCH"). Ak
+rozídu, titulok tej session sa zmení na **„<cesta> — NESÚLAD MAPY ROZSAHOV"**
+(po anglicky „RANGE MAP MISMATCH") a rám ho ukáže v zátvorke za svojím menom,
+kým je tá session aktívna. Ak
 to niekedy uvidíš, neladí invariant 3, 4 alebo 8 a navigácia bude zameriavať
 zle. Raz sa to už stalo (6. 9. 2026) a bol to `NUL` z binárky — hľadaj teda
 najprv znak, ktorý widget spočíta inak než model, a hľadaj ho v poslednom

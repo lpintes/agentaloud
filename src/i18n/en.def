@@ -139,6 +139,24 @@ S(kKeysCommands,
   L"F4 — list of slash commands. The chosen one goes into the prompt, unsent.\n")
 S(kKeysNoCommands, L"F4 — list of slash commands; this agent has none.\n")
 S(kKeysCopyId, L"Ctrl+Shift+C — copies the session id to the clipboard.")
+S(kKeysSessions,
+  L"\n\n"
+  L"More sessions:\n"
+  L"Ctrl+N — new session, in another window.\n"
+  L"Ctrl+Tab or Ctrl+F6 — next session, "
+  L"Ctrl+Shift+Tab or Ctrl+Shift+F6 — previous.\n"
+  L"Ctrl+F4 — closes the session. Alt+F4 — quits the application.\n"
+  L"Alt — the menu; Window in it lists the open sessions.")
+
+S(kMenuFile, L"&File")
+S(kMenuNewSession, L"&New session...\tCtrl+N")
+S(kMenuExit, L"E&xit\tAlt+F4")
+S(kMenuWindow, L"&Window")
+S(kMenuNextSession, L"&Next session\tCtrl+Tab")
+S(kMenuPreviousSession, L"&Previous session\tCtrl+Shift+Tab")
+S(kMenuCloseSession, L"&Close session\tCtrl+F4")
+S(kSayNoSession, L"no session is open")
+S(kSayOnlySession, L"this is the only open session")
 
 // Dialog templates.  Access keys chosen so that none repeats in a dialog.
 S(kDlgDetailsCaption, L"session details")

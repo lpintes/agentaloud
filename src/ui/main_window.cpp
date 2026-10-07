@@ -1,37 +1,203 @@
 #include "ui/main_window.h"
 
+#include <algorithm>
 #include <string>
 
 #include "app_name.h"
 #include "i18n/i18n.h"
 
 namespace ui {
+namespace {
+
+// Menu commands, and the accelerators that send the same ids.  Far below the
+// MDI client's window list, which counts up from kFirstChild.
+enum : UINT {
+  kIdNewSession = 40001,
+  kIdExit,
+  kIdNextSession,
+  kIdPreviousSession,
+  kIdCloseSession,
+};
+constexpr UINT kFirstChild = 50000;
+
+// A session window has gone and its object can be dropped.  Posted by the
+// child from WM_DESTROY -- it is still inside its own window procedure then.
+constexpr UINT kMsgReap = WM_APP + 20;
+
+HMENU BuildMenu(HMENU* windowMenu) {
+  using i18n::Str;
+  HMENU file = CreatePopupMenu();
+  AppendMenuW(file, MF_STRING, kIdNewSession, i18n::Text(Str::kMenuNewSession));
+  AppendMenuW(file, MF_SEPARATOR, 0, nullptr);
+  AppendMenuW(file, MF_STRING, kIdExit, i18n::Text(Str::kMenuExit));
+
+  // The client appends the list of open sessions below these, by their
+  // titles -- which is why a session's title is its folder.
+  HMENU window = CreatePopupMenu();
+  AppendMenuW(window, MF_STRING, kIdNextSession,
+              i18n::Text(Str::kMenuNextSession));
+  AppendMenuW(window, MF_STRING, kIdPreviousSession,
+              i18n::Text(Str::kMenuPreviousSession));
+  AppendMenuW(window, MF_STRING, kIdCloseSession,
+              i18n::Text(Str::kMenuCloseSession));
+
+  HMENU bar = CreateMenu();
+  AppendMenuW(bar, MF_POPUP, reinterpret_cast<UINT_PTR>(file),
+              i18n::Text(Str::kMenuFile));
+  AppendMenuW(bar, MF_POPUP, reinterpret_cast<UINT_PTR>(window),
+              i18n::Text(Str::kMenuWindow));
+  *windowMenu = window;
+  return bar;
+}
+
+// The keys of the menu.  Ctrl+F4 and Ctrl+F6 are MDI's own; Ctrl+Tab is what
+// other MDI and tabbed programs use for the same thing, and it reaches the
+// table before either box would see it -- the prompt used to take it as Tab.
+HACCEL BuildAccelerators() {
+  ACCEL table[] = {
+      {FCONTROL | FVIRTKEY, 'N', kIdNewSession},
+      {FCONTROL | FVIRTKEY, VK_TAB, kIdNextSession},
+      {FCONTROL | FSHIFT | FVIRTKEY, VK_TAB, kIdPreviousSession},
+      {FCONTROL | FVIRTKEY, VK_F6, kIdNextSession},
+      {FCONTROL | FSHIFT | FVIRTKEY, VK_F6, kIdPreviousSession},
+      {FCONTROL | FVIRTKEY, VK_F4, kIdCloseSession},
+  };
+  return CreateAcceleratorTableW(table, ARRAYSIZE(table));
+}
+
+}  // namespace
+
+MainWindow::~MainWindow() {
+  if (accelerators_) DestroyAcceleratorTable(accelerators_);
+}
 
 bool MainWindow::Open(HINSTANCE instance,
                       std::unique_ptr<agent::Backend> backend,
-                      const agent::StartOptions& options) {
+                      const agent::StartOptions& options,
+                      NewSessionFactory factory) {
+  instance_ = instance;
+  factory_ = std::move(factory);
+  HMENU windowMenu = nullptr;
+  HMENU menu = BuildMenu(&windowMenu);
   if (!Create(L"" APP_NAME L"Main", L"" APP_NAME,
-              WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, 900, 700, nullptr)) {
+              WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, 900, 700, menu)) {
+    DestroyMenu(menu);
     return false;
   }
-  pane_ = std::make_unique<SessionPane>();
-  if (!pane_->Create(hwnd_, instance)) return false;
+  accelerators_ = BuildAccelerators();
   if (!status_.Create(hwnd_, instance)) return false;
-  pane_->SetStatusBar(&status_);
+
+  CLIENTCREATESTRUCT create = {};
+  create.hWindowMenu = windowMenu;
+  create.idFirstChild = kFirstChild;
+  // MDIS_ALLCHILDSTYLES: the child's style is the one SessionWindow asks
+  // for, every bit of it chosen for a reason, not the client's default.
+  client_ = CreateWindowExW(0, L"MDICLIENT", nullptr,
+                            WS_CHILD | WS_CLIPCHILDREN | WS_VISIBLE |
+                                MDIS_ALLCHILDSTYLES,
+                            0, 0, 0, 0, hwnd_, nullptr, instance, &create);
+  if (!client_) return false;
+  speech_.Open();
 
   RECT client = {};
   GetClientRect(hwnd_, &client);
   Arrange(client.right, client.bottom);
 
-  if (!pane_->Start(std::move(backend), options)) return false;
+  if (!OpenSession(std::move(backend), options)) return false;
   Show(SW_SHOW);
-  pane_->FocusPrompt();
+  if (SessionWindow* active = Active()) active->pane()->FocusPrompt();
   WarnIfMute();
   return true;
 }
 
+bool MainWindow::OpenSession(std::unique_ptr<agent::Backend> backend,
+                             const agent::StartOptions& options) {
+  // Owned before it is opened: a session that fails to start destroys its
+  // window on the way out, and the reap that follows has to find it.
+  sessions_.push_back(std::make_unique<SessionWindow>());
+  SessionWindow* session = sessions_.back().get();
+  return session->Open(client_, instance_, &status_, std::move(backend),
+                       options,
+                       [this] { PostMessageW(hwnd_, kMsgReap, 0, 0); });
+}
+
+void MainWindow::NewSession() {
+  std::unique_ptr<agent::Backend> backend;
+  agent::StartOptions options;
+  if (!factory_ || !factory_(hwnd_, &backend, &options)) return;
+  if (!OpenSession(std::move(backend), options)) {
+    MessageBoxW(hwnd_, i18n::Text(i18n::Str::kSessionStartFailed),
+                L"" APP_NAME, MB_OK | MB_ICONERROR);
+    return;
+  }
+  // The focus follows the new session into its prompt.  The dialog that
+  // asked for it has just closed, so this is the change of focus NVDA
+  // announces -- and the window title it reads with it names the folder.
+  if (SessionWindow* active = Active()) active->pane()->FocusPrompt();
+}
+
+SessionWindow* MainWindow::Active() const {
+  if (!client_) return nullptr;
+  const HWND active =
+      reinterpret_cast<HWND>(SendMessageW(client_, WM_MDIGETACTIVE, 0, 0));
+  for (const auto& session : sessions_) {
+    if (session->handle() == active && session->pane()) return session.get();
+  }
+  return nullptr;
+}
+
+void MainWindow::StepSession(bool backwards) {
+  SessionWindow* active = Active();
+  const size_t open = std::count_if(
+      sessions_.begin(), sessions_.end(),
+      [](const auto& session) { return session->pane() != nullptr; });
+  // Said, not beeped: a key that does nothing has to say why (invariant 6),
+  // and NVDA announces nothing when the focus does not move.
+  if (active == nullptr) {
+    Announce(i18n::Text(i18n::Str::kSayNoSession));
+    return;
+  }
+  if (open < 2) {
+    Announce(i18n::Text(i18n::Str::kSayOnlySession));
+    return;
+  }
+  // The focus goes with the activation (SessionWindow's WM_SETFOCUS), and
+  // NVDA reads the change: the frame's title with the folder in it, then the
+  // box the reader left in that session.
+  SendMessageW(client_, WM_MDINEXT, reinterpret_cast<WPARAM>(active->handle()),
+               backwards ? 1 : 0);
+}
+
+void MainWindow::CloseSession() {
+  SessionWindow* active = Active();
+  if (active == nullptr) {
+    Announce(i18n::Text(i18n::Str::kSayNoSession));
+    return;
+  }
+  SendMessageW(active->handle(), WM_CLOSE, 0, 0);
+}
+
+void MainWindow::Reap() {
+  std::erase_if(sessions_,
+                [](const auto& session) { return session->handle() == nullptr; });
+  if (!sessions_.empty()) return;
+  // The last session's facts would otherwise stay in the bar and be read on
+  // NVDA+End as if it were still running.
+  for (int field = 0; field < StatusBar::kFieldCount; ++field) {
+    status_.Set(static_cast<StatusBar::Field>(field), L"");
+  }
+}
+
+void MainWindow::Announce(const std::wstring& text) {
+  if (speech_.available()) {
+    speech_.Say(text, true);
+    return;
+  }
+  MessageBeep(MB_ICONASTERISK);
+}
+
 void MainWindow::WarnIfMute() {
-  if (!pane_ || pane_->speechInstalled()) return;
+  if (speech_.loaded()) return;
   // A dialog, and not the status bar or the title, because this is the one
   // message the application cannot say itself: without the library it has no
   // voice, and every Announce falls back to a beep.  A dialog is read out by
@@ -52,16 +218,45 @@ void MainWindow::WarnIfMute() {
 
 void MainWindow::Arrange(int width, int height) {
   // The bar first: it decides its own height from the font, and what is left
-  // is what the pane may have.
+  // is what the sessions may have.
   const int barHeight = status_.Resize(width);
-  if (pane_) pane_->Layout(width, height - barHeight);
+  if (client_) MoveWindow(client_, 0, 0, width, height - barHeight, TRUE);
+}
+
+LRESULT MainWindow::Default(UINT message, WPARAM wParam, LPARAM lParam) const {
+  return DefFrameProcW(hwnd_, client_, message, wParam, lParam);
 }
 
 LRESULT MainWindow::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
   switch (message) {
     case WM_SIZE:
+      // Not passed on: DefFrameProcW would stretch the client over the whole
+      // window, status bar included.
       Arrange(LOWORD(lParam), HIWORD(lParam));
       return 0;
+
+    case WM_COMMAND:
+      switch (LOWORD(wParam)) {
+        case kIdNewSession:
+          NewSession();
+          return 0;
+        case kIdExit:
+          SendMessageW(hwnd_, WM_CLOSE, 0, 0);
+          return 0;
+        case kIdNextSession:
+          StepSession(false);
+          return 0;
+        case kIdPreviousSession:
+          StepSession(true);
+          return 0;
+        case kIdCloseSession:
+          CloseSession();
+          return 0;
+        default:
+          // The window list in the menu is DefFrameProcW's.
+          break;
+      }
+      break;
 
     case WM_DPICHANGED: {
       // Windows hands us the rectangle this window should take on the screen
@@ -69,9 +264,11 @@ LRESULT MainWindow::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
       // the size it had at the old scaling, which is the whole cost of asking
       // for the awareness in the first place (see wWinMain).
       //
-      // The font first: the SetWindowPos below sends WM_SIZE, and the layout
+      // The fonts first: the SetWindowPos below sends WM_SIZE, and the layout
       // it triggers has to measure against the font it will actually draw.
-      if (pane_) pane_->OnDpiChanged();
+      for (const auto& session : sessions_) {
+        if (session->pane()) session->pane()->OnDpiChanged();
+      }
       const RECT* suggested = reinterpret_cast<const RECT*>(lParam);
       SetWindowPos(hwnd_, nullptr, suggested->left, suggested->top,
                    suggested->right - suggested->left,
@@ -99,40 +296,26 @@ LRESULT MainWindow::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
       return 0;
 
     case WM_SETFOCUS:
-      // The window itself is never a useful place for focus to sit; a screen
-      // reader would announce the window and then nothing.  Where it goes is
-      // the pane's business: back to the box the reader left, not always the
-      // prompt -- coming back from another application used to cost them
-      // their place in the transcript.
+      // The frame itself is never a useful place for focus to sit; a screen
+      // reader would announce the window and then nothing.  The active
+      // session decides where it goes (SessionWindow's WM_SETFOCUS): back to
+      // the box the reader left, not always the prompt.
       //
-      // Not while a modal box is up: see WM_ACTIVATE above.  RestoreFocus
-      // would aim at a child of a disabled window and quietly do nothing.
-      if (IsWindowEnabled(hwnd_) && pane_) pane_->RestoreFocus();
+      // Not while a modal box is up: see WM_ACTIVATE above.
+      if (IsWindowEnabled(hwnd_)) {
+        if (SessionWindow* active = Active()) SetFocus(active->handle());
+      }
       return 0;
 
-    case kMsgDrain:
-      if (pane_) pane_->OnDrain();
-      return 0;
-
-    case kMsgPermission:
-      return pane_ ? pane_->OnPermission(lParam) : 0;
-
-    case kMsgQuestion:
-      return pane_ ? pane_->OnQuestion(lParam) : 0;
-
-    case kMsgHistory:
-      if (pane_) pane_->OnHistoryPosted();
-      return 0;
-
-    case kMsgQuestionByPrompt:
-      if (pane_) pane_->OnQuestionByPrompt();
+    case kMsgReap:
+      Reap();
       return 0;
 
     case WM_CLOSE:
-      // Let the pane's backend shut the child down in the right order -- the
-      // turn first, the pipe after.  Destroying the window first would take
-      // the message queue away while the reader thread still wants it.
-      pane_.reset();
+      // Every session's backend shut down in the right order -- the turn
+      // first, the pipe after -- while the windows and the queue they post to
+      // are still there.
+      for (const auto& session : sessions_) session->ShutDown();
       DestroyWindow(hwnd_);
       return 0;
 

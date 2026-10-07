@@ -115,6 +115,18 @@ S(kKeysMoving)
 S(kKeysCommands)
 S(kKeysNoCommands)
 S(kKeysCopyId)
+S(kKeysSessions)
+// ui/main_window: the menu bar and the frame's own answers.  The text after a
+// tab is the key, shown at the right edge of the item.
+S(kMenuFile)
+S(kMenuNewSession)
+S(kMenuExit)
+S(kMenuWindow)
+S(kMenuNextSession)
+S(kMenuPreviousSession)
+S(kMenuCloseSession)
+S(kSayNoSession)
+S(kSayOnlySession)
 // Dialog templates (ui/app.rc), put on by ui::LocalizeDialog.  The '&' in a
 // label is its access key, and within one dialog no two may share a letter --
 // that is per language, so each language picks its own.

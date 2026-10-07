@@ -1,40 +1,84 @@
 #ifndef UI_MAIN_WINDOW_H
 #define UI_MAIN_WINDOW_H
 
-// The top-level window.  For now it holds exactly one SessionPane and does
-// little but forward to it; when tabs arrive (claude-gui-lkk.7) this is where
-// they go, and the pane will not have to change.
+// The top-level window: an MDI frame with a menu bar, one status bar, and a
+// session in each child (claude-gui-lkk.7.9).  MDI rather than tabs:
+// Ctrl+Tab, Ctrl+F4 and a window menu listing what is open are what a reader
+// already knows from other MDI programs, and NVDA reads them well.
+//
+// The frame does not know which CLIs exist.  A new session is asked for
+// through NewSessionFactory, which main.cpp provides -- it is the one place
+// that knows the adapters.
 
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
+#include <functional>
 #include <memory>
-#include <string>
+#include <vector>
 
-#include "ui/session_pane.h"
+#include "agent/backend.h"
+#include "ui/session_window.h"
+#include "ui/speech.h"
 #include "ui/status_bar.h"
 #include "win/window.h"
 
 namespace ui {
 
+// Asks the reader what to start -- the dialog Nová session -- and makes it.
+// False when they cancelled, or when what they chose was refused; the
+// factory has said why then.
+using NewSessionFactory =
+    std::function<bool(HWND owner, std::unique_ptr<agent::Backend>* backend,
+                       agent::StartOptions* options)>;
+
 class MainWindow : public win::Window {
  public:
-  // Takes the backend over and hands it on to the pane.
+  ~MainWindow() override;
+
+  // Takes the backend over and hands it on to the first session.
   bool Open(HINSTANCE instance, std::unique_ptr<agent::Backend> backend,
-            const agent::StartOptions& options);
+            const agent::StartOptions& options, NewSessionFactory factory);
+
+  // For win::RunMdiMessageLoop.
+  HACCEL accelerators() const { return accelerators_; }
 
  protected:
   LRESULT HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) override;
+  LRESULT Default(UINT message, WPARAM wParam, LPARAM lParam) const override;
 
  private:
-  // Status bar along the bottom, pane above it.
+  bool OpenSession(std::unique_ptr<agent::Backend> backend,
+                   const agent::StartOptions& options);
+  // The menu items and their keys.
+  void NewSession();
+  void StepSession(bool backwards);
+  void CloseSession();
+  // The session the reader is in, or null when none is open.
+  SessionWindow* Active() const;
+  // Drops the sessions whose windows are gone.  Posted, never called from a
+  // child's own window procedure.
+  void Reap();
+  // Status bar along the bottom, the MDI client above it.
   void Arrange(int width, int height);
   // Says out loud -- through a dialog, the only way left -- that the speech
   // library is missing.  Once, at startup.
   void WarnIfMute();
+  // The frame's own answer to a key -- with no session open there is no pane
+  // to speak through.  Interrupts, being an answer to a key (invariant 7),
+  // and beeps without a reader, like the pane does (invariant 6).
+  void Announce(const std::wstring& text);
 
  private:
-  // Below the pane and outside it: with tabs there will be several panes and
-  // still one bar.
+  Speech speech_;
+  HINSTANCE instance_ = nullptr;
+  HWND client_ = nullptr;
+  HACCEL accelerators_ = nullptr;
+  NewSessionFactory factory_;
+  // Below the client and outside it: one bar for all the sessions, showing
+  // the active one.
   StatusBar status_;
-  std::unique_ptr<SessionPane> pane_;
+  std::vector<std::unique_ptr<SessionWindow>> sessions_;
 };
 
 }  // namespace ui

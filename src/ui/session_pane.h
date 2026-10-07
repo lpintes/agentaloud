@@ -56,10 +56,18 @@ constexpr UINT kMsgQuestionByPrompt = WM_APP + 5;
 class SessionPane {
  public:
   bool Create(HWND host, HINSTANCE instance);
-  // The bar belongs to the window, not to the pane -- with tabs there will be
-  // several panes and one bar (claude-gui-lkk.7).  May stay null; everything
-  // here works without it, it just has nowhere to put the four facts.
-  void SetStatusBar(StatusBar* bar) { statusBar_ = bar; }
+  // The bar belongs to the window, not to the pane: there are several panes
+  // and one bar, and it shows the active one (claude-gui-lkk.7.9).  The pane
+  // keeps its four fields itself and hands them over whole when it gets the
+  // bar, so a session switched to shows its own facts at once rather than
+  // whatever the previous one left there.  Null while the pane is not the
+  // active one; everything here works without it.
+  void SetStatusBar(StatusBar* bar);
+  // Whether this is the session the reader is in.  The pane cannot ask -- it
+  // does not know what hosts it -- so the host says.  A session that is not
+  // active is spoken for as if its window were in the background
+  // (invariant 11): its progress is silent and its end is a sound.
+  void SetActive(bool active) { active_ = active; }
   void Layout(int width, int height);
   // The pane owns the backend from here on.
   bool Start(std::unique_ptr<agent::Backend> backend,
@@ -115,9 +123,8 @@ class SessionPane {
   // F1: the list of keys, in a modal dialog.  The list itself is in
   // ui/keys_dialog.cpp; this is only the key that opens it.
   //
-  // F1 and not a menu, because there is no menu bar and adding one for this
-  // would put a second thing in the tab order of a window that has two
-  // controls on purpose.  F1 is what a reader tries first anyway.
+  // F1 and not a menu item: F1 is what a reader tries first, and the menu
+  // bar holds what belongs to the window, not to one session.
   void ShowKeys();
   // F2: what this session is and what it has cost, in a modal dialog.  See
   // ui/session_details.h for why a dialog and not the status bar.
@@ -146,10 +153,6 @@ class SessionPane {
 
   const std::wstring& statusLine() const { return status_; }
   bool busy() const { return busy_; }
-  // False when nvdaControllerClient.dll is not beside the executable.  The
-  // host asks after Create, because that is a thing to be told once at the
-  // start and never again -- see Announce for why it cannot be told later.
-  bool speechInstalled() const { return speech_.loaded(); }
 
   // The window moved to a screen with a different scaling.  The controls need
   // a font for the new dpi; the layout follows from the WM_SIZE that comes
@@ -213,6 +216,8 @@ class SessionPane {
   // Never silent: a key that answers with nothing is indistinguishable from a
   // key that did not arrive.
   void Announce(const std::wstring& text);
+  // One field of the bar, kept and shown when there is a bar.
+  void SetField(StatusBar::Field field, const std::wstring& text);
   // Puts the caret at an offset and says the line it landed on.
   void GoToOffset(size_t offset);
   // Says that the turn is over.  The answer itself was already read as it
@@ -242,6 +247,8 @@ class SessionPane {
   HWND lastFocus_ = nullptr;
 
   StatusBar* statusBar_ = nullptr;
+  std::wstring fields_[StatusBar::kFieldCount];
+  bool active_ = true;
   model::Transcript model_;
   model::Bookmarks bookmarks_;
   Speech speech_;

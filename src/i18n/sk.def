@@ -141,6 +141,24 @@ S(kKeysCommands,
   L"F4 — zoznam slash príkazov. Vybraný vloží do promptu, neodošle.\n")
 S(kKeysNoCommands, L"F4 — zoznam slash príkazov; tento agent žiadny nemá.\n")
 S(kKeysCopyId, L"Ctrl+Shift+C — skopíruje id session do schránky.")
+S(kKeysSessions,
+  L"\n\n"
+  L"Viac sessions:\n"
+  L"Ctrl+N — nová session, v ďalšom okne.\n"
+  L"Ctrl+Tab alebo Ctrl+F6 — ďalšia session, "
+  L"Ctrl+Shift+Tab alebo Ctrl+Shift+F6 — predchádzajúca.\n"
+  L"Ctrl+F4 — zavrie session. Alt+F4 — ukončí aplikáciu.\n"
+  L"Alt — menu; v ňom Okno so zoznamom otvorených sessions.")
+
+S(kMenuFile, L"&Súbor")
+S(kMenuNewSession, L"&Nová session...\tCtrl+N")
+S(kMenuExit, L"S&končiť\tAlt+F4")
+S(kMenuWindow, L"&Okno")
+S(kMenuNextSession, L"Ď&alšia session\tCtrl+Tab")
+S(kMenuPreviousSession, L"&Predchádzajúca session\tCtrl+Shift+Tab")
+S(kMenuCloseSession, L"&Zavrieť session\tCtrl+F4")
+S(kSayNoSession, L"žiadna session nie je otvorená")
+S(kSayOnlySession, L"otvorená je len táto session")
 
 // Dialog templates.  The same words as in ui/app.rc, which keeps them only
 // as the layout's placeholder.

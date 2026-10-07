@@ -188,6 +188,60 @@ bool UpdateBeforeStart(app::Settings& settings, const std::wstring& file) {
   return false;
 }
 
+// The dialog Nová session, at startup when the line names no folder and from
+// the menu afterwards.  Fills in the backend, the model and the folder; false
+// when it was cancelled, which is an answer.
+//
+// The file is read again for the backend chosen, and then the model
+// overwritten with the field: an emptied field means the CLI's default, and
+// ApplySettings would fill it back in.
+bool AskNewSession(HWND owner, const app::Arguments& typed,
+                   const app::Settings& settings, app::Arguments* arguments) {
+  ui::NewSession choice;
+  choice.backend = arguments->backend;
+  choice.project = arguments->project;
+  for (const std::string& name : kBackends) {
+    ui::NewSessionBackend entry;
+    entry.name = name;
+    entry.models = MakeBackend(name)->capabilities().models;
+    entry.model = !typed.model.empty()
+                      ? typed.model
+                      : model::Utf16FromUtf8(
+                            settings.Get(name + "." + app::kModelKey));
+    choice.backends.push_back(std::move(entry));
+  }
+  ui::NewSessionDialog dialog(&choice);
+  if (dialog.ShowModal(owner, IDD_NEW_SESSION) != IDOK) return false;
+  arguments->backend = choice.backend;
+  arguments->permissionMode = typed.permissionMode;
+  app::ApplySettings(arguments, settings);
+  arguments->model = choice.model;
+  arguments->project = choice.project;
+  return true;
+}
+
+agent::StartOptions OptionsFrom(const app::Arguments& arguments) {
+  agent::StartOptions options;
+  // Expanded, because the folder is also what the list of conversations is
+  // keyed by for -c, and "." is not a key.
+  options.projectDir = Expand(arguments.project);
+  // The CLI's own word, which is ASCII: a copy, not a conversion.
+  options.mode.assign(arguments.permissionMode.begin(),
+                      arguments.permissionMode.end());
+  options.model = arguments.model;
+  // `-c --resume <id>` is not a contradiction to argue about: the one that
+  // names a conversation wins, because it was typed by someone who knew which
+  // one they wanted.
+  if (arguments.resume) {
+    options.resume = agent::StartOptions::Resume::ById;
+    options.resumeId = arguments.resumeId;
+  } else if (arguments.continueLatest) {
+    options.resume = agent::StartOptions::Resume::Latest;
+  }
+  options.extraArgs = arguments.cliArgs;
+  return options;
+}
+
 std::vector<std::wstring> CommandLineWords() {
   std::vector<std::wstring> words;
   int argc = 0;
@@ -321,31 +375,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   // After the checks, or --help typed on its own -- or a refused option --
   // would be answered with a dialog asking which project.
   if (arguments.project.empty()) {
-    ui::NewSession choice;
-    choice.backend = arguments.backend;
-    for (const std::string& name : kBackends) {
-      ui::NewSessionBackend entry;
-      entry.name = name;
-      entry.models = MakeBackend(name)->capabilities().models;
-      entry.model = !typed.model.empty()
-                        ? typed.model
-                        : model::Utf16FromUtf8(settings.Get(
-                              name + "." + app::kModelKey));
-      choice.backends.push_back(std::move(entry));
-    }
-    ui::NewSessionDialog dialog(&choice);
-    if (dialog.ShowModal(nullptr, IDD_NEW_SESSION) != IDOK) {
+    if (!AskNewSession(nullptr, typed, settings, &arguments)) {
       CoUninitialize();
       return 0;  // cancelled, which is an answer
     }
-    // The file read again for the backend chosen, then the model overwritten
-    // with the field: an emptied field means the CLI's default, and
-    // ApplySettings would fill it back in.
-    arguments.backend = choice.backend;
-    arguments.permissionMode = typed.permissionMode;
-    app::ApplySettings(&arguments, settings);
-    arguments.model = choice.model;
-    arguments.project = choice.project;
     backend = MakeBackend(arguments.backend);
     app::CheckMode(&arguments, backend->capabilities());
     // Only a mode typed for one backend and refused by the other gets here.
@@ -358,8 +391,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       return 2;
     }
   }
-  // Expanded, because the folder is also what the list of conversations is
-  // keyed by for -c, and "." is not a key.
   arguments.project = Expand(arguments.project);
 
   // RichEdit 4.1 comes from this library and the window class does not exist
@@ -371,31 +402,48 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     return 1;
   }
 
-  agent::StartOptions options;
-  options.projectDir = arguments.project;
-  // The CLI's own word, which is ASCII: a copy, not a conversion.
-  options.mode.assign(arguments.permissionMode.begin(),
-                      arguments.permissionMode.end());
-  options.model = arguments.model;
-  // `-c --resume <id>` is not a contradiction to argue about: the one that
-  // names a conversation wins, because it was typed by someone who knew which
-  // one they wanted.
-  if (arguments.resume) {
-    options.resume = agent::StartOptions::Resume::ById;
-    options.resumeId = arguments.resumeId;
-  } else if (arguments.continueLatest) {
-    options.resume = agent::StartOptions::Resume::Latest;
-  }
-  options.extraArgs = arguments.cliArgs;
+  // A session from the menu starts from the line as typed, but without what
+  // names a conversation: the first session is in it already, and the CLI
+  // refuses a session id that is in use (invariant 14).  Without the words
+  // after -- too, which may name one as well.  The backend and the folder
+  // are the ones chosen last, which is the likeliest next answer.
+  app::Arguments last = arguments;
+  ui::NewSessionFactory factory = [&](HWND owner,
+                                      std::unique_ptr<agent::Backend>* made,
+                                      agent::StartOptions* options) {
+    app::Arguments next = typed;
+    next.resume = false;
+    next.resumeId.clear();
+    next.continueLatest = false;
+    next.cliArgs.clear();
+    next.backend = last.backend;
+    next.project = last.project;
+    if (!AskNewSession(owner, typed, settings, &next)) return false;
+    std::unique_ptr<agent::Backend> chosen = MakeBackend(next.backend);
+    app::CheckMode(&next, chosen->capabilities());
+    // A mode typed for one backend and refused by the other, as at startup.
+    if (!next.error.empty()) {
+      const std::wstring text = L"" APP_NAME L": " + next.error + L".";
+      MessageBoxW(owner, text.c_str(), L"" APP_NAME, MB_OK | MB_ICONERROR);
+      return false;
+    }
+    next.project = Expand(next.project);
+    last = next;
+    *made = std::move(chosen);
+    *options = OptionsFrom(next);
+    return true;
+  };
 
   ui::MainWindow window;
-  if (!window.Open(instance, std::move(backend), options)) {
+  if (!window.Open(instance, std::move(backend), OptionsFrom(arguments),
+                   std::move(factory))) {
     MessageBoxW(nullptr, i18n::Text(i18n::Str::kSessionStartFailed),
                 L"" APP_NAME, MB_OK | MB_ICONERROR);
     return 1;
   }
 
-  const int code = win::RunMessageLoop(window.handle(), nullptr);
+  const int code =
+      win::RunMdiMessageLoop(window.handle(), window.accelerators());
   CoUninitialize();
   return code;
 }

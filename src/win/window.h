@@ -30,6 +30,12 @@ class Window {
   // top, so the caller does not have to know how thick this Windows draws it.
   bool Create(const wchar_t* className, const std::wstring& title, DWORD style,
               int clientWidth, int clientHeight, HMENU menu);
+  // An MDI child of the given MDICLIENT.  Made through WM_MDICREATE, which is
+  // the one way the client keeps its list of children -- and its window menu
+  // -- right.  A class whose children have to go through DefMDIChildProcW
+  // says so by overriding Default().
+  bool CreateMdiChild(const wchar_t* className, HWND mdiClient,
+                      const std::wstring& title, DWORD style);
 
   HWND handle() const { return hwnd_; }
   void Show(int cmdShow) const;
@@ -44,13 +50,17 @@ class Window {
  protected:
   // Return the result, or call Default() for anything not handled.
   virtual LRESULT HandleMessage(UINT message, WPARAM wParam, LPARAM lParam);
-  LRESULT Default(UINT message, WPARAM wParam, LPARAM lParam) const;
+  // DefWindowProcW.  An MDI frame overrides it with DefFrameProcW and an MDI
+  // child with DefMDIChildProcW; both insist on seeing messages the window
+  // has handled itself, so those windows call it more often than others do.
+  virtual LRESULT Default(UINT message, WPARAM wParam, LPARAM lParam) const;
 
   HWND hwnd_ = nullptr;
 
  private:
   static LRESULT CALLBACK WndProc(HWND window, UINT message, WPARAM wParam,
                                   LPARAM lParam);
+  static bool Register(const wchar_t* className);
   bool Dispatch(int id);
 
   std::unordered_map<int, std::function<void()>> commands_;
@@ -69,6 +79,17 @@ class Window {
 // then `conditional` never applies.
 int RunMessageLoop(HWND window, HACCEL always, HACCEL conditional = nullptr,
                    std::function<bool()> conditionalActive = nullptr);
+
+// The same loop for an MDI frame, with one table of accelerators.  Its own
+// function rather than another parameter, because RunMessageLoop is shared
+// with another project and must not change underneath it.
+//
+// TranslateMDISysAccel is deliberately not called.  What it gives -- Ctrl+F4,
+// Ctrl+F6 -- goes through the child's system menu, which a child need not
+// have, and it would answer a key with nothing where the frame has to say
+// why.  The frame binds those keys in its own table instead, where they are
+// listed with everything else.
+int RunMdiMessageLoop(HWND frame, HACCEL accelerators);
 
 }  // namespace win
 

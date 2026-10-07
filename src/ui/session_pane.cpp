@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <ctime>
 
-#include "app_name.h"
 #include "i18n/i18n.h"
 #include "model/history.h"
 #include "model/utf.h"
@@ -340,8 +339,10 @@ void SessionPane::Apply(const model::Edit& edit) {
   // wrong place and nothing else would say so.  Loud, in the title, because a
   // quiet log is a thing nobody reads.
   if (TextLength(transcript_) != static_cast<int>(model_.Text().size())) {
-    const std::wstring title = std::wstring(L"" APP_NAME L" — ") +
-                               i18n::Text(Str::kTitleRangeMismatch);
+    // The session's own title, which the frame shows beside its name: the
+    // mismatch is this session's, and the folder says which one that is.
+    const std::wstring title =
+        details_.project + L" — " + i18n::Text(Str::kTitleRangeMismatch);
     SetWindowTextW(host_, title.c_str());
   }
 }
@@ -374,8 +375,10 @@ bool SessionPane::Start(std::unique_ptr<agent::Backend> backend,
   // question, and it answers it with the real id.
   details_.model = options.model;
   details_.requestedModel = options.model;
-  if (statusBar_) statusBar_->Set(StatusBar::kProject, i18n::Format(Str::kStatusProject, {project_}));
-  SetWindowTextW(host_, (L"" APP_NAME L" — " + path).c_str());
+  SetField(StatusBar::kProject, i18n::Format(Str::kStatusProject, {project_}));
+  // The path alone: the frame puts its own name in front of the active
+  // session's title, and the window list in the menu names sessions by it.
+  SetWindowTextW(host_, path.c_str());
 
   agent::Backend::Callbacks callbacks;
   callbacks.onEvents = [this](std::vector<agent::Event> batch) {
@@ -684,7 +687,9 @@ bool SessionPane::Following() const {
 }
 
 bool SessionPane::InForeground() const {
-  if (host_ == nullptr) return false;
+  // A session behind another one is as much out of sight as a window behind
+  // another application.
+  if (host_ == nullptr || !active_) return false;
   const HWND top = GetAncestor(host_, GA_ROOT);
   return top != nullptr && GetForegroundWindow() == top;
 }
@@ -943,7 +948,22 @@ void SessionPane::SetStatus(std::wstring text) {
   // the window takes focus and never again, so a turn that ends while you are
   // reading would not have been heard there anyway -- and the bar can be asked
   // at any time with NVDA+End.
-  if (statusBar_) statusBar_->Set(StatusBar::kTurn, status_);
+  SetField(StatusBar::kTurn, status_);
+}
+
+void SessionPane::SetField(StatusBar::Field field, const std::wstring& text) {
+  fields_[field] = text;
+  if (statusBar_) statusBar_->Set(field, text);
+}
+
+void SessionPane::SetStatusBar(StatusBar* bar) {
+  statusBar_ = bar;
+  if (!statusBar_) return;
+  // Every field, the empty ones too: an empty field here is a fact about this
+  // session, and the previous session's text in it would be a false one.
+  for (int field = 0; field < StatusBar::kFieldCount; ++field) {
+    statusBar_->Set(static_cast<StatusBar::Field>(field), fields_[field]);
+  }
 }
 
 void SessionPane::ShowModel(const std::string& model) {
@@ -998,7 +1018,6 @@ void SessionPane::FollowPermissionMode(const std::string& reported) {
 }
 
 void SessionPane::RefreshModelField() {
-  if (!statusBar_) return;
   // Model and permission mode in one field.  The design said "model and
   // effort", but system/init carries no effort -- and the permission mode is
   // the more useful of the two anyway: it decides whether anything will be put
@@ -1018,12 +1037,10 @@ void SessionPane::RefreshModelField() {
     if (!facts.empty()) facts += L", ";
     facts += i18n::Format(Str::kModeNamed, {ModeLabel(mode)});
   }
-  statusBar_->Set(StatusBar::kModel, facts);
+  SetField(StatusBar::kModel, facts);
 }
 
 void SessionPane::ShowRateLimit(const agent::RateLimitChanged& limit) {
-  if (!statusBar_) return;
-
   const auto percent = [](double share) {
     return std::to_wstring(static_cast<int>(share * 100 + 0.5)) + L" %";
   };
@@ -1073,7 +1090,7 @@ void SessionPane::ShowRateLimit(const agent::RateLimitChanged& limit) {
   } else if (!text.empty()) {
     text = i18n::Format(Str::kStatusLimit, {text});
   }
-  statusBar_->Set(StatusBar::kLimit, text);
+  SetField(StatusBar::kLimit, text);
 }
 
 void SessionPane::FocusPrompt() const { SetFocus(prompt_); }

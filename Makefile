@@ -65,7 +65,7 @@ CXXFLAGS := -std=c++20 -O2 $(WARN) -I. -Isrc -I$(BUILD) \
 # MessageBeep, oba jeho pouzitelne zvuky uz maju iny vyznam (invariant 11).
 # winhttp a bcrypt su aktualizacie: stiahnutie a SHA-256 (claude-gui-lkk.53).
 # uxtheme vypina temu stavoveho riadku, aby ho NVDA citala spravne (status_bar.cpp).
-LDLIBS   := -lole32 -lshell32 -lcomctl32 -luuid -lgdi32 -lwinmm -lwinhttp -lbcrypt -luxtheme
+LDLIBS   := -lole32 -loleacc -lshell32 -lcomctl32 -luuid -lgdi32 -lwinmm -lwinhttp -lbcrypt -luxtheme
 
 # Verzia.  Nie je napisana v ziadnom zdrojaku -- urcuje ju znacka v gite
 # (v2026.10.1, rok.mesiac.poradie), aby druha kopia nemala ako zastarat.
@@ -124,7 +124,7 @@ APP_PURE_SRCS := src/arguments.cpp src/settings.cpp src/version.cpp src/update.c
 MODEL_SRCS := src/model/utf.cpp src/model/transcript.cpp src/model/bookmarks.cpp \
               src/model/history.cpp
 
-UI_SRCS := src/ui/session_pane.cpp src/ui/main_window.cpp src/ui/speech.cpp \
+UI_SRCS := src/ui/session_pane.cpp src/ui/session_window.cpp src/ui/main_window.cpp src/ui/speech.cpp \
            src/ui/status_bar.cpp src/ui/session_details.cpp \
            src/ui/ask_dialog.cpp src/ui/permission_dialog.cpp \
            src/ui/command_dialog.cpp src/ui/keys_dialog.cpp \

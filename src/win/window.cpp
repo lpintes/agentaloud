@@ -23,7 +23,15 @@ LRESULT CALLBACK Window::WndProc(HWND window, UINT message, WPARAM wParam,
   Window* self = nullptr;
   if (message == WM_NCCREATE) {
     auto* create = reinterpret_cast<CREATESTRUCTW*>(lParam);
-    self = static_cast<Window*>(create->lpCreateParams);
+    // A child made through WM_MDICREATE gets the client's structure here, and
+    // the pointer to us one level further in.
+    if (create->dwExStyle & WS_EX_MDICHILD) {
+      const auto* mdi =
+          static_cast<const MDICREATESTRUCTW*>(create->lpCreateParams);
+      self = reinterpret_cast<Window*>(mdi->lParam);
+    } else {
+      self = static_cast<Window*>(create->lpCreateParams);
+    }
     self->hwnd_ = window;
     SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
   } else {
@@ -41,23 +49,44 @@ LRESULT CALLBACK Window::WndProc(HWND window, UINT message, WPARAM wParam,
   return result;
 }
 
+bool Window::Register(const wchar_t* className) {
+  const HINSTANCE instance = GetModuleHandleW(nullptr);
+  WNDCLASSEXW existing{};
+  existing.cbSize = sizeof(existing);
+  if (GetClassInfoExW(instance, className, &existing)) return true;
+  WNDCLASSEXW wc{};
+  wc.cbSize = sizeof(wc);
+  wc.lpfnWndProc = &Window::WndProc;
+  wc.hInstance = instance;
+  wc.hCursor = LoadCursorW(nullptr, kArrowCursor);
+  wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+  wc.lpszClassName = className;
+  wc.hIcon = LoadIconW(nullptr, kApplicationIcon);
+  return RegisterClassExW(&wc) != 0;
+}
+
+bool Window::CreateMdiChild(const wchar_t* className, HWND mdiClient,
+                            const std::wstring& title, DWORD style) {
+  if (!Register(className)) return false;
+  MDICREATESTRUCTW create{};
+  create.szClass = className;
+  create.szTitle = title.c_str();
+  create.hOwner = GetModuleHandleW(nullptr);
+  create.x = CW_USEDEFAULT;
+  create.y = CW_USEDEFAULT;
+  create.cx = CW_USEDEFAULT;
+  create.cy = CW_USEDEFAULT;
+  create.style = style;
+  create.lParam = reinterpret_cast<LPARAM>(this);
+  SendMessageW(mdiClient, WM_MDICREATE, 0, reinterpret_cast<LPARAM>(&create));
+  return hwnd_ != nullptr;
+}
+
 bool Window::Create(const wchar_t* className, const std::wstring& title,
                     DWORD style, int clientWidth, int clientHeight,
                     HMENU menu) {
   const HINSTANCE instance = GetModuleHandleW(nullptr);
-  WNDCLASSEXW existing{};
-  existing.cbSize = sizeof(existing);
-  if (!GetClassInfoExW(instance, className, &existing)) {
-    WNDCLASSEXW wc{};
-    wc.cbSize = sizeof(wc);
-    wc.lpfnWndProc = &Window::WndProc;
-    wc.hInstance = instance;
-    wc.hCursor = LoadCursorW(nullptr, kArrowCursor);
-    wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-    wc.lpszClassName = className;
-    wc.hIcon = LoadIconW(nullptr, kApplicationIcon);
-    if (!RegisterClassExW(&wc)) return false;
-  }
+  if (!Register(className)) return false;
 
   // The caller's size is in 96-DPI units.  A DPI-aware process is not scaled
   // by Windows, so on a scaled display the window has to be scaled here or it
@@ -124,6 +153,19 @@ int RunMessageLoop(HWND window, HACCEL always, HACCEL conditional,
     // Asked afresh every message: the answer changes while the program runs.
     if (conditional && conditionalActive && conditionalActive() &&
         TranslateAcceleratorW(window, conditional, &message))
+      continue;
+    TranslateMessage(&message);
+    DispatchMessageW(&message);
+  }
+  return static_cast<int>(message.wParam);
+}
+
+int RunMdiMessageLoop(HWND frame, HACCEL accelerators) {
+  MSG message{};
+  BOOL result = 0;
+  while ((result = GetMessageW(&message, nullptr, 0, 0)) != 0) {
+    if (result == -1) break;
+    if (accelerators && TranslateAcceleratorW(frame, accelerators, &message))
       continue;
     TranslateMessage(&message);
     DispatchMessageW(&message);
