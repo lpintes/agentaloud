@@ -24,9 +24,11 @@ std::string Ascii(const std::wstring& text) {
 // `decision_reason_type` as a sentence.  The wire's words are for a program:
 // "rule" alone in a dialog says nothing about which rule or whose.
 //
-// Both values below were measured, not read -- "rule" in tools/spike_control.py
-// (a git commit against an ask rule) and "subcommandResults" during the probes
-// on claude-gui-lkk.25.  Anything else is passed through as it came: an unknown
+// All values below were measured, not read -- "rule" in tools/spike_control.py
+// (a git commit against an ask rule), "subcommandResults" during the probes
+// on claude-gui-lkk.25, and "other" on a Bash command with no rule at all
+// (claude-gui-lkk.61), where decision_reason said "This command requires
+// approval".  Anything else is passed through as it came: an unknown
 // word is still more than no word, and inventing a translation for it would be
 // the one failure the dialog cannot afford.  Empty stays empty; the dialog
 // says that the CLI gave none.
@@ -35,6 +37,7 @@ std::string ReasonSentence(const std::string& type) {
   if (type == "subcommandResults") {
     return i18n::Utf8(i18n::Str::kReasonSubcommands);
   }
+  if (type == "other") return i18n::Utf8(i18n::Str::kReasonOther);
   return type;
 }
 
