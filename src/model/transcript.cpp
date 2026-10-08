@@ -8,20 +8,7 @@
 using i18n::Str;
 
 namespace model {
-namespace {
 
-constexpr size_t kSummaryLimit = 100;
-constexpr size_t kInlineResultLimit = 60;
-
-// Every line break becomes exactly one character, and it is '\n'.
-//
-// Not tidiness.  RichEdit stores a paragraph break as a single character and
-// counts it as one, so text carrying "\r\n" would be two characters here and
-// one there.  The map of block to character range is the whole basis of
-// navigation, collapsing and bookmarks, so a drift of one character per line
-// of tool output ends as a caret in the wrong place -- the exact failure this
-// application exists to remove.  Tool output does carry "\r\n": it comes from
-// Windows programs.
 std::wstring NormalizeNewlines(std::wstring text) {
   std::wstring out;
   out.reserve(text.size());
@@ -35,6 +22,11 @@ std::wstring NormalizeNewlines(std::wstring text) {
   }
   return out;
 }
+
+namespace {
+
+constexpr size_t kSummaryLimit = 100;
+constexpr size_t kInlineResultLimit = 60;
 
 // Terminal escape sequences, thrown away rather than rendered.
 //

@@ -48,6 +48,21 @@ bool IsMechanism(BlockKind kind);
 
 const wchar_t* KindLabel(BlockKind kind);
 
+// Every line break becomes exactly one character, and it is '\n'.
+//
+// Not tidiness.  RichEdit stores a paragraph break as a single character and
+// counts it as one, so text carrying "\r\n" would be two characters here and
+// one there.  The map of block to character range is the whole basis of
+// navigation, collapsing and bookmarks, so a drift of one character per line
+// of tool output ends as a caret in the wrong place -- the exact failure this
+// application exists to remove.  Tool output does carry "\r\n": it comes from
+// Windows programs.
+//
+// It is public for the prompt: the edit box hands back "\r\n", and what goes
+// to the agent has to be the text the transcript shows, or the session record
+// on disk holds a different prompt from the one replayed into the transcript.
+std::wstring NormalizeNewlines(std::wstring text);
+
 // A tool call's arguments, written to be read rather than parsed: one field
 // per line, the long ones (a command, a file's new contents, the two halves of
 // an edit) as text of their own rather than as JSON.  Escapes are stripped and

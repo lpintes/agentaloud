@@ -1307,15 +1307,16 @@ void SessionPane::SendText(const std::wstring& text) {
   // the reply.  But it must not do that to somebody who is in the middle of
   // reading something further back; they would lose their place.
   const bool following = Following();
+  const std::wstring prompt = model::NormalizeNewlines(text);
 
   turnFirstId_ = model_.nextBlockId();
-  Apply(model_.AppendUserPrompt(text));
+  Apply(model_.AppendUserPrompt(prompt));
   if (following) {
     PutCaretAtEnd(transcript_);
     anchor_ = model_.Text().size();
   }
 
-  backend_->SendPrompt(model::Utf8FromUtf16(text));
+  backend_->SendPrompt(model::Utf8FromUtf16(prompt));
   interrupted_ = false;
   thinkingSaid_ = false;
   spokeThisTurn_ = false;

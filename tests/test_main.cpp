@@ -1870,6 +1870,13 @@ void TestNewlinesAreOneCharacter() {
   CHECK(text.find(L'\r') == std::wstring::npos);
   CHECK_EQ(std::count(text.begin(), text.end(), L'\n'), ptrdiff_t{4});
 
+  // Ten isty prompt ide aj do CLI (SessionPane::SendText) a odtial do zaznamu
+  // na disku, z ktoreho sa prepis obnovuje.  Musi tam ist uz normalizovany,
+  // inak ma ten isty prompt na disku ine dlzky nez v prepise.
+  CHECK(model::NormalizeNewlines(L"prvy\r\ndruhy\rtreti\nstvrty\r\n") ==
+        L"prvy\ndruhy\ntreti\nstvrty\n");
+  CHECK(model::NormalizeNewlines(L"\r\r\n") == L"\n\n");
+
   proto::Json assistant = proto::Json::parse(R"({
     "type": "user",
     "message": {"content": [
