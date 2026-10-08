@@ -376,6 +376,12 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    `turnInFlight_` zámerne nechá tak — kto ho zhasne skôr, dovolí `Stop()`
    zavrieť stdin uprostred ukončovania ťahu, čiže presne to, čo tento bod
    zakazuje.
+
+   Zatvorenie session počas ťahu je ten istý prípad: `Stop()` v oboch
+   adaptéroch najprv ťah preruší a až potom čaká (claude-gui-lkk.5.21).
+   Predtým len čakal — 5 s z deštruktora — a potom zavrel stdin tak či tak,
+   takže ťah dlhší než päť sekúnd (bežný) skončil presne tým, čo tento bod
+   zakazuje. Kto chce ťah dobehnúť, volá najprv `WaitForTurn`.
 2. **Callbacky bežia na čítacom vlákne.** `EventCallback` aj
    `PermissionCallback`. Čokoľvek, čo siahne na okno, musí ísť cez
    `PostMessage`.

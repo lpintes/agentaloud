@@ -197,8 +197,9 @@ class Backend {
   // ModeChanged back to the mode the CLI is really in.
   virtual bool SetMode(const std::string& id) = 0;
 
-  // Waits out the turn in flight, THEN closes the connection.  Both CLIs
-  // throw a turn away when their stdin closes under it (invariant 1).
+  // Interrupts the turn in flight and waits for its TurnEnded, THEN closes
+  // the connection.  Both CLIs throw a turn away when their stdin closes
+  // under it (invariant 1).
   virtual void Stop(unsigned turnTimeoutMs = 120000) = 0;
 
   // ---- What is known now.  Safe from any thread.

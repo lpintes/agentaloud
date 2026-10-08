@@ -286,6 +286,11 @@ bool Session::WaitForTurn(unsigned milliseconds) {
 }
 
 void Session::Stop(unsigned turnTimeoutMs) {
+  // A turn still running is asked to stop, not waited out: closing a window
+  // mid-turn would otherwise sit through the timeout and then close stdin under
+  // the turn anyway.  Interrupted, it ends with its own result, usually within
+  // a second, and the record on disk says it was interrupted.
+  Interrupt();
   WaitForTurn(turnTimeoutMs);
   // Only now.  Closing earlier makes the CLI report a broken channel as a
   // permission rule -- see control.h.

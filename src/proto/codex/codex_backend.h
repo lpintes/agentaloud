@@ -18,8 +18,8 @@
 //   * A question has no item of its own, so the adapter puts the call and its
 //     answer into the stream itself.
 //   * Stdin is the whole connection: closed during a turn, the process exits
-//     at once and the turn is thrown away (measured).  Stop waits for the
-//     turn to end, as for Claude (invariant 1).
+//     at once and the turn is thrown away (measured).  Stop interrupts the
+//     turn and waits for it to end, as for Claude (invariant 1).
 
 #include <condition_variable>
 #include <map>

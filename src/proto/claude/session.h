@@ -96,8 +96,9 @@ class Session {
   // leaves the session usable -- the caller may want to wait again.
   bool WaitForTurn(unsigned milliseconds);
 
-  // Ends the session cleanly: waits out the turn in flight, THEN closes stdin.
-  // The order is the whole point; see the note in control.h.
+  // Ends the session cleanly: interrupts the turn in flight and waits for its
+  // result, THEN closes stdin.  The order is the whole point; see the note in
+  // control.h.  Whoever wants the turn to finish calls WaitForTurn first.
   void Stop(unsigned turnTimeoutMs = 120000);
 
   // The conversation's id.  Known from Start() onwards, because we are the

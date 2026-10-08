@@ -222,6 +222,9 @@ bool CodexBackend::SetMode(const std::string& id) {
 }
 
 void CodexBackend::Stop(unsigned turnTimeoutMs) {
+  // Asked to stop rather than waited out, as for Claude: the wait has a limit
+  // and stdin closes after it either way.
+  Interrupt();
   {
     std::unique_lock<std::mutex> lock(mutex_);
     turnEnded_.wait_for(lock, std::chrono::milliseconds(turnTimeoutMs),
