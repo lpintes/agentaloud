@@ -16,6 +16,7 @@
 #define IDD_KEYS            104
 #define IDD_NEW_SESSION     105
 #define IDD_FIND            106
+#define IDD_ABOUT           107
 
 #define IDC_DETAILS_ID          1000
 #define IDC_DETAILS_MODEL       1001
@@ -97,5 +98,10 @@
 // Hľadanie v prepise.  See ui/find_dialog.h.
 #define IDC_FIND_TEXT           1120
 #define IDC_FIND_TEXT_LABEL     1130
+
+// O programe.  See ui/about_dialog.h.
+#define IDC_ABOUT_TEXT          1140
+#define IDC_ABOUT_PAGE          1141
+#define IDC_ABOUT_TEXT_LABEL    1150
 
 #endif

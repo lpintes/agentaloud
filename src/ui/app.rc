@@ -256,3 +256,18 @@ BEGIN
     DEFPUSHBUTTON   "&Nájsť", IDOK, 136, 30, 56, 14
     PUSHBUTTON      "&Zavrieť", IDCANCEL, 196, 30, 56, 14
 END
+
+// O programe.  The facts are a read-only box like the key list, so that the
+// version and the address can be read by character and copied.
+IDD_ABOUT DIALOGEX 0, 0, 240, 104
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION APP_NAME " — o programe"
+FONT 9, "Segoe UI", 400, 0, 1
+BEGIN
+    LTEXT           "&O programe:", IDC_ABOUT_TEXT_LABEL, 8, 8, 224, 8
+    EDITTEXT        IDC_ABOUT_TEXT, 8, 18, 224, 58,
+                    ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL
+
+    PUSHBUTTON      "&Stránka projektu", IDC_ABOUT_PAGE, 96, 84, 76, 14
+    DEFPUSHBUTTON   "&Zavrieť", IDCANCEL, 176, 84, 56, 14
+END

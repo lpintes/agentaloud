@@ -6,6 +6,7 @@
 #include "app_name.h"
 #include "i18n/i18n.h"
 #include "session_names.h"
+#include "ui/about_dialog.h"
 
 namespace ui {
 namespace {
@@ -20,6 +21,7 @@ enum : UINT {
   kIdCloseSession,
   kIdKeys,
   kIdCheckUpdates,
+  kIdAbout,
 };
 constexpr UINT kFirstChild = 50000;
 
@@ -48,6 +50,8 @@ HMENU BuildMenu(HMENU* windowMenu) {
   AppendMenuW(help, MF_STRING, kIdKeys, i18n::Text(Str::kMenuKeys));
   AppendMenuW(help, MF_STRING, kIdCheckUpdates,
               i18n::Text(Str::kMenuCheckUpdates));
+  AppendMenuW(help, MF_SEPARATOR, 0, nullptr);
+  AppendMenuW(help, MF_STRING, kIdAbout, i18n::Text(Str::kMenuAbout));
 
   HMENU bar = CreateMenu();
   AppendMenuW(bar, MF_POPUP, reinterpret_cast<UINT_PTR>(file),
@@ -304,6 +308,9 @@ LRESULT MainWindow::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
           return 0;
         case kIdCheckUpdates:
           if (checkForUpdates_) checkForUpdates_(hwnd_);
+          return 0;
+        case kIdAbout:
+          ShowAbout(hwnd_);
           return 0;
         default:
           // The window list in the menu is DefFrameProcW's.

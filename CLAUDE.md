@@ -1144,10 +1144,12 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     Popisok promptu unesie práve jednu klávesu („Ctrl+Enter odošle") a viac
     nie — NVDA ho číta pri **každom** vstupe do poľa, takže druhá by sa počula
     pri každom návrate k písaniu kvôli veci, ktorá je potrebná raz. Preto
-    dialóg, a preto F1: okno nemá menu a pridať ho kvôli tomuto by znamenalo
-    tretí prvok v poradí, ktoré má dva zámerne. Nápoveda (`--help`) o F1 hovorí
-    tiež, lebo je to jediné miesto, kde sa dá zoznam nájsť skôr, než okno
-    vznikne.
+    dialóg, a preto F1. Menu rám od MDI má (invariant 24) a zoznam je v ňom
+    ako Pomocník > Klávesové skratky; F1 je v akcelerátoroch rámu, nie
+    v procedúrach polí, aby odpovedalo aj bez session (vtedy povie, že žiadna
+    session nie je — zoznam závisí od `Capabilities` backendu). Nápoveda
+    (`--help`) o F1 hovorí tiež, lebo je to jediné miesto, kde sa dá zoznam
+    nájsť skôr, než okno vznikne.
 
     Klávesa sa v tom zozname píše ako **skratka, nie ako znak**: „T" a
     „Shift+T", nikdy „t" a „T". Čítačka povie obe veľkosti písmena rovnako,
@@ -1365,8 +1367,18 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     reštart nič nestráca a nikto sa nepýta na priečinok dvakrát. Raz denne
     (`last-update-check`), so stropom 3 s aj na DNS, ktoré WinHTTP samo
     neobmedzí; deň sa zapíše len vtedy, keď prišla odpoveď. `check-updates=0`
-    ju vypne. Ručná kontrola (`updater::FetchLatestAsked`) je hotová a čaká na
-    menu, ktoré príde po lokalizácii.
+    ju vypne.
+
+    **Ručná kontrola interval nečíta ani nezapisuje a odpovie vždy**
+    (claude-gui-lkk.65; konvencia Sparkle, Notepad++, VS Code). Volá ju
+    `--check-updates` pri štarte namiesto dennej kontroly a Pomocník >
+    Skontrolovať aktualizácie za behu (`CheckForUpdatesAsked` v `main.cpp`,
+    pravidlo `update::AnswerAsked`). Ignoruje preskočenú verziu a povie aj
+    „máte najnovšiu", „vydanie zatiaľ nie je", chybu a vývojovú zostavu —
+    vývojová (`0.0.0-…`, `…-N-g…`, `-dirty`) ponuku nedostane nikdy, takže
+    ponuka sa skúša len na stiahnutom vydaní. Z menu bežia sessions, preto sa
+    po inštalácii nereštartuje, len povie, že nová verzia nabehne pri ďalšom
+    štarte.
 
     Poradie je pevné a každý krok môže zastaviť všetko ďalšie:
     `releases/latest` (značka z presmerovania, bez API), stiahnutie

@@ -11,3 +11,6 @@
 // The file name, for the version resource and for messages that tell the
 // reader what to look for beside it.
 #define APP_EXE "agentaloud.exe"
+
+// Where the project lives, for O programe.
+#define APP_URL "https://github.com/lpintes/agentaloud"
