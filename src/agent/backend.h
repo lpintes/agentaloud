@@ -72,9 +72,11 @@ struct Capabilities {
 // not known yet, and that is the one case where the key must say so instead
 // of guessing (invariant 20).  Any other mode outside the cycle, known or not,
 // restarts at the second mode of the cycle, so the key always moves.  Empty
-// too when the agent has no modes.
+// too when the agent has no modes, or when every other mode is in `refused`.
+// A refused mode is stepped over as if it were not in the cycle.
 std::string NextMode(const Capabilities& capabilities,
-                     const std::string& current);
+                     const std::string& current,
+                     const std::vector<std::string>& refused = {});
 
 // The mode's entry, or nullptr.
 const Mode* FindMode(const Capabilities& capabilities, const std::string& id);
@@ -223,6 +225,11 @@ class Backend {
   virtual std::string conversationId() const = 0;
   // A Mode::id; empty while it depends on settings nobody has stated yet.
   virtual std::string mode() const = 0;
+  // Mode::ids the CLI refused to switch to in this session.  Shift+Tab steps
+  // over them, or a refused mode next in the cycle would hold the reader on
+  // the one before it (claude-gui-lkk.46).  Not part of Capabilities: it is
+  // learned while running and holds for this session only.
+  virtual std::vector<std::string> refusedModes() const = 0;
   // Both empty until Ready.
   virtual Account account() const = 0;
   virtual std::vector<SlashCommand> commands() const = 0;

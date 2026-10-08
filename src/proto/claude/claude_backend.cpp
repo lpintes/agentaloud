@@ -129,8 +129,14 @@ void ClaudeBackend::OnRecord(const Event& event) {
   // the rules about which report may move it (PermissionModeTracker).
   // Reported after the record's own events, as a change -- a ModeChanged that
   // repeats the mode the pane already has is harmless, it ignores it.
+  //
+  // The answer to a Shift+Tab is reported even when the mode equals the last
+  // one reported.  The pane moved ahead on the key, which reportedMode_ never
+  // saw, so a refusal falls back to exactly that mode -- and with the plain
+  // comparison the pane kept the refused one (found checking
+  // claude-gui-lkk.46: plan, Shift+Tab to a refused auto, F2 said auto).
   const std::string mode = session_.permissionMode();
-  if (!mode.empty() && mode != reportedMode_) {
+  if (!mode.empty() && (mode != reportedMode_ || IsModeAnswer(event.raw))) {
     reportedMode_ = mode;
     batch.push_back(agent::ModeChanged{mode});
   }
@@ -228,6 +234,10 @@ std::string ClaudeBackend::conversationId() const {
 }
 
 std::string ClaudeBackend::mode() const { return session_.permissionMode(); }
+
+std::vector<std::string> ClaudeBackend::refusedModes() const {
+  return session_.refusedModes();
+}
 
 agent::Account ClaudeBackend::account() const {
   const InitializeInfo handshake = session_.handshake();

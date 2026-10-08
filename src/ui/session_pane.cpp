@@ -1359,7 +1359,8 @@ void SessionPane::CyclePermissionMode() {
     Announce(i18n::Text(Str::kModeNotKnownYet));
     return;
   }
-  const std::string next = agent::NextMode(backend_->capabilities(), current);
+  const std::string next = agent::NextMode(backend_->capabilities(), current,
+                                           backend_->refusedModes());
   if (next.empty()) {
     // An agent whose modes cannot be switched while it runs.  Said, like
     // every key that has nothing to do -- invariant 6.
@@ -1377,7 +1378,8 @@ void SessionPane::CyclePermissionMode() {
   // later could not cut in to be heard.  Nearly every switch goes through, so
   // the wait is not worth a silent key; the one that may not (auto, on an
   // account without it) is put right by FollowPermissionMode when the refusal
-  // arrives, and said then.  Session::permissionMode is already moved;
+  // arrives, and said then.  The next press steps over it (refusedModes).
+  // Session::permissionMode is already moved;
   // details_ and the bar follow it here, which is also what keeps
   // FollowPermissionMode from saying this same mode a second time.
   details_.permissionMode = model::Utf16FromUtf8(next);

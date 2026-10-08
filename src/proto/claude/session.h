@@ -143,6 +143,8 @@ class Session {
   // from handshake() because that one is a snapshot of one record and this one
   // changes.
   std::string permissionMode() const;
+  // Modes the CLI refused to switch to in this session (PermissionModeTracker).
+  std::vector<std::string> refusedModes() const;
 
  private:
   void OnBytes(std::string_view bytes);

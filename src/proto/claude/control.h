@@ -20,6 +20,7 @@
 //     as a transient fault and retries, so the mistake costs tokens as well.
 //     Session enforces the ordering; nothing else should close the handle.
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -190,6 +191,10 @@ bool ParsePermissionModeReport(const Json& record, std::string* mode);
 // can be told from the answers to everything else we ask.
 extern const char kModeRequestPrefix[];
 
+// True for the answer, success or refusal, to one of our set_permission_mode
+// requests.
+bool IsModeAnswer(const Json& record);
+
 // The permission mode the session is in, folded out of everything that says
 // it.  Not thread-safe; Session holds it under its lock.  A class of its own,
 // out of Session, so that the rules below can be tested on records rather than
@@ -214,6 +219,16 @@ extern const char kModeRequestPrefix[];
 // reader who has just heard the new one.  An older request answered after a
 // newer one does not settle current() either -- it would restore a mode the
 // reader has already pressed past.
+//
+// A mode the CLI refused once is kept in refused() for the rest of the
+// session, and Shift+Tab steps over it (claude-gui-lkk.46).  Without that, a
+// refused auto put the mode back on plan, the next press asked for auto again,
+// and plan could not be left by the key at all.  For the session only: the
+// refusal depends on the account and the gate, and the same account let auto
+// through a few hours later.  Settings refuse it reliably --
+// permissions.disableAutoMode "disable" gives {"subtype":"error","error":
+// "Cannot set permission mode to auto: auto mode disabled by settings",
+// "error_code":"auto_mode_settings"} (tools/probe_mode.py, 2026-10-08).
 class PermissionModeTracker {
  public:
   void Seed(const std::string& mode);
@@ -222,6 +237,7 @@ class PermissionModeTracker {
   // Empty while nothing was asked for and the CLI has not said: the mode then
   // comes from settings and is genuinely not known.
   const std::string& current() const { return current_; }
+  const std::vector<std::string>& refused() const { return refused_; }
 
  private:
   void Report(const std::string& mode);
@@ -229,6 +245,10 @@ class PermissionModeTracker {
   std::string current_;
   std::string reported_;
   std::string pendingId_;
+  // Every request not answered yet, newest or not: a refusal of an older one
+  // is still a refusal of its mode.
+  std::map<std::string, std::string> asked_;
+  std::vector<std::string> refused_;
 };
 
 // updatedInput may be null, in which case the tool's own input is used

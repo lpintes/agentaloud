@@ -1,5 +1,7 @@
 #include "proto/claude/control.h"
 
+#include <algorithm>
+
 namespace proto {
 namespace {
 
@@ -142,6 +144,13 @@ bool ParsePermissionModeReport(const Json& record, std::string* mode) {
 
 const char kModeRequestPrefix[] = "mode-";
 
+bool IsModeAnswer(const Json& record) {
+  if (StringField(record, "type") != "control_response") return false;
+  auto outer = record.find("response");
+  if (outer == record.end() || !outer->is_object()) return false;
+  return StringField(*outer, "request_id").rfind(kModeRequestPrefix, 0) == 0;
+}
+
 void PermissionModeTracker::Seed(const std::string& mode) {
   current_ = mode;
   reported_ = mode;
@@ -150,6 +159,7 @@ void PermissionModeTracker::Seed(const std::string& mode) {
 void PermissionModeTracker::Requested(const std::string& requestId,
                                       const std::string& mode) {
   pendingId_ = requestId;
+  asked_[requestId] = mode;
   current_ = mode;
 }
 
@@ -186,6 +196,15 @@ void PermissionModeTracker::Observe(const Json& record) {
       ParseSetPermissionModeResponse(record, &ignore, &echoed) &&
       !echoed.empty()) {
     reported_ = echoed;
+  }
+  auto asked = asked_.find(id);
+  if (asked != asked_.end()) {
+    if (subtype == "error" &&
+        std::find(refused_.begin(), refused_.end(), asked->second) ==
+            refused_.end()) {
+      refused_.push_back(asked->second);
+    }
+    asked_.erase(asked);
   }
   if (id != pendingId_) return;
   pendingId_.clear();

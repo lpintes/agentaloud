@@ -1238,6 +1238,19 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
         stlačením. Pri dvoch stlačeniach mohlo byť odmietnuté aj prvé.
         Odpoveď na staršiu požiadavku `current()` neurovná vôbec — vrátila by
         mód, cez ktorý čitateľ už prestlačil.
+      • **Odmietnutý mód sa pamätá do konca session a Shift+Tab ho preskočí**
+        (`PermissionModeTracker::refused` → `Backend::refusedModes` →
+        `agent::NextMode`). Inak z `plan` išla klávesa vždy na `auto`,
+        odmietnutie vrátilo `plan` a z plánovania sa nedalo odísť
+        (claude-gui-lkk.46). Len do konca session: to isté konto `auto` raz
+        odmietlo a o pár hodín pustilo. Naisto ho odmietne
+        `permissions.disableAutoMode: "disable"` v `--settings`
+        (`error_code: "auto_mode_settings"`, `tools/probe_mode.py`).
+      • **Odpoveď na Shift+Tab sa ohlási ako `ModeChanged` vždy**, aj keď sa
+        mód rovná naposledy ohlásenému (`IsModeAnswer` v
+        `ClaudeBackend::OnRecord`). Panel sa na klávese posunul sám, takže
+        odmietnutie vracia presne ten mód, ktorý backend ohlásil naposledy —
+        a porovnanie bez tejto výnimky nechalo panel na odmietnutom.
 
     Mód sa **ohlasuje synchrónne na klávese** (`CyclePermissionMode`), nie až na
     potvrdení: podľa invariantu 7 smie prerušiť reč len odozva na klávesu.

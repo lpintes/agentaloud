@@ -55,6 +55,9 @@ class CodexBackend : public agent::Backend {
 
   std::string conversationId() const override;
   std::string mode() const override;
+  // A refused settings update has been seen in no measurement, so nothing
+  // is kept: ModeTracker falls back and the next press tries again.
+  std::vector<std::string> refusedModes() const override { return {}; }
   agent::Account account() const override;
   std::vector<agent::SlashCommand> commands() const override { return {}; }
   bool ready() const override;

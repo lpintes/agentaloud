@@ -40,6 +40,7 @@ class ClaudeBackend : public agent::Backend {
 
   std::string conversationId() const override;
   std::string mode() const override;
+  std::vector<std::string> refusedModes() const override;
   agent::Account account() const override;
   std::vector<agent::SlashCommand> commands() const override;
   bool ready() const override;

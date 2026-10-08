@@ -256,6 +256,11 @@ std::string Session::permissionMode() const {
   return mode_.current();
 }
 
+std::vector<std::string> Session::refusedModes() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return mode_.refused();
+}
+
 bool Session::SendJson(const Json& value) {
   const std::string line = value.dump() + "\n";
   std::lock_guard<std::mutex> lock(writeMutex_);

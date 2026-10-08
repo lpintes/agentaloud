@@ -1527,6 +1527,65 @@ void TestPermissionModeTracker() {
   CHECK_EQ(tracker.current(), std::string("auto"));
 }
 
+// Z plan isiel Shift+Tab vzdy na auto; ked ho CLI odmietlo, tracker vratil
+// plan a dalsie stlacenie skusilo auto znova -- z planovania sa klavesou
+// nedalo odist (claude-gui-lkk.46). Odmietnuty rezim sa preto pamata do konca
+// session a cyklus ho preskoci.
+void TestRefusedModeIsSkipped() {
+  TEST("control: rezim, ktory CLI odmietlo, Shift+Tab preskoci");
+
+  proto::PermissionModeTracker tracker;
+  tracker.Seed("plan");
+  tracker.Requested("mode-1", "auto");
+  // Odpoved doslova, s permissions.disableAutoMode "disable"
+  // (tools/probe_mode.py, 2026-10-08).
+  tracker.Observe(proto::Json::parse(R"({"type": "control_response",
+    "response": {"subtype": "error", "request_id": "mode-1",
+      "error": "Cannot set permission mode to auto: auto mode disabled by settings",
+      "error_code": "auto_mode_settings"}})"));
+  CHECK_EQ(tracker.current(), std::string("plan"));
+  // Rezim je po odmietnuti ten isty ako pred stlacenim, a ClaudeBackend ho
+  // aj tak musi ohlasit -- panel sa na klavese posunul na auto.
+  CHECK(proto::IsModeAnswer(ModeRefusal("mode-1")));
+  CHECK(proto::IsModeAnswer(ModeAnswer("mode-1", "plan")));
+  CHECK(!proto::IsModeAnswer(ModeRefusal("stop-1")));
+  CHECK(!proto::IsModeAnswer(ModeStatus("plan")));
+  CHECK_EQ(tracker.refused().size(), size_t(1));
+  CHECK_EQ(tracker.refused()[0], std::string("auto"));
+
+  const agent::Capabilities claude = proto::ClaudeCapabilities();
+  CHECK_EQ(agent::NextMode(claude, "plan", tracker.refused()),
+           std::string("default"));
+  // Zvysok cyklu ide dalej, len bez auto.
+  CHECK_EQ(agent::NextMode(claude, "default", tracker.refused()),
+           std::string("acceptEdits"));
+  // Mimo cyklu sa zacina na acceptEdits ako vzdy, a ked je odmietnuty aj ten,
+  // ide sa dalej po cykle.
+  CHECK_EQ(agent::NextMode(claude, "dontAsk", {"acceptEdits"}),
+           std::string("plan"));
+
+  // Odmietnutie starsej z dvoch poziadaviek je tiez odmietnutie jej rezimu,
+  // hoci current() neurovna.
+  tracker.Requested("mode-2", "default");
+  tracker.Requested("mode-3", "acceptEdits");
+  tracker.Observe(ModeRefusal("mode-2"));
+  CHECK_EQ(tracker.refused().size(), size_t(2));
+  CHECK_EQ(tracker.refused()[1], std::string("default"));
+  // To iste odmietnutie dvakrat sa nezapise dvakrat.
+  tracker.Requested("mode-4", "auto");
+  tracker.Observe(ModeRefusal("mode-4"));
+  CHECK_EQ(tracker.refused().size(), size_t(2));
+  // Uspech zoznam nemeni.
+  tracker.Requested("mode-5", "plan");
+  tracker.Observe(ModeAnswer("mode-5", "plan"));
+  CHECK_EQ(tracker.refused().size(), size_t(2));
+
+  // Ked je odmietnute vsetko ostatne, klavesa nema kam -- prazdne, nie
+  // rezim, ktory uz raz neprisiel.
+  CHECK_EQ(agent::NextMode(claude, "plan", {"default", "acceptEdits", "auto"}),
+           std::string());
+}
+
 void TestAnsweringModel() {
   TEST("events: model je ten, ktory odpoveda, nie ten zo system/init");
 
@@ -3581,6 +3640,7 @@ int main(int argc, char** argv) {
   TestUpdateRules();
   TestPermissionModeReports();
   TestPermissionModeTracker();
+  TestRefusedModeIsSkipped();
   TestAnsweringModel();
   TestTranslatorModelAndTurn();
   TestUsageParsing();
