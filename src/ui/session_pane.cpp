@@ -581,6 +581,8 @@ void SessionPane::OnDrain() {
         questionsByPrompt_.push_back(*asked);
       } else if (std::holds_alternative<agent::TurnEnded>(event)) {
         OnTurnEnded();
+      } else if (std::holds_alternative<agent::SessionEnded>(event)) {
+        OnSessionEnded();
       } else if (const auto* limit =
                      std::get_if<agent::RateLimitChanged>(&event)) {
         ShowRateLimit(*limit);
@@ -637,6 +639,32 @@ void SessionPane::OnTurnEnded() {
     }
   } else {
     SignalTurnEnd();
+  }
+}
+
+void SessionPane::OnSessionEnded() {
+  ended_ = true;
+  // A turn the process died in gets no TurnEnded; it is over all the same,
+  // and nothing it was waiting for will come.
+  busy_ = false;
+  interrupted_ = false;
+  questionsByPrompt_.clear();
+  // Not cleared like the end of a turn.  An empty field says "nothing is
+  // running, ask away", and here the second half is no longer true.
+  SetStatus(i18n::Text(Str::kStatusAgentEnded));
+  // The first line of the block, queued -- it arrived on its own (invariant
+  // 7) -- and in the foreground whatever the caret is doing.  Invariant 11
+  // keeps progress quiet for a reader who is reading elsewhere, but this is
+  // not progress: it is the one fact that changes what every key does next,
+  // and nothing later would say it.  The CLI's own words stay in the block,
+  // where they can be read line by line; spoken, a stack trace is noise.
+  // Behind the window it is the sound of a turn ending there, which it is.
+  const std::vector<model::Block>& blocks = model_.blocks();
+  if (InForeground() && speech_.available() && !blocks.empty() &&
+      blocks.back().kind == model::BlockKind::SessionEnded) {
+    speech_.Say(blocks.back().summary, false);
+  } else {
+    MessageBeep(InForeground() ? MB_ICONASTERISK : kBackgroundEndSound);
   }
 }
 
@@ -1152,6 +1180,10 @@ void SessionPane::Send() {
   // send that answers with silence cannot be told from a key that half
   // arrived.  The text is left in the box in both cases; that is why the
   // wording says what is in the way rather than that something was lost.
+  if (ended_) {
+    Announce(i18n::Text(Str::kAgentNotRunning));
+    return;
+  }
   if (busy_) {
     Announce(i18n::Text(Str::kTurnStillRunning));
     return;

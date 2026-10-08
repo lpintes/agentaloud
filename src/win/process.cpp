@@ -54,6 +54,12 @@ HANDLE MakeKillOnCloseJob() {
   return job;
 }
 
+// How much of stderr is kept.  The head is where a CLI that refuses to start
+// says why; the tail is where a crash says what it was doing.  What is between
+// them in a long session is warnings nobody will read in a dialog anyway.
+constexpr size_t kErrorHead = 4096;
+constexpr size_t kErrorTail = 12288;
+
 }  // namespace
 
 Process::~Process() {
@@ -64,10 +70,21 @@ Process::~Process() {
   Close(&outputRead_);
   if (reader_.joinable()) reader_.join();
   Close(&process_);
-  // Last, and it does more than tidy up: Terminate() above kills the child we
-  // started, this kills whatever the child started.  On the orderly path there
-  // is nothing left to kill, and that is what it should look like.
+  // Last of the three, and it does more than tidy up: Terminate() above kills
+  // the child we started, this kills whatever the child started.  On the
+  // orderly path there is nothing left to kill, and that is what it should
+  // look like.
   Close(&job_);
+  // After the job, because everything that could still hold the write end of
+  // stderr is dead by now and the read sees EOF.  Without a job a grandchild
+  // may outlive us with it, and the read is cancelled instead.
+  if (errorThread_) {
+    CancelSynchronousIo(errorThread_);
+    WaitForSingleObject(errorThread_, INFINITE);
+  }
+  Close(&errorRead_);
+  Close(&errorThread_);
+  Close(&errorDone_);
 }
 
 std::wstring Process::Quote(const std::wstring& argument) {
@@ -100,25 +117,40 @@ std::wstring Process::Quote(const std::wstring& argument) {
 }
 
 bool Process::Start(const std::wstring& commandLine,
-                    const std::wstring& workingDir, OutputCallback onOutput) {
+                    const std::wstring& workingDir, OutputCallback onOutput,
+                    ExitCallback onExit) {
+  startError_ = 0;
   HANDLE inputRead = nullptr;
   HANDLE outputWrite = nullptr;
-  if (!MakePipe(&inputRead, &inputWrite_, false)) return false;
-  if (!MakePipe(&outputRead_, &outputWrite, true)) {
+  HANDLE errorWrite = nullptr;
+  auto fail = [&] {
+    startError_ = GetLastError();
     Close(&inputRead);
+    Close(&outputWrite);
+    Close(&errorWrite);
     Close(&inputWrite_);
+    Close(&outputRead_);
+    Close(&errorRead_);
+    Close(&errorDone_);
+    Close(&job_);
     return false;
-  }
+  };
+  if (!MakePipe(&inputRead, &inputWrite_, false)) return fail();
+  if (!MakePipe(&outputRead_, &outputWrite, true)) return fail();
+  // The child's stderr is ours to read, not passed through to our own.  Ours
+  // does not exist -- this is a -mwindows program -- and the CLI says there
+  // exactly the things a user needs when a session will not start: an option
+  // it refuses, a session id already in use (invariant 16).
+  if (!MakePipe(&errorRead_, &errorWrite, true)) return fail();
+  errorDone_ = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+  if (errorDone_ == nullptr) return fail();
 
   STARTUPINFOW startup = {};
   startup.cb = sizeof(startup);
   startup.dwFlags = STARTF_USESTDHANDLES;
   startup.hStdInput = inputRead;
   startup.hStdOutput = outputWrite;
-  // The child's stderr goes to ours.  Claude puts diagnostics there and
-  // nothing that belongs to the protocol, so letting it through to the console
-  // is more useful than swallowing it.
-  startup.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+  startup.hStdError = errorWrite;
 
   // CreateProcessW may write into the command line, so it cannot be a literal.
   std::vector<wchar_t> mutableLine(commandLine.begin(), commandLine.end());
@@ -137,16 +169,11 @@ bool Process::Start(const std::wstring& commandLine,
       CREATE_NO_WINDOW | (job_ ? CREATE_SUSPENDED : 0u), nullptr,
       workingDir.empty() ? nullptr : workingDir.c_str(), &startup, &info);
 
+  if (!started) return fail();
   // The child owns its ends now; ours have to go or the pipes never break.
   Close(&inputRead);
   Close(&outputWrite);
-
-  if (!started) {
-    Close(&inputWrite_);
-    Close(&outputRead_);
-    Close(&job_);
-    return false;
-  }
+  Close(&errorWrite);
   if (job_) {
     // Failure here is not fatal and is not treated as one: the session works,
     // it just loses the guarantee that the child dies with us.  Since Windows
@@ -159,6 +186,13 @@ bool Process::Start(const std::wstring& commandLine,
   CloseHandle(info.hThread);
   process_ = info.hProcess;
   onOutput_ = std::move(onOutput);
+  onExit_ = std::move(onExit);
+  // Before the stdout reader, which waits for this one at the end.  Without
+  // it the session still works, it only says nothing about why it ended --
+  // and the event is set so that nobody waits for a reader that is not there.
+  errorThread_ = CreateThread(nullptr, 0, &Process::ErrorThread, this, 0,
+                              nullptr);
+  if (errorThread_ == nullptr) SetEvent(errorDone_);
   reader_ = std::thread(&Process::ReadLoop, this);
   return true;
 }
@@ -171,6 +205,59 @@ void Process::ReadLoop() {
     if (read == 0) break;  // EOF: the child closed its end or exited
     if (onOutput_ && !stopping_) onOutput_(std::string_view(buffer, read));
   }
+  if (!onExit_ || stopping_) return;
+
+  // stdout ends when the child does, nearly always.  A child that closed it
+  // and carried on is given a few seconds and then reported without a code,
+  // rather than holding this thread -- and with it the destructor -- forever.
+  Exit exit;
+  if (WaitForSingleObject(process_, 5000) == WAIT_OBJECT_0 &&
+      GetExitCodeProcess(process_, &exit.code)) {
+    exit.codeKnown = true;
+  }
+  // The last words of a crash are written just before it, on the other pipe,
+  // and may still be on their way.  Bounded for the same grandchild that may
+  // hold that pipe open after the child is gone.
+  WaitForSingleObject(errorDone_, 1000);
+  exit.errorOutput = ErrorOutput();
+  if (!stopping_) onExit_(exit);
+}
+
+DWORD WINAPI Process::ErrorThread(void* self) {
+  static_cast<Process*>(self)->ErrorLoop();
+  return 0;
+}
+
+void Process::ErrorLoop() {
+  char buffer[4096];
+  for (;;) {
+    DWORD read = 0;
+    if (!ReadFile(errorRead_, buffer, sizeof(buffer), &read, nullptr)) break;
+    if (read == 0) break;
+    std::string_view bytes(buffer, read);
+    std::lock_guard<std::mutex> lock(errorMutex_);
+    const size_t room = kErrorHead - errorHead_.size();
+    errorHead_.append(bytes.substr(0, room));
+    if (bytes.size() > room) errorTail_.append(bytes.substr(room));
+    if (errorTail_.size() > kErrorTail) {
+      errorTail_.erase(0, errorTail_.size() - kErrorTail);
+      errorDropped_ = true;
+    }
+  }
+  SetEvent(errorDone_);
+}
+
+std::string Process::ErrorOutput() const {
+  std::lock_guard<std::mutex> lock(errorMutex_);
+  if (!errorDropped_) return errorHead_ + errorTail_;
+  // The cut may have landed inside a UTF-8 sequence; its continuation bytes
+  // would decode as a replacement character the reader hears for nothing.
+  size_t start = 0;
+  while (start < errorTail_.size() &&
+         (static_cast<unsigned char>(errorTail_[start]) & 0xC0) == 0x80) {
+    ++start;
+  }
+  return errorHead_ + "\n\xE2\x80\xA6\n" + errorTail_.substr(start);
 }
 
 bool Process::Write(std::string_view bytes) {

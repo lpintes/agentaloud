@@ -35,6 +35,7 @@ enum class BlockKind {
   AssistantText,     // the answer
   PermissionDenied,  // a tool a rule would not let through
   Interrupted,       // the turn the reader stopped; added locally, like a prompt
+  SessionEnded,      // the CLI exited unasked, with what it wrote to stderr
   Thinking,
   ToolUse,
   ToolResult,

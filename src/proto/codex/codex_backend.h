@@ -21,6 +21,7 @@
 //     at once and the turn is thrown away (measured).  Stop interrupts the
 //     turn and waits for it to end, as for Claude (invariant 1).
 
+#include <atomic>
 #include <condition_variable>
 #include <map>
 #include <memory>
@@ -94,6 +95,8 @@ class CodexBackend : public agent::Backend {
   Translator translator_;
   std::string reportedMode_;
   bool reportedReady_ = false;
+  // Set by Stop(), so that the end it causes is not reported as the CLI's.
+  std::atomic<bool> stopping_{false};
 
   mutable std::mutex mutex_;
   std::condition_variable turnEnded_;

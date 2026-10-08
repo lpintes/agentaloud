@@ -228,6 +228,21 @@ struct TurnEnded {
 // after every request to the model.  The pane keeps the newest.
 struct UsageChanged { Usage usage; };
 
+// The CLI's process ended without being asked to: it refused its arguments,
+// crashed, or was killed.  The last event of a session -- nothing comes after
+// it, and a turn that was running is over without a TurnEnded of its own.
+// Never sent for an end that Stop asked for.
+//
+// errorOutput is what the CLI wrote to stderr, as it came (UTF-8 from both
+// CLIs), and may be empty; a long one has lost its middle.  It is the only
+// place a CLI says why it would not start (invariants 14 and 16), so it is
+// shown, not interpreted.
+struct SessionEnded {
+  bool exitCodeKnown = false;
+  unsigned long exitCode = 0;
+  std::string errorOutput;
+};
+
 // A record the adapter did not recognise.  Not an error; the soak counts them
 // so a new record type is noticed by us and not by a user.
 struct Unrecognised { std::string type; };
@@ -237,7 +252,7 @@ using Event = std::variant<AssistantText, Thinking, ThinkingTick,
                            QuestionByPrompt, UserPrompt, Interrupted, WorkingDirectory,
                            ModelChanged, ModeChanged, ContextUsed,
                            UsageChanged, RateLimitChanged, Ready, TurnEnded,
-                           Unrecognised>;
+                           SessionEnded, Unrecognised>;
 
 }  // namespace agent
 

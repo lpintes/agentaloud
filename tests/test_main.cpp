@@ -482,6 +482,42 @@ void TestInterruptLeavesAMark() {
   CHECK_EQ(transcript.FirstLine(2), std::wstring(L"Prerušené používateľom."));
 }
 
+void TestSessionEndedKeepsStderr() {
+  TEST("transcript: koniec CLI zanecha blok s jeho chybovym vystupom");
+  model::Transcript transcript;
+  std::string problem;
+  transcript.AppendUserPrompt(L"ahoj");
+  // Farba a CRLF, ako ich pise node na stderr; do bloku nesmie vojst ani
+  // jedno (invarianty 4 a 8).
+  transcript.Append({agent::SessionEnded{
+      true, 1, "\x1b[31mError: Session ID x is already in use.\x1b[0m\r\n"}});
+  CHECK(transcript.CheckInvariants(&problem));
+  CHECK_EQ(transcript.blocks().size(), size_t{2});
+  const model::Block& ended = transcript.blocks()[1];
+  CHECK(ended.kind == model::BlockKind::SessionEnded);
+  CHECK(ended.isError);
+  // Obsah, nie mechanizmus: neda sa zbalit, cita sa cely.
+  CHECK(!ended.collapsible);
+  CHECK(!ended.collapsed);
+  CHECK_EQ(ended.summary, std::wstring(L"Agent skončil s kódom 1."));
+  CHECK_EQ(ended.body, std::wstring(L"Agent skončil s kódom 1.\n"
+                                    L"Error: Session ID x is already in use."));
+  CHECK_EQ(transcript.FirstLine(1), std::wstring(L"Agent skončil s kódom 1."));
+
+  // Pad: NTSTATUS sa cita len hexa.  Prazdny stderr sa povie, inak by blok
+  // vyzeral useknuty.
+  model::Transcript crashed;
+  crashed.Append({agent::SessionEnded{true, 0xC0000005, ""}});
+  CHECK_EQ(crashed.blocks().size(), size_t{1});
+  CHECK_EQ(crashed.blocks()[0].body,
+           std::wstring(L"Agent skončil s kódom 0xC0000005.\n"
+                        L"Na chybový výstup nenapísal nič."));
+
+  model::Transcript lingering;
+  lingering.Append({agent::SessionEnded{false, 0, "x"}});
+  CHECK_EQ(lingering.blocks()[0].summary, std::wstring(L"Agent skončil."));
+}
+
 void TestToolResultsSitBehindTheirCall() {
   TEST("transcript: vysledok stoji za svojim volanim, nie na konci");
   model::Transcript transcript;
@@ -3529,6 +3565,7 @@ int main(int argc, char** argv) {
   TestControlCharactersNeverReachTheBuffer();
   TestErrorNavigationAndFirstLine();
   TestInterruptLeavesAMark();
+  TestSessionEndedKeepsStderr();
   TestToolResultsSitBehindTheirCall();
   TestBookmarksSurviveCollapsing();
   TestBookmarkIntoCollapsedBlock();

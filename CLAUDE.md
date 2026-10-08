@@ -848,9 +848,9 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     obnovenie: CLI povie „Error: Session ID … is already in use.", skončí
     s kódom 1 a na stdout nepovie nič. Obnovuje `--resume`, ktoré si obnovené
     id ponechá, a druhé `--session-id` k nemu CLI odmietne bez
-    `--fork-session`. Obe hlášky idú na stderr — a ten appka preložená
-    s `-mwindows` nemá kam vypísať, takže sa to prejaví ako session, ktorá sa
-    spustila a mlčí. `Start` preto id nevyrobí, keď o rozhovore hovoria už
+    `--fork-session`. Obe hlášky idú na stderr; do 8. 10. 2026 sa to prejavilo
+    ako session, ktorá sa spustila a mlčí, dnes ako blok „Agent skončil
+    s kódom 1." s tou hláškou (invariant 25). `Start` preto id nevyrobí, keď o rozhovore hovoria už
     `extraArgs` (`--resume`, `-r`, `--continue`, `-c`, vlastné `--session-id`).
     Odmerané 6. 9. 2026, `tools/probe_session_id.py`.
 
@@ -878,7 +878,9 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     S poznámkou zmizol `Transcript::AppendNote` aj `BlockKind::Note`, teda
     vlastný hlas appky v prepise. Keby sa niekedy vracal, patrí sem s ním aj
     dôvod, prečo `AssistantText` nestačí: boli by to slová vložené Claudovi
-    do úst.
+    do úst. Vlastný hlas appky v prepise dnes majú dva bloky, oba bez
+    predpony hovoriaceho a oba ako odpoveď na udalosť, nie ako komentár:
+    `Interrupted` a `SessionEnded` (invariant 25).
 
     `ResumesConversation` je pritom **užšia otázka** než `SaysWhichConversation`,
     ktorou sa riadi vlastné id vyššie: `--session-id` rozhovor pomenúva, ale
@@ -988,8 +990,8 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     Je to **zmena rozhodnutia**. `--` sa tu predtým zvažovalo a zamietlo ako
     „druhé pravidlo pre prípad, ktorý na Windows nenastáva" — no vtedy
     len ako spôsob, ako zadať priečinok s pomlčkou. Dôvod, ktorý ho teraz
-    zaviedol, je iný a skutočný. Cena zostáva: CLI, ktoré parameter odmietne,
-    to povie na stderr, ktorý appka zatiaľ neukáže (claude-gui-lkk.49).
+    zaviedol, je iný a skutočný. CLI, ktoré parameter odmietne, to povie na
+    stderr a skončí; appka to ukáže ako blok v prepise (invariant 25).
 
     **`--backend <meno>` je nepovinné** a predvolené je `claude` — povinné by
     rozbilo každú skratku a nepovedalo by nič, čo appka nevie. Neznáme meno sa
@@ -1458,6 +1460,41 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     hovoril, nemusí existovať. Zatvorením poslednej session appka nekončí;
     rám zostane prázdny so zmazaným stavovým riadkom, a ten treba zmazať, inak
     by NVDA+End čítal fakty session, ktorá už nebeží.
+
+25. **Proces CLI, ktorý skončil sám, je blok v prepise, a jeho stderr je
+    obsah toho bloku.** CLI hovorí na stderr presne to, čo čitateľ potrebuje,
+    keď session nejde — odmietnutú voľbu, obsadené id, holé `--resume`
+    (invarianty 14 a 16) — a appka s `-mwindows` vlastný stderr nemá. Kým ho
+    `win::Process` dieťaťu podával (claude-gui-lkk.49), session sa spustila
+    a mlčala: prázdny prepis, prázdny stavový riadok a nič, z čoho by sa
+    dalo zistiť prečo.
+
+    `win::Process` má teraz rúru aj na stderr a **vlastné čítacie vlákno, a to
+    nie je kozmetika**: nečítaná rúra sa zaplní a dieťa sa zasekne na zápise,
+    a CLI tam píše varovania aj v bežnej session. Drží sa hlava (4 kB) a chvost
+    (12 kB) — hláška pri odmietnutí je na začiatku, posledné slová pádu na
+    konci. Koniec procesu hlási `onExit` až po EOF na stdout, teda za
+    posledným záznamom, a na zvyšok stderr počká najviac sekundu: vnuk môže
+    rúru držať aj po smrti dieťaťa.
+
+    Adaptér z toho spraví `agent::SessionEnded` — **ale nie po vlastnom
+    `Stop()`**; ten si nastaví `stopping_` skôr, než čokoľvek zavrie. A uvoľní
+    `turnInFlight_`: ťah, v ktorom proces zomrel, svoj `result` nedostane
+    a `Stop()` by pri zatvorení okna čakal celý timeout.
+
+    Blok (`BlockKind::SessionEnded`) je obsah, nie mechanizmus, takže sa
+    nezbalí; prvý riadok je náš („Agent skončil s kódom 1.", NTSTATUS hexa),
+    za ním text CLI cez `Widen` ako všetko z rúr, a prázdny stderr sa povie
+    vetou — inak by blok vyzeral useknutý. `isError`, aby ho našlo E. Panel
+    v popredí povie prvý riadok **bez ohľadu na kurzor** (invariant 11 tu
+    neplatí, je to fakt, ktorý mení, čo urobí každá ďalšia klávesa), na
+    pozadí zvuk konca ťahu. Stavový riadok povie „agent nebeží" — prázdne
+    pole by znamenalo „hotovo, pýtaj sa" — a Ctrl+Enter odmietne s odkazom
+    na Ctrl+N. Session sa na mieste nereštartuje.
+
+    Overené naostro bez kreditu (8. 10. 2026): `agentaloud <priečinok> --
+    --fafa` dá blok „Agent skončil s kódom 1. / error: unknown option
+    '--fafa'" a zavretie okna trvá 0,2 s.
 
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa

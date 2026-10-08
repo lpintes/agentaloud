@@ -81,9 +81,17 @@ bool CodexBackend::Start(const agent::StartOptions& options,
 
   assembler_ = std::make_unique<LineAssembler>(
       [this](std::string_view text) { OnLine(text); });
-  if (!process_.Start(line, options.projectDir, [this](std::string_view bytes) {
-        assembler_->Feed(bytes);
-      })) {
+  if (!process_.Start(
+          line, options.projectDir,
+          [this](std::string_view bytes) { assembler_->Feed(bytes); },
+          [this](const win::Process::Exit& exit) {
+            // A turn the process died in will never be completed; over now,
+            // or Stop() would wait out its timeout for it.
+            TurnOver();
+            if (stopping_) return;
+            Emit({agent::SessionEnded{exit.codeKnown, exit.code,
+                                      exit.errorOutput}});
+          })) {
     return false;
   }
   // experimentalApi unlocks thread/settings/update, which is the only way to
@@ -224,6 +232,7 @@ bool CodexBackend::SetMode(const std::string& id) {
 void CodexBackend::Stop(unsigned turnTimeoutMs) {
   // Asked to stop rather than waited out, as for Claude: the wait has a limit
   // and stdin closes after it either way.
+  stopping_ = true;
   Interrupt();
   {
     std::unique_lock<std::mutex> lock(mutex_);

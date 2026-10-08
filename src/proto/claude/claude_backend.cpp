@@ -113,6 +113,11 @@ bool ClaudeBackend::Start(const agent::StartOptions& options,
       session, [this](const Event& event) { OnRecord(event); },
       [this](const PermissionRequest& request) {
         return OnPermission(request);
+      },
+      [this](const win::Process::Exit& exit) {
+        if (!callbacks_.onEvents) return;
+        callbacks_.onEvents({agent::SessionEnded{exit.codeKnown, exit.code,
+                                                 exit.errorOutput}});
       });
 }
 

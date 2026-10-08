@@ -108,9 +108,10 @@ bool SaysWhichConversation(const std::vector<std::wstring>& extraArgs) {
 Session::~Session() { Stop(5000); }
 
 bool Session::Start(const Options& options, EventCallback onEvent,
-                    PermissionCallback onPermission) {
+                    PermissionCallback onPermission, ExitCallback onExit) {
   onEvent_ = std::move(onEvent);
   onPermission_ = std::move(onPermission);
+  onExit_ = std::move(onExit);
   assembler_ = std::make_unique<LineAssembler>(
       [this](std::string_view line) { OnLine(line); });
   // The id is ours to decide, and deciding it here is the point: told to the
@@ -132,8 +133,10 @@ bool Session::Start(const Options& options, EventCallback onEvent,
   // read differently is corrected, not kept.  Mode names are ASCII.
   mode_.Seed(std::string(options.permissionMode.begin(),
                          options.permissionMode.end()));
-  if (!process_.Start(BuildCommandLine(effective), options.workingDir,
-                      [this](std::string_view bytes) { OnBytes(bytes); })) {
+  if (!process_.Start(
+          BuildCommandLine(effective), options.workingDir,
+          [this](std::string_view bytes) { OnBytes(bytes); },
+          [this](const win::Process::Exit& exit) { OnExit(exit); })) {
     return false;
   }
   // Opening the channel before the first turn, so that the first thing to
@@ -223,6 +226,17 @@ void Session::OnLine(std::string_view line) {
   if (onEvent_) onEvent_(event);
 }
 
+void Session::OnExit(const win::Process::Exit& exit) {
+  // A turn the process died in will never have its result.  Over now, or
+  // Stop() would wait out its whole timeout for it when the window closes.
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    turnInFlight_ = false;
+  }
+  turnEnded_.notify_all();
+  if (onExit_ && !stopping_) onExit_(exit);
+}
+
 std::string Session::sessionId() const {
   std::lock_guard<std::mutex> lock(mutex_);
   return sessionId_;
@@ -290,6 +304,7 @@ void Session::Stop(unsigned turnTimeoutMs) {
   // mid-turn would otherwise sit through the timeout and then close stdin under
   // the turn anyway.  Interrupted, it ends with its own result, usually within
   // a second, and the record on disk says it was interrupted.
+  stopping_ = true;
   Interrupt();
   WaitForTurn(turnTimeoutMs);
   // Only now.  Closing earlier makes the CLI report a broken channel as a

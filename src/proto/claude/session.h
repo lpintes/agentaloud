@@ -64,14 +64,21 @@ class Session {
   using EventCallback = std::function<void(const Event&)>;
   using PermissionCallback =
       std::function<PermissionDecision(const PermissionRequest&)>;
+  // The process ended on its own -- after the last event, and never for an
+  // end that Stop() asked for.  Also on the reader thread.
+  using ExitCallback = std::function<void(const win::Process::Exit&)>;
 
   Session() = default;
   ~Session();
   Session(const Session&) = delete;
   Session& operator=(const Session&) = delete;
 
+  // On false, startError() is the GetLastError of what failed -- the process
+  // not starting at all; a CLI that starts and then refuses its arguments
+  // returns true here and is reported through onExit.
   bool Start(const Options& options, EventCallback onEvent,
-             PermissionCallback onPermission);
+             PermissionCallback onPermission, ExitCallback onExit = nullptr);
+  DWORD startError() const { return process_.startError(); }
 
   // Queues one user turn.  Returns as soon as it is written; the turn is over
   // when a Result event arrives.
@@ -140,9 +147,13 @@ class Session {
  private:
   void OnBytes(std::string_view bytes);
   void OnLine(std::string_view line);
+  void OnExit(const win::Process::Exit& exit);
   bool SendJson(const Json& value);
 
   win::Process process_;
+  ExitCallback onExit_;
+  // Set by Stop(), so that the end it causes is not reported as the CLI's.
+  std::atomic<bool> stopping_{false};
   // One assembler for the life of the session: a record split across two
   // reads has to survive the gap between them.  Built in Start() because it
   // needs `this`.

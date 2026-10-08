@@ -1,5 +1,7 @@
 #include "model/transcript.h"
 
+#include <cwchar>
+
 #include "i18n/i18n.h"
 #include "model/utf.h"
 
@@ -495,6 +497,7 @@ bool IsMechanism(BlockKind kind) {
     case BlockKind::AssistantText:
     case BlockKind::PermissionDenied:
     case BlockKind::Interrupted:
+    case BlockKind::SessionEnded:
       return false;
   }
   return false;
@@ -506,6 +509,7 @@ const wchar_t* KindLabel(BlockKind kind) {
     case BlockKind::AssistantText: return i18n::Text(Str::kKindAnswer);
     case BlockKind::PermissionDenied: return i18n::Text(Str::kKindDenied);
     case BlockKind::Interrupted: return i18n::Text(Str::kKindInterrupted);
+    case BlockKind::SessionEnded: return i18n::Text(Str::kKindSessionEnded);
     case BlockKind::Thinking: return i18n::Text(Str::kKindThinking);
     case BlockKind::ToolUse: return i18n::Text(Str::kKindTool);
     case BlockKind::ToolResult: return i18n::Text(Str::kKindOutput);
@@ -636,6 +640,43 @@ Block MakeInterrupted() {
   return block;
 }
 
+// The CLI's process gone without being asked, and the only words it left: its
+// stderr.  That is where a CLI says it refused an option or a session id is
+// in use (invariants 14 and 16), and before this a session that did either
+// simply went quiet.
+//
+// Content, not mechanism, so it never collapses -- what the CLI said is the
+// thing to read, and a heading in front of it would be one more line to get
+// past.  The first line is ours and is the summary; the CLI's text follows
+// whole, through Widen like everything else off the pipes: an error output
+// is a terminal program's output, colours and all.  An empty one is said to
+// be empty, because nothing after the first line would read as the block
+// having been cut short.
+Block MakeSessionEnded(const agent::SessionEnded& ended) {
+  Block block;
+  block.kind = BlockKind::SessionEnded;
+  std::wstring first = i18n::Text(Str::kSessionEndedNoCode);
+  if (ended.exitCodeKnown) {
+    // An NTSTATUS (0xC0000005 for a crash) means something only in hex;
+    // a code the program chose is a small number and is read as one.
+    wchar_t code[16];
+    swprintf(code, 16, ended.exitCode >= 0x10000 ? L"0x%08lX" : L"%lu",
+             ended.exitCode);
+    first = i18n::Format(Str::kSessionEnded, {code});
+  }
+  std::wstring output = Widen(ended.errorOutput);
+  while (!output.empty() && output.back() == L'\n') output.pop_back();
+  block.body = first + L'\n' +
+               (output.empty() ? std::wstring(i18n::Text(Str::kSessionEndedSilent))
+                               : output);
+  block.summary = first;
+  block.collapsible = false;
+  // E finds it: it is the place the work stopped, whatever the code says --
+  // a CLI that exits on its own with 0 is still not a turn that finished.
+  block.isError = true;
+  return block;
+}
+
 }  // namespace
 
 Edit Transcript::AppendUserPrompt(const std::wstring& text) {
@@ -693,6 +734,8 @@ std::vector<Edit> Transcript::Append(const std::vector<agent::Event>& events) {
       made.push_back(MakeUserPrompt(Utf16FromUtf8(prompt->text)));
     } else if (std::holds_alternative<agent::Interrupted>(event)) {
       made.push_back(MakeInterrupted());
+    } else if (const auto* ended = std::get_if<agent::SessionEnded>(&event)) {
+      made.push_back(MakeSessionEnded(*ended));
     } else if (const auto* directory =
                    std::get_if<agent::WorkingDirectory>(&event)) {
       // Makes no block, but it is the project, and tool paths are shortened

@@ -188,6 +188,9 @@ class SessionPane {
   // hears that it is over -- "prerušené" if they stopped it, otherwise
   // SignalTurnEnd.
   void OnTurnEnded();
+  // The CLI exited unasked.  Its block is already in the transcript; this
+  // ends the turn it may have been in and says that the session is over.
+  void OnSessionEnded();
   void SetStatus(std::wstring text);
   // The model that is answering now.  Which record says that is the
   // translator's business (invariant 21); this only shows it.
@@ -294,6 +297,9 @@ class SessionPane {
   std::vector<agent::Event> history_;
 
   bool busy_ = false;
+  // The CLI's process is gone and nothing sent will be heard.  For good:
+  // a session is not restarted in place.
+  bool ended_ = false;
   // The questions of the turn now running that wait for the next prompt.
   // Offered when the turn ends, unless the reader stopped it.
   std::vector<agent::QuestionByPrompt> questionsByPrompt_;
