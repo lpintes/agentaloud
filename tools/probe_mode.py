@@ -29,12 +29,14 @@ def rq(request_id, request):
 
 
 def main():
-    # probe_mode.py [mod] [sekundy]
+    # probe_mode.py [mod] [sekundy] [dalsie argumenty CLI...]
+    # Napriklad '--settings subor.json' s permissions.disableAutoMode, ktorym
+    # sa da odmietnutie auto vyvolat naisto (claude-gui-lkk.46).
     mode = sys.argv[1] if len(sys.argv) > 1 else "acceptEdits"
     seconds = float(sys.argv[2]) if len(sys.argv) > 2 else 20.0
 
     child = subprocess.Popen(
-        ARGS, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        ARGS + sys.argv[3:], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         stderr=subprocess.PIPE, text=True, encoding="utf-8", shell=True)
 
     lines = []
