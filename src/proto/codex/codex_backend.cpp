@@ -95,14 +95,15 @@ bool CodexBackend::Start(const agent::StartOptions& options,
     return false;
   }
   // experimentalApi unlocks thread/settings/update, which is the only way to
-  // change the mode between turns and to enter plan mode at all.
-  return Request(Purpose::Initialize, "initialize",
-                 {{"clientInfo",
-                   {{"name", "agentaloud"},
-                    {"title", APP_NAME},
-                    {"version", "0"}}},
-                  {"capabilities",
-                   {{"experimentalApi", true}, {"requestAttestation", false}}}});
+  // change the mode between turns and to enter plan mode at all.  A write
+  // that fails is a child already dead, and its exit says why -- as with
+  // Claude's initialize.
+  Request(Purpose::Initialize, "initialize",
+          {{"clientInfo",
+            {{"name", "agentaloud"}, {"title", APP_NAME}, {"version", "0"}}},
+           {"capabilities",
+            {{"experimentalApi", true}, {"requestAttestation", false}}}});
+  return true;
 }
 
 bool CodexBackend::Send(const Json& message) {

@@ -162,6 +162,17 @@ struct StartOptions {
   std::vector<std::wstring> extraArgs;
 };
 
+// Why Start returned false.  Only a process that could not be started at all
+// ends up here: one that starts and then refuses its arguments makes Start
+// succeed, and says why itself, off stderr, in SessionEnded (invariant 25).
+struct StartFailure {
+  // What was looked for on PATH, as a reader would type it to try it by hand.
+  std::wstring program;
+  // The system's error code for the attempt.  A number and not words: the
+  // port does not include windows.h, and the words are the UI's to find.
+  unsigned long systemError = 0;
+};
+
 class Backend {
  public:
   struct Callbacks {
@@ -185,6 +196,8 @@ class Backend {
   virtual const Capabilities& capabilities() const = 0;
 
   virtual bool Start(const StartOptions& options, Callbacks callbacks) = 0;
+  // After a Start that returned false; meaningless otherwise.
+  virtual StartFailure startFailure() const = 0;
 
   // Queues one turn.  The turn is over when TurnEnded arrives.
   virtual bool SendPrompt(const std::string& utf8Text) = 0;

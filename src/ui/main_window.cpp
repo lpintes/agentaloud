@@ -75,7 +75,7 @@ MainWindow::~MainWindow() {
 bool MainWindow::Open(HINSTANCE instance,
                       std::unique_ptr<agent::Backend> backend,
                       const agent::StartOptions& options,
-                      NewSessionFactory factory) {
+                      NewSessionFactory factory, std::wstring* failure) {
   instance_ = instance;
   factory_ = std::move(factory);
   HMENU windowMenu = nullptr;
@@ -104,7 +104,7 @@ bool MainWindow::Open(HINSTANCE instance,
   GetClientRect(hwnd_, &client);
   Arrange(client.right, client.bottom);
 
-  if (!OpenSession(std::move(backend), options)) return false;
+  if (!OpenSession(std::move(backend), options, failure)) return false;
   Show(SW_SHOW);
   if (SessionWindow* active = Active()) active->pane()->FocusPrompt();
   WarnIfMute();
@@ -112,13 +112,15 @@ bool MainWindow::Open(HINSTANCE instance,
 }
 
 bool MainWindow::OpenSession(std::unique_ptr<agent::Backend> backend,
-                             const agent::StartOptions& options) {
+                             const agent::StartOptions& options,
+                             std::wstring* failure) {
   // Owned before it is opened: a session that fails to start destroys its
   // window on the way out, and the reap that follows has to find it.
   sessions_.push_back(std::make_unique<SessionWindow>());
   SessionWindow* session = sessions_.back().get();
-  if (!session->Open(client_, instance_, &status_, std::move(backend), options,
-                     [this] { PostMessageW(hwnd_, kMsgReap, 0, 0); })) {
+  if (!session->Open(
+          client_, instance_, &status_, std::move(backend), options,
+          [this] { PostMessageW(hwnd_, kMsgReap, 0, 0); }, failure)) {
     return false;
   }
   Renumber();
@@ -143,9 +145,11 @@ void MainWindow::NewSession() {
   std::unique_ptr<agent::Backend> backend;
   agent::StartOptions options;
   if (!factory_ || !factory_(hwnd_, &backend, &options)) return;
-  if (!OpenSession(std::move(backend), options)) {
-    MessageBoxW(hwnd_, i18n::Text(i18n::Str::kSessionStartFailed),
-                L"" APP_NAME, MB_OK | MB_ICONERROR);
+  std::wstring failure;
+  if (!OpenSession(std::move(backend), options, &failure)) {
+    std::wstring text = i18n::Text(i18n::Str::kSessionStartFailed);
+    if (!failure.empty()) text += L"\n" + failure;
+    MessageBoxW(hwnd_, text.c_str(), L"" APP_NAME, MB_OK | MB_ICONERROR);
     return;
   }
   // The focus follows the new session into its prompt.  The dialog that

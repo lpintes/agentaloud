@@ -45,6 +45,9 @@ class CodexBackend : public agent::Backend {
     return capabilities_;
   }
   bool Start(const agent::StartOptions& options, Callbacks callbacks) override;
+  agent::StartFailure startFailure() const override {
+    return {L"codex", process_.startError()};
+  }
   bool SendPrompt(const std::string& utf8Text) override;
   bool Interrupt() override;
   bool SetMode(const std::string& id) override;

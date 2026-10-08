@@ -69,9 +69,10 @@ class SessionPane {
   // (invariant 11): its progress is silent and its end is a sound.
   void SetActive(bool active) { active_ = active; }
   void Layout(int width, int height);
-  // The pane owns the backend from here on.
+  // The pane owns the backend from here on.  On false, *failure says why in
+  // a sentence for the reader.
   bool Start(std::unique_ptr<agent::Backend> backend,
-             const agent::StartOptions& options);
+             const agent::StartOptions& options, std::wstring* failure);
   // Which of the sessions in this folder this one is, zero when it is the
   // only one (app::SessionOrdinals).  The host says, and says again whenever
   // a session in the same folder opens or closes; it goes into the title and

@@ -237,6 +237,8 @@ S(kUnknownKey)
 S(kSettingsFileError)
 S(kNoRichEdit)
 S(kSessionStartFailed)
+S(kProgramNotFound)
+S(kProgramNotStarted)
 S(kPackageBadPath)
 S(kPackageMissing)
 // updater.cpp: the update dialogs and what can go wrong on the way.

@@ -365,6 +365,26 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     CoUninitialize();
     return 2;
   }
+  // A folder that is not there is refused like a bad option and for the same
+  // reason: it was typed at a prompt.  Left to the process start, it came
+  // back as "the directory name is invalid" about a directory nobody named.
+  // The dialog checks its own answer; this is only the typed one.
+  const bool typedProject = !arguments.project.empty();
+  if (typedProject) {
+    const std::wstring folder = Expand(arguments.project);
+    const DWORD attributes = GetFileAttributesW(folder.c_str());
+    if (attributes == INVALID_FILE_ATTRIBUTES ||
+        !(attributes & FILE_ATTRIBUTE_DIRECTORY)) {
+      const std::wstring text =
+          L"" APP_NAME L": " +
+          i18n::Format(i18n::Str::kNewFolderMissing, {folder}) + L"\n";
+      if (!win::WriteToParentConsole(text)) {
+        MessageBoxW(nullptr, text.c_str(), L"" APP_NAME, MB_OK | MB_ICONERROR);
+      }
+      CoUninitialize();
+      return 2;
+    }
+  }
   // A previous update's folders go first, so they are gone whether or not this
   // start checks; then the check, which may end this process.
   updater::RemoveLeftover();
@@ -435,10 +455,19 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   };
 
   ui::MainWindow window;
+  std::wstring failure;
   if (!window.Open(instance, std::move(backend), OptionsFrom(arguments),
-                   std::move(factory))) {
-    MessageBoxW(nullptr, i18n::Text(i18n::Str::kSessionStartFailed),
-                L"" APP_NAME, MB_OK | MB_ICONERROR);
+                   std::move(factory), &failure)) {
+    std::wstring text = i18n::Text(i18n::Str::kSessionStartFailed);
+    if (!failure.empty()) text += L"\n" + failure;
+    // To the console only when nothing came between it and this: after the
+    // dialog that asked for the folder, whoever started us is looking at
+    // windows, not at the prompt.
+    if (!typedProject ||
+        !win::WriteToParentConsole(L"" APP_NAME L": " + text + L"\n")) {
+      MessageBoxW(nullptr, text.c_str(), L"" APP_NAME, MB_OK | MB_ICONERROR);
+    }
+    CoUninitialize();
     return 1;
   }
 

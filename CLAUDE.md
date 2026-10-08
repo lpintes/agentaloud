@@ -1496,6 +1496,18 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     --fafa` dá blok „Agent skončil s kódom 1. / error: unknown option
     '--fafa'" a zavretie okna trvá 0,2 s.
 
+    **Proces, ktorý nevznikol vôbec, blok nemá — nemá kam.** Session bez
+    procesu sa nespustí, okno zanikne, a dôvod ide von ako veta pod
+    „Nepodarilo sa spustiť session." (claude-gui-lkk.17): backend vráti
+    `agent::StartFailure` (program a `GetLastError`), panel z neho spraví
+    vetu — chýbajúci program na PATH vlastnou, čokoľvek iné slovami systému
+    s číslom. Hranica je **vznik procesu**: `Start` oboch adaptérov po ňom
+    vracia `true` aj vtedy, keď zlyhá prvý zápis do kanála, lebo také dieťa
+    je mŕtve a jeho koniec povie viac než `GetLastError` nula. Priečinok
+    z príkazového riadka sa overuje už v `main.cpp` a odmieta ako zlá voľba
+    (kód 2); dialóg novej session overuje svoj. Hláška ide na konzolu len
+    vtedy, keď sa priečinok písal — po dialógu sa čitateľ pozerá na okná.
+
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa
 rozídu, titulok tej session sa zmení na **„<cesta> — NESÚLAD MAPY ROZSAHOV"**

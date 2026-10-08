@@ -367,6 +367,9 @@ S(kUnknownKey, L"unknown key {0}")
 S(kSettingsFileError, L"settings {0}, {1}")
 S(kNoRichEdit, L"Msftedit.dll could not be loaded.")
 S(kSessionStartFailed, L"The session could not be started.")
+S(kProgramNotFound,
+  L"The program {0} was not found. Is it installed and on the PATH?")
+S(kProgramNotStarted, L"The program {0} could not be started (error {1}). {2}")
 S(kPackageBadPath, L"the package contains an invalid path {0}")
 S(kPackageMissing, L"the package lacks {0}")
 

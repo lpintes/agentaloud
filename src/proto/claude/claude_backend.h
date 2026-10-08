@@ -30,6 +30,9 @@ class ClaudeBackend : public agent::Backend {
   // A conversation named by --resume in extraArgs is read off disk and handed
   // to onHistory before the process starts, on the calling thread.
   bool Start(const agent::StartOptions& options, Callbacks callbacks) override;
+  agent::StartFailure startFailure() const override {
+    return {L"claude", session_.startError()};
+  }
   bool SendPrompt(const std::string& utf8Text) override;
   bool Interrupt() override;
   bool SetMode(const std::string& id) override;

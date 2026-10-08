@@ -142,7 +142,11 @@ bool Session::Start(const Options& options, EventCallback onEvent,
   // Opening the channel before the first turn, so that the first thing to
   // travel on it is not a permission request under time pressure.
   initRequestId_ = "init-" + std::to_string(nextRequestId_++);
-  return SendJson(MakeInitialize(initRequestId_));
+  // A write that fails is a child that died before reading its first line,
+  // and its exit says why, with its own words off stderr.  Failing Start on
+  // it instead would trade them for a GetLastError of zero.
+  SendJson(MakeInitialize(initRequestId_));
+  return true;
 }
 
 void Session::OnBytes(std::string_view bytes) {

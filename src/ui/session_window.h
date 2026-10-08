@@ -30,10 +30,12 @@ class SessionWindow : public win::Window {
   using Closed = std::function<void()>;
 
   // Makes the child, the pane in it, and starts the backend.  False when the
-  // session did not start; the child is gone again by then.
+  // session did not start; the child is gone again by then, and *failure
+  // says why when the backend knows -- empty when it never got that far.
   bool Open(HWND mdiClient, HINSTANCE instance, StatusBar* bar,
             std::unique_ptr<agent::Backend> backend,
-            const agent::StartOptions& options, Closed closed);
+            const agent::StartOptions& options, Closed closed,
+            std::wstring* failure);
 
   // Null once the session has been shut down.
   SessionPane* pane() const { return pane_.get(); }

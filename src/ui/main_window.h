@@ -36,9 +36,12 @@ class MainWindow : public win::Window {
  public:
   ~MainWindow() override;
 
-  // Takes the backend over and hands it on to the first session.
+  // Takes the backend over and hands it on to the first session.  On false,
+  // *failure is why the session did not start, or empty when that is not
+  // known.
   bool Open(HINSTANCE instance, std::unique_ptr<agent::Backend> backend,
-            const agent::StartOptions& options, NewSessionFactory factory);
+            const agent::StartOptions& options, NewSessionFactory factory,
+            std::wstring* failure);
 
   // For win::RunMdiMessageLoop.
   HACCEL accelerators() const { return accelerators_; }
@@ -49,7 +52,7 @@ class MainWindow : public win::Window {
 
  private:
   bool OpenSession(std::unique_ptr<agent::Backend> backend,
-                   const agent::StartOptions& options);
+                   const agent::StartOptions& options, std::wstring* failure);
   // The menu items and their keys.
   void NewSession();
   void StepSession(bool backwards);

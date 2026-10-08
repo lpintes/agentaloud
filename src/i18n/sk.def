@@ -372,6 +372,9 @@ S(kUnknownKey, L"neznámy kľúč {0}")
 S(kSettingsFileError, L"nastavenia {0}, {1}")
 S(kNoRichEdit, L"Nepodarilo sa načítať Msftedit.dll.")
 S(kSessionStartFailed, L"Nepodarilo sa spustiť session.")
+S(kProgramNotFound,
+  L"Program {0} sa nenašiel. Je nainštalovaný a je na ceste PATH?")
+S(kProgramNotStarted, L"Program {0} sa nepodarilo spustiť (chyba {1}). {2}")
 S(kPackageBadPath, L"balík obsahuje neplatnú cestu {0}")
 S(kPackageMissing, L"v balíku chýba {0}")
 

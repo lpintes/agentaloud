@@ -219,6 +219,29 @@ size_t BookmarkSlot(WPARAM key) {
   return static_cast<size_t>(key - '0');
 }
 
+// A program missing from PATH is the likely case and gets a sentence that says
+// what to do; anything else is the system's own words, with the number to
+// search for.  The folder is not among the likely ones -- the command line
+// and the dialog both check it before a session is started.
+std::wstring StartFailureText(const agent::StartFailure& failure) {
+  if (failure.systemError == ERROR_FILE_NOT_FOUND ||
+      failure.systemError == ERROR_PATH_NOT_FOUND) {
+    return i18n::Format(Str::kProgramNotFound, {failure.program});
+  }
+  wchar_t* buffer = nullptr;
+  const DWORD length = FormatMessageW(
+      FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+          FORMAT_MESSAGE_IGNORE_INSERTS,
+      nullptr, failure.systemError, 0, reinterpret_cast<wchar_t*>(&buffer), 0,
+      nullptr);
+  std::wstring reason(buffer, length);
+  LocalFree(buffer);
+  while (!reason.empty() && iswspace(reason.back())) reason.pop_back();
+  return i18n::Format(Str::kProgramNotStarted,
+                      {failure.program, std::to_wstring(failure.systemError),
+                       reason});
+}
+
 }  // namespace
 
 bool SessionPane::Create(HWND host, HINSTANCE instance) {
@@ -391,7 +414,8 @@ void SessionPane::ShowName() {
 }
 
 bool SessionPane::Start(std::unique_ptr<agent::Backend> backend,
-                        const agent::StartOptions& options) {
+                        const agent::StartOptions& options,
+                        std::wstring* failure) {
   backend_ = std::move(backend);
   // Before anything can make a block, a restored history included: the name
   // is part of every answer's rendered text.
@@ -469,6 +493,10 @@ bool SessionPane::Start(std::unique_ptr<agent::Backend> backend,
   // prompt is exactly when it is.  After Start, because a history handed over
   // inside it may have named the model.
   const bool started = backend_->Start(options, std::move(callbacks));
+  if (!started) {
+    if (failure) *failure = StartFailureText(backend_->startFailure());
+    return false;
+  }
   // The mode as the backend holds it, which may be spelled differently from
   // the command line ("manual" is Claude's other name for "default").  Taken
   // over without a word -- nothing has changed -- so that the first report of
@@ -477,7 +505,7 @@ bool SessionPane::Start(std::unique_ptr<agent::Backend> backend,
     details_.permissionMode = model::Utf16FromUtf8(mode);
   }
   RefreshModelField();
-  return started;
+  return true;
 }
 
 void SessionPane::RestoreHistory(const std::vector<agent::Event>& events) {
