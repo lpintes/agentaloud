@@ -32,6 +32,10 @@ using NewSessionFactory =
     std::function<bool(HWND owner, std::unique_ptr<agent::Backend>* backend,
                        agent::StartOptions* options)>;
 
+// Pomocník → Skontrolovať aktualizácie.  From main.cpp, which holds the
+// settings the answer may write (a skipped version); the frame does not.
+using UpdateCheck = std::function<void(HWND owner)>;
+
 class MainWindow : public win::Window {
  public:
   ~MainWindow() override;
@@ -41,7 +45,7 @@ class MainWindow : public win::Window {
   // known.
   bool Open(HINSTANCE instance, std::unique_ptr<agent::Backend> backend,
             const agent::StartOptions& options, NewSessionFactory factory,
-            std::wstring* failure);
+            UpdateCheck checkForUpdates, std::wstring* failure);
 
   // For win::RunMdiMessageLoop.
   HACCEL accelerators() const { return accelerators_; }
@@ -57,6 +61,9 @@ class MainWindow : public win::Window {
   void NewSession();
   void StepSession(bool backwards);
   void CloseSession();
+  // F1.  The list is the active session's, because what Shift+Tab and F4 do
+  // depends on its agent; without a session there is nothing true to list.
+  void ShowKeys();
   // The session the reader is in, or null when none is open.
   SessionWindow* Active() const;
   // Numbers the sessions that share a folder, so that their titles differ.
@@ -82,6 +89,7 @@ class MainWindow : public win::Window {
   HWND client_ = nullptr;
   HACCEL accelerators_ = nullptr;
   NewSessionFactory factory_;
+  UpdateCheck checkForUpdates_;
   // Below the client and outside it: one bar for all the sessions, showing
   // the active one.
   StatusBar status_;

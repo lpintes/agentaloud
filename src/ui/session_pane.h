@@ -128,10 +128,8 @@ class SessionPane {
   bool Navigate(wchar_t key);
 
   // F1: the list of keys, in a modal dialog.  The list itself is in
-  // ui/keys_dialog.cpp; this is only the key that opens it.
-  //
-  // F1 and not a menu item: F1 is what a reader tries first, and the menu
-  // bar holds what belongs to the window, not to one session.
+  // ui/keys_dialog.cpp.  The key and the menu item are the frame's, which
+  // asks the active session because the list depends on its agent.
   void ShowKeys();
   // F2: what this session is and what it has cost, in a modal dialog.  See
   // ui/session_details.h for why a dialog and not the status bar.

@@ -1579,14 +1579,11 @@ LRESULT CALLBACK SessionPane::PromptProc(HWND window, UINT message,
       pane->Navigate(static_cast<wchar_t>(wParam - 'A' + L'a'));
       return 0;
     }
-    // All three are the same key in both boxes, like Esc and the chords:
-    // which box has the focus is not something to have to remember first.  A
-    // function key needs no second discard either -- it produces no WM_CHAR at
-    // all, which is one whole class of trap it cannot fall into.
-    if (wParam == VK_F1) {
-      pane->ShowKeys();
-      return 0;
-    }
+    // Both are the same key in both boxes, like Esc and the chords: which box
+    // has the focus is not something to have to remember first.  A function
+    // key needs no second discard either -- it produces no WM_CHAR at all,
+    // which is one whole class of trap it cannot fall into.  F1 is the frame's
+    // (its accelerator table), so that it answers with no session open too.
     if (wParam == VK_F2) {
       pane->ShowDetails();
       return 0;
@@ -1676,10 +1673,6 @@ LRESULT CALLBACK SessionPane::TranscriptProc(HWND window, UINT message,
   // something a reader should have to remember before pressing a key.
   if (message == WM_KEYDOWN && IsJumpChord(wParam)) {
     pane->Navigate(static_cast<wchar_t>(wParam - 'A' + L'a'));
-    return 0;
-  }
-  if (message == WM_KEYDOWN && wParam == VK_F1) {
-    pane->ShowKeys();
     return 0;
   }
   if (message == WM_KEYDOWN && wParam == VK_F2) {

@@ -18,6 +18,8 @@ enum : UINT {
   kIdNextSession,
   kIdPreviousSession,
   kIdCloseSession,
+  kIdKeys,
+  kIdCheckUpdates,
 };
 constexpr UINT kFirstChild = 50000;
 
@@ -42,11 +44,18 @@ HMENU BuildMenu(HMENU* windowMenu) {
   AppendMenuW(window, MF_STRING, kIdCloseSession,
               i18n::Text(Str::kMenuCloseSession));
 
+  HMENU help = CreatePopupMenu();
+  AppendMenuW(help, MF_STRING, kIdKeys, i18n::Text(Str::kMenuKeys));
+  AppendMenuW(help, MF_STRING, kIdCheckUpdates,
+              i18n::Text(Str::kMenuCheckUpdates));
+
   HMENU bar = CreateMenu();
   AppendMenuW(bar, MF_POPUP, reinterpret_cast<UINT_PTR>(file),
               i18n::Text(Str::kMenuFile));
   AppendMenuW(bar, MF_POPUP, reinterpret_cast<UINT_PTR>(window),
               i18n::Text(Str::kMenuWindow));
+  AppendMenuW(bar, MF_POPUP, reinterpret_cast<UINT_PTR>(help),
+              i18n::Text(Str::kMenuHelp));
   *windowMenu = window;
   return bar;
 }
@@ -54,8 +63,10 @@ HMENU BuildMenu(HMENU* windowMenu) {
 // The keys of the menu.  Ctrl+F4 and Ctrl+F6 are MDI's own; Ctrl+Tab is what
 // other MDI and tabbed programs use for the same thing, and it reaches the
 // table before either box would see it -- the prompt used to take it as Tab.
+// F1 is here and not in the boxes so that it answers with no session open too.
 HACCEL BuildAccelerators() {
   ACCEL table[] = {
+      {FVIRTKEY, VK_F1, kIdKeys},
       {FCONTROL | FVIRTKEY, 'N', kIdNewSession},
       {FCONTROL | FVIRTKEY, VK_TAB, kIdNextSession},
       {FCONTROL | FSHIFT | FVIRTKEY, VK_TAB, kIdPreviousSession},
@@ -75,9 +86,11 @@ MainWindow::~MainWindow() {
 bool MainWindow::Open(HINSTANCE instance,
                       std::unique_ptr<agent::Backend> backend,
                       const agent::StartOptions& options,
-                      NewSessionFactory factory, std::wstring* failure) {
+                      NewSessionFactory factory, UpdateCheck checkForUpdates,
+                      std::wstring* failure) {
   instance_ = instance;
   factory_ = std::move(factory);
+  checkForUpdates_ = std::move(checkForUpdates);
   HMENU windowMenu = nullptr;
   HMENU menu = BuildMenu(&windowMenu);
   if (!Create(L"" APP_NAME L"Main", L"" APP_NAME,
@@ -199,6 +212,15 @@ void MainWindow::CloseSession() {
   SendMessageW(active->handle(), WM_CLOSE, 0, 0);
 }
 
+void MainWindow::ShowKeys() {
+  SessionWindow* active = Active();
+  if (active == nullptr) {
+    Announce(i18n::Text(i18n::Str::kSayNoSession));
+    return;
+  }
+  active->pane()->ShowKeys();
+}
+
 void MainWindow::Reap() {
   std::erase_if(sessions_,
                 [](const auto& session) { return session->handle() == nullptr; });
@@ -276,6 +298,12 @@ LRESULT MainWindow::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
           return 0;
         case kIdCloseSession:
           CloseSession();
+          return 0;
+        case kIdKeys:
+          ShowKeys();
+          return 0;
+        case kIdCheckUpdates:
+          if (checkForUpdates_) checkForUpdates_(hwnd_);
           return 0;
         default:
           // The window list in the menu is DefFrameProcW's.

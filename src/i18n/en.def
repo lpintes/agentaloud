@@ -162,7 +162,8 @@ S(kKeysSessions,
   L"Ctrl+Tab or Ctrl+F6 — next session, "
   L"Ctrl+Shift+Tab or Ctrl+Shift+F6 — previous.\n"
   L"Ctrl+F4 — closes the session. Alt+F4 — quits the application.\n"
-  L"Alt — the menu; Window in it lists the open sessions.")
+  L"Alt — the menu; Window in it lists the open sessions, Help checks for\n"
+  L"updates.")
 
 S(kMenuFile, L"&File")
 S(kMenuNewSession, L"&New session...\tCtrl+N")
@@ -171,6 +172,9 @@ S(kMenuWindow, L"&Window")
 S(kMenuNextSession, L"&Next session\tCtrl+Tab")
 S(kMenuPreviousSession, L"&Previous session\tCtrl+Shift+Tab")
 S(kMenuCloseSession, L"&Close session\tCtrl+F4")
+S(kMenuHelp, L"&Help")
+S(kMenuKeys, L"&Keyboard shortcuts\tF1")
+S(kMenuCheckUpdates, L"Check for &updates...")
 S(kSayNoSession, L"no session is open")
 S(kSayOnlySession, L"this is the only open session")
 
@@ -331,7 +335,8 @@ S(kHelp,
   L"      Checks for a newer version right at startup and says the result\n"
   L"      even when there is none.  It ignores when the last check was,\n"
   L"      and check-updates=0, and offers a skipped version too.  Then the\n"
-  L"      start goes on as usual.\n"
+  L"      start goes on as usual.  While running, the same is in the Help\n"
+  L"      menu.\n"
   L"\n"
   L"An option before -- that {0} does not know -- --fork-session, say --\n"
   L"is neither passed on nor taken for a path: {0} says so and ends.\n"

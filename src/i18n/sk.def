@@ -164,7 +164,8 @@ S(kKeysSessions,
   L"Ctrl+Tab alebo Ctrl+F6 — ďalšia session, "
   L"Ctrl+Shift+Tab alebo Ctrl+Shift+F6 — predchádzajúca.\n"
   L"Ctrl+F4 — zavrie session. Alt+F4 — ukončí aplikáciu.\n"
-  L"Alt — menu; v ňom Okno so zoznamom otvorených sessions.")
+  L"Alt — menu; v ňom Okno so zoznamom otvorených sessions a Pomocník\n"
+  L"s kontrolou aktualizácií.")
 
 S(kMenuFile, L"&Súbor")
 S(kMenuNewSession, L"&Nová session...\tCtrl+N")
@@ -173,6 +174,9 @@ S(kMenuWindow, L"&Okno")
 S(kMenuNextSession, L"Ď&alšia session\tCtrl+Tab")
 S(kMenuPreviousSession, L"&Predchádzajúca session\tCtrl+Shift+Tab")
 S(kMenuCloseSession, L"&Zavrieť session\tCtrl+F4")
+S(kMenuHelp, L"&Pomocník")
+S(kMenuKeys, L"&Klávesové skratky\tF1")
+S(kMenuCheckUpdates, L"&Skontrolovať aktualizácie...")
 S(kSayNoSession, L"žiadna session nie je otvorená")
 S(kSayOnlySession, L"otvorená je len táto session")
 
@@ -337,7 +341,8 @@ S(kHelp,
   L"      Hneď pri štarte zistí, či je novšia verzia, a povie výsledok aj\n"
   L"      vtedy, keď nie je.  Nehľadí na to, kedy sa kontrolovalo\n"
   L"      naposledy, ani na check-updates=0, a ponúkne aj preskočenú\n"
-  L"      verziu.  Potom štart pokračuje ako obvykle.\n"
+  L"      verziu.  Potom štart pokračuje ako obvykle.  Za behu je to\n"
+  L"      isté v menu Pomocník.\n"
   L"\n"
   L"Voľba pred --, ktorú {0} nepozná — napríklad --fork-session —\n"
   L"sa neprepošle a ani sa z nej nestane cesta: povie to a skončí.  Kto\n"

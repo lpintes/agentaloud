@@ -531,8 +531,13 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
 
   ui::MainWindow window;
   std::wstring failure;
+  // Never restarting from here: sessions are running, and a restart would
+  // end every one of them.  The new version waits for the next start.
+  ui::UpdateCheck checkForUpdates = [&](HWND owner) {
+    CheckForUpdatesAsked(owner, settings, settingsFile, false);
+  };
   if (!window.Open(instance, std::move(backend), OptionsFrom(arguments),
-                   std::move(factory), &failure)) {
+                   std::move(factory), std::move(checkForUpdates), &failure)) {
     std::wstring text = i18n::Text(i18n::Str::kSessionStartFailed);
     if (!failure.empty()) text += L"\n" + failure;
     // To the console only when nothing came between it and this: after the
