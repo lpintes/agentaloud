@@ -221,6 +221,26 @@ struct Ready {};
 // (claude-gui-lkk.5.23); the pane ignores it for a turn it started itself.
 struct TurnStarted {};
 
+enum class TaskKind { Agent, Shell };
+
+// Something that runs on without the turn: a subagent, or a command left
+// running.  Claude starts a subagent in the background unless told not to,
+// and Codex runs every subagent beside its parent, so this is the ordinary
+// case and not an exotic one (tools/probe_subagents.notes.md,
+// tools/probe_codex_subagents.notes.md).
+struct BackgroundTask {
+  std::string id;           // what the adapter would stop it by
+  TaskKind kind = TaskKind::Agent;
+  std::string description;  // as the CLI put it; may be empty
+};
+
+// Every task that runs now, the whole list each time, and only the ones that
+// outlive a turn -- while a turn runs, "working" says enough.  The whole list
+// and not what changed, because Claude sends it that way and the pane then has
+// nothing to reconcile (claude-gui-b8n.2).  Codex sends no list; its adapter
+// keeps one.
+struct BackgroundTasksChanged { std::vector<BackgroundTask> tasks; };
+
 enum class TurnOutcome { Completed, Interrupted, Failed };
 
 // The end of a turn, and the only thing that ends one.  An interruption ends
@@ -258,7 +278,7 @@ using Event = std::variant<AssistantText, Thinking, ThinkingTick,
                            QuestionByPrompt, UserPrompt, Interrupted, WorkingDirectory,
                            ModelChanged, ModeChanged, ContextUsed,
                            UsageChanged, RateLimitChanged, Ready, TurnStarted,
-                           TurnEnded,
+                           TurnEnded, BackgroundTasksChanged,
                            SessionEnded, Unrecognised>;
 
 }  // namespace agent

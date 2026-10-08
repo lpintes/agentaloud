@@ -8,6 +8,7 @@
 #include <ctime>
 
 #include "i18n/i18n.h"
+#include "model/background.h"
 #include "model/history.h"
 #include "model/utf.h"
 #include "ui/ask_dialog.h"
@@ -612,7 +613,13 @@ void SessionPane::OnDrain() {
         if (!busy_ && !ended_) OnTurnStartedByAgent();
       } else if (std::holds_alternative<agent::TurnEnded>(event)) {
         OnTurnEnded();
+      } else if (const auto* changed =
+                     std::get_if<agent::BackgroundTasksChanged>(&event)) {
+        tasks_ = changed->tasks;
+        SetStatus(status_);
       } else if (std::holds_alternative<agent::SessionEnded>(event)) {
+        // Nothing of the process outlives it (invariant 10).
+        tasks_.clear();
         OnSessionEnded();
       } else if (const auto* limit =
                      std::get_if<agent::RateLimitChanged>(&event)) {
@@ -1074,7 +1081,7 @@ void SessionPane::SetStatus(std::wstring text) {
   // the window takes focus and never again, so a turn that ends while you are
   // reading would not have been heard there anyway -- and the bar can be asked
   // at any time with NVDA+End.
-  SetField(StatusBar::kTurn, status_);
+  SetField(StatusBar::kTurn, model::TurnStatus(status_, tasks_));
 }
 
 void SessionPane::SetField(StatusBar::Field field, const std::wstring& text) {

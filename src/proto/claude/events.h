@@ -28,6 +28,8 @@ enum class EventKind {
   // sign that a turn is doing something, and the only one during a long
   // think.  That is what it is classified for.
   SystemThinkingTokens,
+  // The whole list of tasks running in the background, after every change.
+  SystemBackgroundTasks,
   SystemOther,
   Assistant,              // one message, content blocks inside
   User,                   // our prompt replayed, or a tool_result

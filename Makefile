@@ -124,7 +124,7 @@ APP_PURE_SRCS := src/arguments.cpp src/settings.cpp src/version.cpp src/update.c
 # Transkript a jeho mapa rozsahov.  Nevie o windows.h, a prave preto sa da
 # testovat bez okna -- co je vacsina toho, preco maju tie testy cenu.
 MODEL_SRCS := src/model/utf.cpp src/model/transcript.cpp src/model/bookmarks.cpp \
-              src/model/history.cpp
+              src/model/history.cpp src/model/background.cpp
 
 UI_SRCS := src/ui/session_pane.cpp src/ui/session_window.cpp src/ui/main_window.cpp src/ui/speech.cpp \
            src/ui/status_bar.cpp src/ui/session_details.cpp \

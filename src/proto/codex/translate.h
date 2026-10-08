@@ -191,6 +191,11 @@ Json MakeElicitationAnswer(agent::Verdict verdict);
 class Translator {
  public:
   void SeedModel(const std::string& model) { model_ = model; }
+  // The conversation's own thread.  A subagent is a thread of its own, with
+  // turns of its own on the same wire, and those must not start or end ours
+  // (tools/probe_codex_subagents.notes.md).  Until it is known, every
+  // message counts as the conversation's.
+  void SetThread(const std::string& threadId) { thread_ = threadId; }
 
   // Server requests and responses translate to nothing: answering them is
   // the adapter's job.
@@ -203,8 +208,22 @@ class Translator {
 
  private:
   void ReportModel(const std::string& model, std::vector<agent::Event>* out);
+  bool Foreign(const Json& params) const;
+  // The subagent and command items that change the list of tasks.
+  void TrackTask(const Json& item, bool completed,
+                 std::vector<agent::Event>* out);
+  void ReportTasks(std::vector<agent::Event>* out) const;
 
   std::map<std::string, agent::ToolCall> running_;
+  std::string thread_;
+  // Codex sends no list of what runs in the background, so it is kept here:
+  // subagents from subAgentActivity, by thread id, in the order they started;
+  // commands that a turn of ours left running, by item id.  A command of the
+  // turn in flight is only a candidate -- every command has a processId, and
+  // only the end of the turn tells one left running from one waited for.
+  std::vector<agent::BackgroundTask> agents_;
+  std::vector<agent::BackgroundTask> shells_;
+  std::map<std::string, std::string> commands_;
   // Why the reviewer said no, by the item it judged, until that item ends.
   std::map<std::string, std::string> deniedByReviewer_;
   std::string model_;

@@ -286,7 +286,17 @@ void CodexBackend::OnLine(std::string_view line) {
 
   const std::string method = StringField(message, "method");
   const Json& params = Field(message, "params");
-  if (method == "thread/settings/updated") {
+  // A subagent's turns come on the same wire and are not ours to interrupt
+  // or wait for.
+  bool own = true;
+  if (const std::string thread = StringField(params, "threadId");
+      !thread.empty()) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    own = threadId_.empty() || thread == threadId_;
+  }
+  if (!own) {
+    // Nothing of the conversation's own state, only the translator's.
+  } else if (method == "thread/settings/updated") {
     const Json& settings = Field(params, "threadSettings");
     std::lock_guard<std::mutex> lock(mutex_);
     mode_.Reported(ModeFromThreadSettings(settings));
@@ -316,7 +326,7 @@ void CodexBackend::OnLine(std::string_view line) {
   }
 
   std::vector<agent::Event> batch = translator_.Translate(message);
-  if (method == "turn/completed") TurnOver();
+  if (own && method == "turn/completed") TurnOver();
   Emit(std::move(batch));
 }
 
@@ -456,6 +466,7 @@ void CodexBackend::OnThreadOpened(const Json& result, bool resumed) {
     if (callbacks_.onHistory) callbacks_.onHistory(TranslateHistory(result));
   }
 
+  translator_.SetThread(StringField(thread, "id"));
   std::vector<std::string> queued;
   std::string modeAfterOpen;
   {

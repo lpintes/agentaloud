@@ -312,7 +312,9 @@ class SessionPane {
   // marked: a turn that spoke gets a word, a turn that stayed silent gets the
   // beep -- see SignalTurnEnd.
   bool spokeThisTurn_ = false;
+  // The turn's own word; the bar shows it with tasks_ behind it.
   std::wstring status_;
+  std::vector<agent::BackgroundTask> tasks_;
   // The folder name, kept because the bar is rewritten field by field and the
   // project one has to be put back after anything that clears it.
   std::wstring project_;

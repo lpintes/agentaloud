@@ -1,5 +1,6 @@
 #include "proto/codex/translate.h"
 
+#include <algorithm>
 #include <set>
 
 #include "i18n/i18n.h"
@@ -636,6 +637,64 @@ void Translator::ReportModel(const std::string& model,
   out->push_back(agent::ModelChanged{model});
 }
 
+bool Translator::Foreign(const Json& params) const {
+  const std::string thread = StringField(params, "threadId");
+  return !thread_.empty() && !thread.empty() && thread != thread_;
+}
+
+void Translator::ReportTasks(std::vector<agent::Event>* out) const {
+  agent::BackgroundTasksChanged changed;
+  changed.tasks = agents_;
+  changed.tasks.insert(changed.tasks.end(), shells_.begin(), shells_.end());
+  out->push_back(std::move(changed));
+}
+
+void Translator::TrackTask(const Json& item, bool completed,
+                           std::vector<agent::Event>* out) {
+  const std::string type = StringField(item, "type");
+  if (type == "subAgentActivity") {
+    // Both item/started and item/completed carry the same item, one right
+    // after the other, so either may be the first to say it.
+    const std::string kind = StringField(item, "kind");
+    const std::string thread = StringField(item, "agentThreadId");
+    auto found = std::find_if(agents_.begin(), agents_.end(),
+                              [&](const agent::BackgroundTask& task) {
+                                return task.id == thread;
+                              });
+    if (kind == "started" && found == agents_.end() && !thread.empty()) {
+      // "/root/agent_1": the model picks the path, and its last part is the
+      // closest thing to a name the notification has.  The nickname is only
+      // in thread/read.
+      std::string path = StringField(item, "agentPath");
+      if (size_t slash = path.rfind('/'); slash != std::string::npos) {
+        path.erase(0, slash + 1);
+      }
+      agents_.push_back({thread, agent::TaskKind::Agent, path});
+      ReportTasks(out);
+    } else if ((kind == "completed" || kind == "interrupted") &&
+               found != agents_.end()) {
+      agents_.erase(found);
+      ReportTasks(out);
+    }
+  } else if (type == "commandExecution" &&
+             !Field(item, "processId").is_null()) {
+    const std::string id = StringField(item, "id");
+    if (!completed) {
+      commands_[id] = ReadableCommand(item);
+      return;
+    }
+    commands_.erase(id);
+    auto found = std::find_if(shells_.begin(), shells_.end(),
+                              [&](const agent::BackgroundTask& task) {
+                                return task.id == id;
+                              });
+    if (found != shells_.end()) {
+      shells_.erase(found);
+      ReportTasks(out);
+    }
+  }
+}
+
 bool Translator::FindCall(const std::string& itemId,
                           agent::ToolCall* out) const {
   auto found = running_.find(itemId);
@@ -651,8 +710,32 @@ std::vector<agent::Event> Translator::Translate(const Json& message) {
   const std::string method = StringField(message, "method");
   const Json& params = Field(message, "params");
 
+  // A subagent's own turns and token counts.  Its items stay: what it does is
+  // shown, and how is claude-gui-b8n.3.
+  const bool foreign = Foreign(params);
+  if (foreign && (method == "turn/started" ||
+                  method == "thread/tokenUsage/updated")) {
+    return events;
+  }
+  if (foreign && method == "turn/completed") {
+    // A subagent we interrupted ends here and nowhere else: the parent's
+    // thread hears nothing of it (measured, spawn-kill).
+    const std::string status = StringField(Field(params, "turn"), "status");
+    const std::string thread = StringField(params, "threadId");
+    auto found = std::find_if(agents_.begin(), agents_.end(),
+                              [&](const agent::BackgroundTask& task) {
+                                return task.id == thread;
+                              });
+    if (status != "completed" && found != agents_.end()) {
+      agents_.erase(found);
+      ReportTasks(&events);
+    }
+    return events;
+  }
+
   if (method == "item/started") {
     const Json& item = Field(params, "item");
+    if (!foreign) TrackTask(item, false, &events);
     if (IsToolItem(item)) {
       agent::ToolCall call = ToolCallFromItem(item);
       running_[call.id] = call;
@@ -664,6 +747,7 @@ std::vector<agent::Event> Translator::Translate(const Json& message) {
     }
   } else if (method == "item/completed") {
     const Json& item = Field(params, "item");
+    if (!foreign) TrackTask(item, true, &events);
     if (IsToolItem(item)) {
       const std::string id = StringField(item, "id");
       auto found = running_.find(id);
@@ -719,8 +803,19 @@ std::vector<agent::Event> Translator::Translate(const Json& message) {
       ended.outcome = agent::TurnOutcome::Failed;
     }
     events.push_back(ended);
+    // What the turn left running is in the background now -- an interrupted
+    // turn as well, which does not stop its commands either.
+    if (!commands_.empty()) {
+      for (const auto& [id, command] : commands_) {
+        shells_.push_back({id, agent::TaskKind::Shell, command});
+      }
+      commands_.clear();
+      ReportTasks(&events);
+    }
   } else if (method == "thread/started") {
     const Json& thread = Field(params, "thread");
+    // Only the conversation's own thread is announced; a subagent's is not.
+    if (thread_.empty()) thread_ = StringField(thread, "id");
     const std::string cwd = StringField(thread, "cwd");
     if (!cwd.empty()) events.push_back(agent::WorkingDirectory{cwd});
     ReportModel(StringField(thread, "model"), &events);

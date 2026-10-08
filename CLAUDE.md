@@ -224,7 +224,9 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
    `Session::Interrupt()` preto `turnInFlight_` nezhasína. `Stop()` v oboch
    adaptéroch najprv ťah preruší, potom čaká. Ťah môže začať aj CLI samo
    (dobehla úloha na pozadí) — `turnInFlight_` rozsvieti aj `system/init`
-   / `turn/started`, nielen `SendPrompt`.
+   / `turn/started`, nielen `SendPrompt`. Codex: stav ťahu len z vlastného
+   vlákna (`own` v `CodexBackend::OnLine`), ťahy subagentov vidí len
+   translátor.
 2. **Callbacky bežia na čítacom vlákne** (`EventCallback`,
    `PermissionCallback`). Na okno len cez `PostMessage`.
 3. **Kurzor v prepise sa nehýbe kvôli textu, ktorý prichádza** — zostane pri

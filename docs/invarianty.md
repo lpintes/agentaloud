@@ -36,6 +36,15 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    (`Session::OnRecord`), resp. `turn/started` (`CodexBackend`), nielen
    `SendPrompt` — inak by Esc počas takého ťahu vrátil „nič nebeží" a `Stop()`
    by zavrel stdin uprostred neho (claude-gui-lkk.5.23).
+
+   V Codexe chodia po tej istej rúre aj ťahy subagentov, každý s vlastným
+   `threadId` (`tools/probe_codex_subagents.notes.md`). Stav ťahu
+   (`turnInFlight_`, `TurnOver`, režim) sa preto berie **len z vlastného
+   vlákna** (`own` v `CodexBackend::OnLine`); cudzie vlákno vidí iba
+   translátor, ktorý z neho skladá úlohy na pozadí a jeho `turn/started`,
+   `turn/completed` a spotrebu tokenov zahodí. Predtým `turn/completed`
+   subagenta ukončil hlavný ťah — busy zhasol a Esc už nemal čo prerušiť
+   (claude-gui-b8n.2).
 2. **Callbacky bežia na čítacom vlákne.** `EventCallback` aj
    `PermissionCallback`. Čokoľvek, čo siahne na okno, musí ísť cez
    `PostMessage`.

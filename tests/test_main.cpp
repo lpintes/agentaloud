@@ -42,6 +42,7 @@
 
 #include "app_name.h"
 #include "i18n/i18n.h"
+#include "model/background.h"
 #include "model/bookmarks.h"
 #include "model/history.h"
 #include "model/transcript.h"
@@ -3374,6 +3375,141 @@ void TestCodexElicitation() {
 // Nie fixtura: zamietnutie recenzentom sa da vyvolat len politikou
 // recenzenta, ktora zamietne vsetko.  Tvary su skratene, ale doslova zo
 // sondy (tools/probe_codex_never.py, never-review-deny-1.log, 7. 10. 2026).
+void TestClaudeBackgroundTasks() {
+  TEST("claude: background_tasks_changed je cely zoznam uloh na pozadi");
+  proto::Translator translator;
+  // Tvar z tools/probe_subagents.notes.md (scenar B), skrateny.
+  auto events = translator.Translate(proto::Json::parse(
+      R"({"type":"system","subtype":"background_tasks_changed","tasks":[
+          {"task_id":"a1","run_id":"r","task_type":"local_agent",
+           "subagent_type":"general-purpose","description":"agent 1"},
+          {"task_id":"b2","task_type":"local_bash","description":"ping"}]})"));
+  const auto changed = EventsOf<agent::BackgroundTasksChanged>(events);
+  CHECK_EQ(changed.size(), size_t{1});
+  if (!changed.empty() && changed[0].tasks.size() == 2) {
+    CHECK_EQ(changed[0].tasks[0].id, std::string("a1"));
+    CHECK(changed[0].tasks[0].kind == agent::TaskKind::Agent);
+    CHECK_EQ(changed[0].tasks[0].description, std::string("agent 1"));
+    CHECK(changed[0].tasks[1].kind == agent::TaskKind::Shell);
+  } else {
+    CHECK(false);
+  }
+  // Prazdny zoznam je udalost tiez: posledna uloha dobehla.
+  events = translator.Translate(proto::Json::parse(
+      R"({"type":"system","subtype":"background_tasks_changed","tasks":[]})"));
+  const auto emptied = EventsOf<agent::BackgroundTasksChanged>(events);
+  CHECK_EQ(emptied.size(), size_t{1});
+  CHECK(!emptied.empty() && emptied[0].tasks.empty());
+}
+
+void TestCodexBackgroundTasks() {
+  TEST("codex: zoznam uloh na pozadi si adapter vedie sam");
+  proto::codex::Translator translator;
+  translator.SetThread("main");
+  std::vector<agent::BackgroundTasksChanged> lists;
+  std::vector<agent::Event> all;
+  auto feed = [&](const char* line) {
+    for (agent::Event& event : translator.Translate(proto::Json::parse(line))) {
+      if (auto* changed = std::get_if<agent::BackgroundTasksChanged>(&event)) {
+        lists.push_back(*changed);
+      }
+      all.push_back(std::move(event));
+    }
+  };
+  const char* spawn1 =
+      R"({"method":"item/started","params":{"threadId":"main","item":{
+          "type":"subAgentActivity","id":"call_1","kind":"started",
+          "agentThreadId":"sub1","agentPath":"/root/agent_1"}}})";
+  feed(spawn1);
+  // Ta ista polozka hned v item/completed -- zoznam sa nemeni.
+  feed(R"({"method":"item/completed","params":{"threadId":"main","item":{
+          "type":"subAgentActivity","id":"call_1","kind":"started",
+          "agentThreadId":"sub1","agentPath":"/root/agent_1"}}})");
+  feed(R"({"method":"item/started","params":{"threadId":"main","item":{
+          "type":"subAgentActivity","id":"call_2","kind":"started",
+          "agentThreadId":"sub2","agentPath":"/root/agent_2"}}})");
+  CHECK_EQ(lists.size(), size_t{2});
+  if (lists.size() == 2) {
+    CHECK_EQ(lists[1].tasks.size(), size_t{2});
+    CHECK_EQ(lists[1].tasks[0].description, std::string("agent_1"));
+    CHECK(lists[1].tasks[0].kind == agent::TaskKind::Agent);
+  }
+
+  // Tahy subagenta nie su nase: ani zaciatok, ani koniec, ani tokeny.
+  feed(R"({"method":"turn/started","params":{"threadId":"sub1",
+          "turn":{"id":"st1"}}})");
+  feed(R"({"method":"thread/tokenUsage/updated","params":{"threadId":"sub1",
+          "tokenUsage":{"last":{"totalTokens":5},"total":{}}}})");
+  feed(R"({"method":"turn/completed","params":{"threadId":"sub1",
+          "turn":{"id":"st1","status":"completed"}}})");
+  CHECK_EQ(CountOf<agent::TurnStarted>(all), size_t{0});
+  CHECK_EQ(CountOf<agent::TurnEnded>(all), size_t{0});
+  CHECK_EQ(CountOf<agent::ContextUsed>(all), size_t{0});
+  CHECK_EQ(lists.size(), size_t{2});
+
+  // Dobehnuty subagent: completed na hlavnom vlakne.
+  feed(R"({"method":"item/completed","params":{"threadId":"main","item":{
+          "type":"subAgentActivity","id":"subagent-completed-st1",
+          "kind":"completed","agentThreadId":"sub1",
+          "agentPath":"/root/agent_1"}}})");
+  CHECK_EQ(lists.size(), size_t{3});
+  if (lists.size() == 3) CHECK_EQ(lists[2].tasks.size(), size_t{1});
+  // Prerusenie nasim turn/interrupt: hlavne vlakno nepovie nic, len jeho
+  // vlastny turn/completed (spawn-kill).
+  feed(R"({"method":"turn/completed","params":{"threadId":"sub2",
+          "turn":{"id":"st2","status":"interrupted"}}})");
+  CHECK_EQ(lists.size(), size_t{4});
+  if (lists.size() == 4) CHECK(lists[3].tasks.empty());
+
+  // Prikaz: kazdy ma processId, na pozadi je len ten, ktory prezil tah.
+  feed(R"({"method":"item/started","params":{"threadId":"main","item":{
+          "type":"commandExecution","id":"exec-a","command":"ping -n 2",
+          "processId":"1","source":"unifiedExecStartup",
+          "status":"inProgress"}}})");
+  feed(R"({"method":"item/completed","params":{"threadId":"main","item":{
+          "type":"commandExecution","id":"exec-a","command":"ping -n 2",
+          "processId":"1","status":"completed","aggregatedOutput":"",
+          "exitCode":0}}})");
+  feed(R"({"method":"item/started","params":{"threadId":"main","item":{
+          "type":"commandExecution","id":"exec-b","command":"ping -n 40",
+          "processId":"2","source":"unifiedExecStartup",
+          "status":"inProgress"}}})");
+  CHECK_EQ(lists.size(), size_t{4});
+  feed(R"({"method":"turn/completed","params":{"threadId":"main",
+          "turn":{"id":"t1","status":"completed"}}})");
+  CHECK_EQ(CountOf<agent::TurnEnded>(all), size_t{1});
+  CHECK_EQ(lists.size(), size_t{5});
+  if (lists.size() == 5 && lists[4].tasks.size() == 1) {
+    CHECK_EQ(lists[4].tasks[0].id, std::string("exec-b"));
+    CHECK(lists[4].tasks[0].kind == agent::TaskKind::Shell);
+  } else {
+    CHECK(false);
+  }
+  feed(R"({"method":"item/completed","params":{"threadId":"main","item":{
+          "type":"commandExecution","id":"exec-b","command":"ping -n 40",
+          "processId":"2","status":"failed","aggregatedOutput":"",
+          "exitCode":-1}}})");
+  CHECK_EQ(lists.size(), size_t{6});
+  if (lists.size() == 6) CHECK(lists[5].tasks.empty());
+  CHECK(EventsOf<agent::Unrecognised>(all).empty());
+}
+
+void TestBackgroundText() {
+  TEST("stavovy riadok: pocet uloh na pozadi");
+  i18n::SetLanguage(i18n::Lang::kSlovak);
+  using agent::TaskKind;
+  std::vector<agent::BackgroundTask> tasks;
+  CHECK(model::BackgroundText(tasks).empty());
+  CHECK(model::TurnStatus(L"pracujem", tasks) == L"pracujem");
+  tasks = {{"1", TaskKind::Agent, ""}, {"2", TaskKind::Agent, ""},
+           {"3", TaskKind::Shell, ""}};
+  CHECK(model::BackgroundText(tasks) == L"na pozadí: 2 agenti, 1 príkaz");
+  CHECK(model::TurnStatus(L"pracujem", tasks) ==
+        L"pracujem; na pozadí: 2 agenti, 1 príkaz");
+  CHECK(model::TurnStatus(L"", {{"3", TaskKind::Shell, ""}}) ==
+        L"na pozadí: 1 príkaz");
+}
+
 void TestCodexReviewerDenial() {
   TEST("codex auto: zamietnutie recenzentom povie kto a preco");
   proto::codex::Translator translator;
@@ -3698,6 +3834,9 @@ int main(int argc, char** argv) {
   TestCodexModes();
   TestCodexElicitation();
   TestCodexReviewerDenial();
+  TestClaudeBackgroundTasks();
+  TestCodexBackgroundTasks();
+  TestBackgroundText();
   TestClaudeSessionPermissions();
   TestCodexFixtureMulti(fixtures);
   TestCodexFixtureEdit(fixtures);

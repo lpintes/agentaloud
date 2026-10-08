@@ -305,6 +305,29 @@ std::vector<agent::Event> Translator::Translate(const Json& record) {
     case EventKind::SystemThinkingTokens:
       events.push_back(agent::ThinkingTick{});
       break;
+    // Sent only for tasks in the background, never for a subagent the turn
+    // waits on, and it comes outside turns as well (measured,
+    // tools/probe_subagents.notes.md).
+    case EventKind::SystemBackgroundTasks: {
+      agent::BackgroundTasksChanged changed;
+      auto tasks = event.raw.find("tasks");
+      if (tasks != event.raw.end() && tasks->is_array()) {
+        for (const Json& task : *tasks) {
+          if (!task.is_object()) continue;
+          agent::BackgroundTask out;
+          out.id = StringField(task, "task_id");
+          // local_agent, local_bash; anything newer is more likely another
+          // kind of agent than a command.
+          if (StringField(task, "task_type") == "local_bash") {
+            out.kind = agent::TaskKind::Shell;
+          }
+          out.description = StringField(task, "description");
+          changed.tasks.push_back(std::move(out));
+        }
+      }
+      events.push_back(std::move(changed));
+      break;
+    }
     case EventKind::Result: {
       // The usage first: whatever is said at the end of a turn is said about a
       // turn whose numbers are already in.
