@@ -103,203 +103,32 @@ patrí `./build.sh` alebo `./build.sh app`. A keď appka beží, linker do nej
 nezapíše (`cannot open output file ... Permission denied`) — to je jediné
 miesto, kde sa to ohlási nahlas, takže zavri ju skôr, než prekladáš.
 
-`build.sh` je tenká vrstva nad `make`: predradí ucrt64 na PATH a obnoví
-`compile_commands.json`. Argumenty prechádzajú do `make` nezmenené, takže
-`-j8`, `-B` aj ciele fungujú. Holé `PATH=/c/msys64/ucrt64/bin:$PATH make`
-platí ďalej.
+`build.sh` je tenká vrstva nad `make`: predradí ucrt64 na PATH, obnoví
+`compile_commands.json` a argumenty (`-j8`, `-B`, ciele) pošle `make`
+nezmenené. Výstup je tichý, jeden riadok na zdroják. ucrt64, nie mingw64 —
+UCRT je systémové CRT a odpadá `msvcrt` s jeho UTF-8. Prekladač sa volá
+absolútnou cestou; globálnemu PATH sa never.
 
-Výstup je tichý — jeden riadok na zdroják. `V=1` vráti pôvodné príkazy.
+Diagnostiku dáva clangd z `compile_commands.json` (`make compdb`, nie je
+v gite, po upgrade gcc `touch Makefile`). Databáza nesie aj `--target`
+a `-isystem` z nášho `g++` — bez nich si clangd nájde MSVC a **preloží to bez
+jedinej chyby** s iným `<windows.h>` a STL. Prečo, je v komentári v `Makefile`.
 
-Diagnostiku dáva clangd z `compile_commands.json`, ktorý generuje
-`make compdb` z tých istých premenných, ktorými sa prekladá. Do gitu
-nejde: sú v ňom absolútne cesty. Po upgrade gcc stačí `touch Makefile`.
+**Soak nad korpusom, fixtúry a scrubber, sondy, `spike_console` a pohľad do
+bežiaceho okna (`tools/lens.ps1`) sú v `tools/CLAUDE.md`.** Prečítaj ho pred
+úpravou fixtúry alebo `tools/make_fixtures.py`, pred soakom a pred overovaním
+naostro. Najostrejšie pravidlá odtiaľ:
 
-**Databáza nesie aj toolchain**, nielen prepínače — `--target` a `-isystem`
-cesty vytiahnuté z nášho `g++`. Bez nich si clangd na Windows nájde MSVC
-a Windows SDK, **preloží to bez jedinej chyby** a diagnostika potom platí
-pre iný prekladač, než ktorým sa prekladá: iný `<windows.h>`, iné STL,
-`_MSC_VER` namiesto `__GNUC__`. Vlastného `clangd` netreba prehovárať
-prepínačom `--query-driver` — LSP plugin Claude Code ho aj tak spúšťa
-holý.
-
-Testy majú tri úrovne s odlišným účelom — sú vysvetlené v hlavičke
-`tests/test_main.cpp`. Tretia, soak nad súkromným korpusom, sa zapína
-premennou a beží ručne:
-
-```bash
-ls ~/.claude/projects/*/*.jsonl | xargs -d'\n' cygpath -m > /tmp/corpus.txt
-AGENTALOUD_CORPUS=/tmp/corpus.txt ./bin/tests.exe
-```
-
-`cygpath -m` nie je kozmetika. Bash dáva cesty ako `/c/users/...`, natívny
-`.exe` im nerozumie a otvorenie **zlyhá ticho** — soak potom nahlási nula
-súborov namiesto chyby.
-
-**Korpus je posuvné okno, nie archív.** CLI zametá prepisy staršie než
-`cleanupPeriodDays`, čo je **30 dní** a v `~/.claude/settings.json` to nemusí
-byť napísané — je to východisková hodnota (overené v binárke: „Number of days
-to retain chat transcripts before automatic cleanup (default: 30)"). Deväť
-mesiacov používania teda znamená dvadsaťosem dní na disku. Poznať to podľa
-toho, že korpus má **každý** deň bez medzery až po ostrý spodok; to nie je
-vzorec používania. Súbory, nad ktorými soak niečo raz našiel, o mesiac
-neexistujú, takže nález, ktorý sa nezapíše sem alebo do fixtúry, sa nedá
-zopakovať. Kto chce dlhší korpus, nastaví si `cleanupPeriodDays` vyššie —
-a fixtúra `thinking.jsonl` je práve ten prípad: záznamy, z ktorých vznikla, sa
-zmažú koncom septembra a ona bude jediná kópia.
-
-Fixtúry sa negenerujú v testoch. `python tools/make_fixtures.py` sa púšťa
-ručne, keď sa zmení formát CLI; diff fixtúry je práve tá informácia, ktorú
-chceš vidieť. Fixtúry sú tri a `disk.jsonl` nie je stream, ale **súbor session
-z `~/.claude/projects`** — ten formát, z ktorého sa obnovuje história po
-`--resume`. Bez nej by tú cestu testoval iba soak, teda nikto, kto ho nepúšťa.
-
-**Fixtúra je artefakt a nie každá sa dá zopakovať.** `basic.jsonl`,
-`denied.jsonl` a `disk.jsonl` sa pregenerovať smú; `thinking.jsonl` **nie** —
-a nie preto, že by sa nechcelo, ale preto, že sa to už nedá. CLI prestalo
-posielať text premýšľania: bloky `thinking` chodia s prázdnym textom a samotným
-podpisom, takže `Transcript` z nich blok nespraví — a je to správne,
-„premýšľanie (0 riadkov)" je šum. Odmerané dvakrát. Nad korpusom: z vyše 6000
-častí `thinking` v 197 súboroch má text **32**, a všetkých 32 je z CLI 2.1.258
-a modelu haiku (2. 9. 2026) — pričom opus mal na **tej istej** verzii nulu zo
-478, takže nerozhoduje len verzia, ale dvojica verzia + model. A priamo,
-lebo korpus o sonnete nehovorí nič (na 2.1.258 nikdy nebežal):
-`tools/probe_thinking.py` na CLI 2.1.263 dá pri haiku, sonnete aj opuse blok
-bez textu. `thinking.jsonl` je teda jediný skutočný záznam premýšľania
-s obsahom, ktorý existuje, a preto stojí bokom od `basic.jsonl`
-(claude-gui-lkk.35). Každý súbor má zároveň vlastný `Scrubber`: spoločné
-číslovanie identifikátorov by fixtúry zviazalo tak, že zahodenie jednej by
-zneplatnilo druhú.
-
-**Do fixtúry nesmie vojsť to, čo CLI poskladalo z tohto stroja.** Diskový
-formát má typ `attachment` a v ňom sedí globálny `CLAUDE.md` používateľa, jeho
-e-mail a celý `prompt_snapshot` — 186 z 209 kB prvej verzie fixtúry, ktorá
-mala ísť do verejného repozitára. Zahadzuje ich `write_fixture` tým istým
-pravidlom ako hooky: je to vlastnosť stroja, nie formátu, a `ReadSessionRecords`
-ich aj tak neprepúšťa. Zlyhalo by to ticho — fixtúra vyzerá ako fixtúra a
-nikto ju nečíta celú.
-
-To isté pravidlo má **tri ďalšie vrstvy a všetky sedia v `system/init`**, ktorý
-`attachment` nie je a zahodiť sa nedá:
-
-  • **Meno účtu v cestách.** `Scrubber.text_for` ho prepisuje v každom reťazci,
-    nie v poliach, ktoré vyzerajú ako cesta — cesta je aj v argumente nástroja,
-    aj vo výsledku, aj v `memory_paths`, aj v ceste pluginu, a vymenovať tie
-    polia znamená minúť to, ktoré pribudne. Tvary sú tri, lebo CLI ich píše
-    tromi spôsobmi: `C:\Users\…`, `C:/Users/…` a s pomlčkami (kľúč adresára
-    v `~/.claude/projects`). Cesta sa **neškrtá, len prepisuje** — z toho
-    istého dôvodu ako čas nižšie.
-  • **Inventár stroja.** `plugins`, `mcp_servers`, `skills`, `slash_commands`,
-    `agents` a `terminal_slash_commands` sú zoznam toho, čo má autor
-    nainštalované. Kľúč zostáva a hodnota sa vyprázdni, takže fixtúra ďalej
-    hovorí, že to pole existuje a že je to pole — čo je jediné, čo o ňom
-    appka vie. Overené grepom: zo `system/init` číta appka `model`, `cwd`,
-    `permissionMode` a `session_id`, nič viac (dnes `proto::Translator`
-    a `Session`).
-  • **`tools` je dvoch druhov naraz.** `Bash`, `Read` a `Edit` sú tvar
-    protokolu a v tej istej fixtúre sa aj používajú, kdežto mená s prefixom
-    `mcp__` sú MCP servery tohto stroja — v `basic.jsonl` ich bolo 104
-    a všetkých 104 iba tu, ani jedno v bloku `tool_use`. Preto sa vyhadzujú
-    ony a zoznam zostáva.
-
-Pregenerovať sa kvôli tomu nemuselo nič: `python tools/make_fixtures.py
---rescrub <súbor>` prežene existujúcu fixtúru scrubberom znova, bez CLI
-a bez kreditu. Je to jediná cesta k `thinking.jsonl`, ktorá sa smie použiť —
-prepísať reťazce v nej tvar záznamu nemení. Opakovanie je bezpečné: id aj časy
-dostávajú náhrady v poradí prvého výskytu a to poradie je v zapísanej fixtúre
-rovnaké ako pri jej vzniku.
-
-Čas sa naopak **neškrtá, len sa nahrádza stabilným a platným** ISO 8601.
-Diskový formát je jediný, kde na čase záleží (invariant 15), a `<scrubbed>`
-namiesto času by tú vlastnosť otestovať nedal.
-
-Overenie protokolovej vrstvy naostro (potrebuje jednorazový git repozitár,
-míňa kredit, `allow` naozaj vykoná commit):
-
-```bash
-./bin/spike_console.exe <prazdny-git-repo> allow   # commit prejde
-./bin/spike_console.exe <prazdny-git-repo> deny    # commit neprejde
-./bin/spike_console.exe <prazdny-git-repo> interrupt  # tah sa prerusi zvonku
-```
-
-Režim `interrupt` vypisuje každý záznam celý: pri ňom je tvar záznamov práve
-ten výsledok, po ktorom siaha.
-
-**Do bežiaceho okna sa dá pozrieť bez očí** — `tools/lens.ps1`. Dot-source ju
-a `Get-LensWindows <pid>`, `Get-LensChildren`, `Get-LensFocus`, `Send-LensKey`
-odpovedia, čo je v ktorom poli a čo má fokus. Text sa ťahá `WM_GETTEXT`om,
-ktorý systém marshaluje aj cez hranicu procesu; `GetWindowText` na to
-nepoužívaj — cez hranicu vráti prázdny reťazec, čiže **zlyhá ticho** a vyzerá
-to ako prázdne pole.
-
-**Skutočné klávesy sa tak posielať nedajú.** `SendKeys` aj `keybd_event` idú do
-okna v popredí, takže by pristáli u používateľa. `PostMessage WM_KEYDOWN`
-priamo prvku obchádza slučku správ, ale pre klávesu, ktorú chytá subclass
-procedúra (F1, F2, F4, chordy), je to plnohodnotné overenie — obsluhuje ju tá
-istá procedúra, do ktorej by prišla aj skutočná správa. Pre klávesu, o ktorej
-rozhoduje až dialógová slučka, nedokazuje nič. A `SendMessage` do modálneho
-dialógu zablokuje volajúci shell, kým sa dialóg nezavrie; na otvorenie dialógu
-teda `PostMessage`. Ten zase dorazí aj do okna, ktoré modál zakázal, takže
-klávesa poslaná pod otvoreným dialógom spraví niečo, čo skutočná klávesa
-nedokáže (napríklad otvorí druhý dialóg). Tlačidlo OK v `MessageBox` nemá id 1.
-
-**Chord s Ctrl alebo Shift — a teda aj odoslanie promptu — sa poslať dá**, a
-tiež bez popredia: `Set-LensText` dá text do promptu a `Send-LensChord $prompt
-0x0D -Ctrl` ho odošle. Procedúra sa na modifikátor pýta cez `GetKeyState`,
-ktorý `PostMessage` nastaviť nevie; `Send-LensChord` sa preto z pomocného
-vlákna pripojí `AttachThreadInput` na vlákno appky a modifikátor nastaví
-`SetKeyboardState` — stav kláves je po pripojení spoločný. Overené 6. 10. 2026
-(claude-gui-lkk.52): celý ťah naostro, aj s dialógom povolenia a otázky, bez
-jediného stlačenia u používateľa. Na overenie naostro stačí `--model haiku`.
-Dialóg povolenia pritom nevyvolá hocijaký príkaz: `echo hello` CLI povolí
-samo ako read-only, `echo hello > hello.txt` už nie.
+- `tests/fixtures/thinking.jsonl` sa **nepregenerúva** — CLI už text
+  premýšľania neposiela; jediná dovolená cesta je `make_fixtures.py --rescrub`.
+- Do fixtúry nesmie vojsť nič z tohto stroja (`attachment`, meno účtu
+  v cestách, inventár pluginov a MCP v `system/init`).
+- Text z cudzieho okna `WM_GETTEXT`, nie `GetWindowText` (cez hranicu procesu
+  vráti prázdno). Klávesy cez `lens.ps1`, nikdy `SendKeys` — pristáli by
+  u používateľa.
 
 Testovaciu inštanciu zatváraj **podľa PID**, nikdy `taskkill /IM` — používateľ
 má vlastnú AgentAloud (či staršiu ClaudeLens) spustenú.
-
-### Vydanie
-
-```bash
-./release            # push, spusti vydanie.yml, pocka a vypise adresu
-```
-
-`.github/workflows/zostavenie.yml`
-beží pri každom pushi do main a pri PR: Windows, msys2 **UCRT64**, ten istý
-`./build.sh all` a `./build.sh check` ako lokálne, a varovanie prekladača je
-chyba. `vydanie.yml` dopočíta číslo `vRRRR.M.N`, zavolá `zostavenie.yml` so
-značkou, overí, že EXE nesie tú istú verziu, a až potom značku a vydanie
-zverejní. Balík: `agentaloud.exe`, `nvdaControllerClient.dll`, `LICENSE.txt`,
-licencia DLL ako `nvdaControllerClient-LICENSE.txt` a `README.md` ako
-`README.txt` (dvojklik na `.md` sa na Windows pýta, čím ho otvoriť).
-
-**Verzia nie je napísaná nikde** — dáva ju `git describe` (Makefile →
-`build/app_version.h` → VERSIONINFO, `--version`, nápoveda). Mimo
-značky je to `0.0.0-<hash>` alebo `<značka>-N-g<hash>`, s `-dirty` pri
-necommitnutých zmenách. Hlavička sa prepíše len pri zmene obsahu, takže
-preklad bez nového commitu neprekladá nič.
-
-**Konce riadkov sú LF, a drží ich `.gitattributes`** (`* text=auto eol=lf`;
-`vendor/` a `tests/fixtures/` sú `-text`, ich bajty sa nemenia). Kým tam
-nebol, mal index pár súborov CRLF a zvyšok LF, a `sed -i` z Git Bash — ktorý
-CR zahadzuje, kým nedostane `-b` — taký súbor ticho prepísal celý; commit
-potom zmenil každý riadok (claude-gui-lkk.64). Renormalizácia bola kedysi
-zamietnutá práve preto, že tie súbory prepíše celé — no to je cena raz,
-zmiešaný stav sa platil pri každej úprave. Commit renormalizácie je
-v `.git-blame-ignore-revs`; `git blame` ho preskočí s
-`git config blame.ignoreRevsFile .git-blame-ignore-revs`.
-
-Runner má `core.autocrlf=true` a workflow ho pred checkoutom stále vypína:
-`build.sh` s CRLF bash zhodí a fixtúry by sa zmenili pod testami. Odkedy je
-`.gitattributes`, je to len poistka.
-
-Repozitár je od 5. 10. 2026 verejný, a na tom stojí updater: súbor
-z vydania súkromného repozitára sa bez prihlásenia stiahnuť nedá
-(invariant 23). Databáza beadov (Dolt) sa na GitHub neposiela — remote je
-odstránený a jedinou kópiou v gite je pasívny export `.beads/issues.jsonl`.
-
-
-ucrt64, nie mingw64 — UCRT je systémové CRT novších Windowsov a odpadá
-`msvcrt` a jeho zaobchádzanie s UTF-8. Prekladač sa volá absolútnou cestou;
-globálnemu PATH sa never (viď poznámku o 32/64-bit v globálnom `CLAUDE.md`).
 
 **Codex (`--backend codex`) musí byť z natívneho inštalátora**
 (`powershell -c "irm https://chatgpt.com/codex/install.ps1 | iex"`), nie z npm.
@@ -309,6 +138,30 @@ skript), ktoré `CreateProcessW` nespustí. Inštalátor dá
 `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin` na začiatok používateľského PATH,
 ale **starú npm inštaláciu v `scoop\apps\nodejs` nespozná** ako konflikt.
 Overenie: `where.exe codex` musí na prvom mieste ukázať ten priečinok.
+
+### Vydanie
+
+```bash
+./release            # push, spusti vydanie.yml, pocka a vypise adresu
+```
+
+`zostavenie.yml` beží pri každom pushi do main a pri PR (msys2 UCRT64, ten
+istý `./build.sh all` a `check`, varovanie je chyba). `vydanie.yml` dopočíta
+číslo `vRRRR.M.N`, overí, že EXE nesie tú istú verziu, a až potom značku
+a vydanie zverejní; obsah balíka je v ňom.
+
+**Verzia nie je napísaná nikde** — dáva ju `git describe` (Makefile →
+`build/app_version.h` → VERSIONINFO, `--version`, nápoveda). Mimo značky
+`0.0.0-<hash>` alebo `<značka>-N-g<hash>`, s `-dirty` pri necommitnutých
+zmenách.
+
+**Konce riadkov sú LF, drží ich `.gitattributes`** (`vendor/` a
+`tests/fixtures/` sú `-text`). Commit renormalizácie je
+v `.git-blame-ignore-revs` (claude-gui-lkk.64).
+
+Repozitár je od 5. 10. 2026 verejný a stojí na tom updater (invariant 23).
+Databáza beadov (Dolt) sa na GitHub neposiela — remote je odstránený a jedinou
+kópiou v gite je pasívny export `.beads/issues.jsonl`.
 
 ## Architecture Overview
 
