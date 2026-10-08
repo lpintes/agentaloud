@@ -27,6 +27,15 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    Predtým len čakal — 5 s z deštruktora — a potom zavrel stdin tak či tak,
    takže ťah dlhší než päť sekúnd (bežný) skončil presne tým, čo tento bod
    zakazuje. Kto chce ťah dobehnúť, volá najprv `WaitForTurn`.
+
+   Ťah nezačína len náš prompt. Keď dobehne úloha na pozadí (Bash, subagent),
+   CLI začne ťah samo: `system/task_notification` → `system/init` →
+   `assistant` → `result`, **bez** `user` záznamu (odmerané 8. 10. 2026, CLI
+   2.1.293, `tools/probe_selfturn.notes.md`). Codex to isté hlási
+   `turn/started`. Preto `turnInFlight_` rozsvieti aj `system/init`
+   (`Session::OnRecord`), resp. `turn/started` (`CodexBackend`), nielen
+   `SendPrompt` — inak by Esc počas takého ťahu vrátil „nič nebeží" a `Stop()`
+   by zavrel stdin uprostred neho (claude-gui-lkk.5.23).
 2. **Callbacky bežia na čítacom vlákne.** `EventCallback` aj
    `PermissionCallback`. Čokoľvek, čo siahne na okno, musí ísť cez
    `PostMessage`.
@@ -62,7 +71,7 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    svoje volanie, nie na koniec — Claude volá nástroje paralelne a v poradí
    príchodu sa nedá zistiť, ktorý výstup patrí ku ktorému príkazu. Vloženie
    doprostred posunie indexy všetkých blokov za ním. Čokoľvek, čo pomenúva blok
-   naprieč časom — záložka, začiatok ťahu — preto drží `id`, nie index. Indexy
+   naprieč časom — záložka, prvý nový blok dávky — preto drží `id`, nie index. Indexy
    sú platné len v rámci jednej obsluhy.
 6. **NVDA neohlási posun kurzora, ktorý nespravila sama.** Overené skúšaním.
    Každá akcia, ktorej jedinou odozvou mal byť presun kurzora — skok na blok,
@@ -83,6 +92,17 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    nestalo**: Ctrl+Enter je chord a chord sa dá minúť — samotný Enter urobí
    nový riadok a nič viac. Preto hovoria všetky tri konce `Send()`: odoslanie
    („pracujem"), bežiaci ťah aj prázdny prompt.
+
+   Ťah, ktorý agent začal sám (dobehla úloha na pozadí), nemá klávesu, ktorá
+   by ho ohlásila. Ohlási ho port: `agent::TurnStarted` prichádza na začiatku
+   **každého** ťahu a panel ho pri `!busy_` berie ako cudzí ťah
+   (`SessionPane::OnTurnStartedByAgent`): `busy_`, „pracujem" v stavovom
+   riadku a do fronty „agent pracuje sám" (invarianty 7 a 11). Predtým sa
+   ozvala až odpoveď a „hotovo", a hneď po prerušení to znelo, akoby
+   prerušenie neprešlo (claude-gui-lkk.5.23). Vlastný ťah je v tej chvíli už
+   `busy_` a `TurnStarted` ho necháva tak — a stavový riadok sa na začiatku
+   ťahu **nikdy nečistí**: `system/init` prichádza aj po našom prompte
+   a čistenie tam raz zmazalo „pracujem".
 
    A ťah, ktorý beží, nesmie byť ticho celý — a ohlasuje sa **v poradí, v akom
    sa deje**: „premýšľam" pri prvom `system/thinking_tokens` daného úseku, text

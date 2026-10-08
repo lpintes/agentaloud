@@ -302,6 +302,9 @@ void CodexBackend::OnLine(std::string_view line) {
     bool interrupt = false;
     {
       std::lock_guard<std::mutex> lock(mutex_);
+      // Also for a turn the agent began without a prompt from us, so that
+      // Interrupt and Stop treat it as the turn it is (invariant 1).
+      turnInFlight_ = true;
       turnId_ = turn;
       interrupt = interruptWanted_;
       interruptWanted_ = false;

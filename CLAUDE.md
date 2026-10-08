@@ -222,7 +222,9 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
    zamietnutie pravidlom. Prerušenie je `control_request` `subtype: interrupt`
    (nie `control_cancel_request`) a ťah končí až jeho `result`;
    `Session::Interrupt()` preto `turnInFlight_` nezhasína. `Stop()` v oboch
-   adaptéroch najprv ťah preruší, potom čaká.
+   adaptéroch najprv ťah preruší, potom čaká. Ťah môže začať aj CLI samo
+   (dobehla úloha na pozadí) — `turnInFlight_` rozsvieti aj `system/init`
+   / `turn/started`, nielen `SendPrompt`.
 2. **Callbacky bežia na čítacom vlákne** (`EventCallback`,
    `PermissionCallback`). Na okno len cez `PostMessage`.
 3. **Kurzor v prepise sa nehýbe kvôli textu, ktorý prichádza** — zostane pri
@@ -237,7 +239,9 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
 6. **NVDA neohlási posun kurzora, ktorý nespravila sama.** Každá klávesa musí
    prehovoriť (`SessionPane::Announce`), aj keď sa nič nestalo; hovorí sa
    riadok, kde kurzor stojí. Dlhá akcia dvakrát (začiatok aj koniec —
-   „prerušujem"/„prerušené", „hotovo" cez `SignalTurnEnd`). Ťah sa ohlasuje
+   „prerušujem"/„prerušené", „hotovo" cez `SignalTurnEnd`). Ťah bez promptu
+   ohlási `agent::TurnStarted` pri `!busy_` (`OnTurnStartedByAgent`); stavový
+   riadok sa na začiatku ťahu nečistí. Ťah sa ohlasuje
    priebežne v poradí, celými blokmi (`AnnounceProgress`), text asistenta
    s menom hovoriaceho (`Transcript::SpeakerPrefix`, meno z
    `Capabilities::agentName`, nastavené pred `Start` a potom nemenné).

@@ -215,6 +215,12 @@ struct RateLimitChanged {
 // in (invariant 17), so "not ready" is an ordinary state that has to be said.
 struct Ready {};
 
+// The start of a turn -- every turn, the reader's own as well as one the agent
+// began by itself, because a task in the background finished.  Only the
+// stream knows about the second kind, so it is the stream that says so
+// (claude-gui-lkk.5.23); the pane ignores it for a turn it started itself.
+struct TurnStarted {};
+
 enum class TurnOutcome { Completed, Interrupted, Failed };
 
 // The end of a turn, and the only thing that ends one.  An interruption ends
@@ -251,7 +257,8 @@ using Event = std::variant<AssistantText, Thinking, ThinkingTick,
                            ToolCallStarted, ToolCallFinished, ToolDenied,
                            QuestionByPrompt, UserPrompt, Interrupted, WorkingDirectory,
                            ModelChanged, ModeChanged, ContextUsed,
-                           UsageChanged, RateLimitChanged, Ready, TurnEnded,
+                           UsageChanged, RateLimitChanged, Ready, TurnStarted,
+                           TurnEnded,
                            SessionEnded, Unrecognised>;
 
 }  // namespace agent

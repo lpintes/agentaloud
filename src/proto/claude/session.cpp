@@ -219,7 +219,13 @@ void Session::OnLine(std::string_view line) {
     }
   }
 
-  if (event.kind == EventKind::Result) {
+  if (event.kind == EventKind::SystemInit) {
+    // A turn SendPrompt did not start -- the CLI began it when a task in the
+    // background ended.  Without this Interrupt() would refuse it, and Stop()
+    // would close stdin in the middle of it (invariant 1).
+    std::lock_guard<std::mutex> lock(mutex_);
+    turnInFlight_ = true;
+  } else if (event.kind == EventKind::Result) {
     {
       std::lock_guard<std::mutex> lock(mutex_);
       turnInFlight_ = false;

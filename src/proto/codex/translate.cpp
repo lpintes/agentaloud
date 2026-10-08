@@ -56,7 +56,6 @@ const std::set<std::string>& IgnoredMethods() {
       "item/reasoning/summaryTextDelta",
       "item/reasoning/textDelta",
       "item/mcpToolCall/progress",
-      "turn/started",
       "turn/diff/updated",
       "turn/plan/updated",
       "thread/status/changed",
@@ -702,6 +701,8 @@ std::vector<agent::Event> Translator::Translate(const Json& message) {
       deniedByReviewer_[StringField(params, "targetItemId")] =
           StringField(review, "rationale");
     }
+  } else if (method == "turn/started") {
+    events.push_back(agent::TurnStarted{});
   } else if (method == "turn/completed") {
     // A call still running is NOT forgotten here.  Interrupting the turn does
     // not kill the command (Codex 0.160.0): a ping ran on to its end and its

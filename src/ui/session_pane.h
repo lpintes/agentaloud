@@ -183,6 +183,9 @@ class SessionPane {
                                          UINT_PTR id, DWORD_PTR data);
 
   void Apply(const model::Edit& edit);
+  // A turn the agent began without a prompt -- a task in the background
+  // finished.  The pane is put in the state SendText leaves it in.
+  void OnTurnStartedByAgent();
   // The end of a turn, however it ended: the bar is cleared, and the reader
   // hears that it is over -- "prerušené" if they stopped it, otherwise
   // SignalTurnEnd.
@@ -276,11 +279,6 @@ class SessionPane {
   model::Transcript model_;
   model::Bookmarks bookmarks_;
   Speech speech_;
-  // The id this turn's blocks start from, so that when it ends we know which
-  // of the answers is the new one to read out.  An id and not an index: a tool
-  // result is inserted behind its call, so the turn's blocks are not the tail
-  // of the vector.
-  size_t turnFirstId_ = 0;
   // Where Send() last put the caret.  If it is still there when the next
   // prompt goes out, nobody has moved it and the caret is ours to move; if it
   // has moved, the reader is reading and it is theirs.

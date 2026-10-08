@@ -607,6 +607,9 @@ void SessionPane::OnDrain() {
       } else if (const auto* asked =
                      std::get_if<agent::QuestionByPrompt>(&event)) {
         questionsByPrompt_.push_back(*asked);
+      } else if (std::holds_alternative<agent::TurnStarted>(event)) {
+        // A turn of our own is already busy_: SendText said all there is.
+        if (!busy_ && !ended_) OnTurnStartedByAgent();
       } else if (std::holds_alternative<agent::TurnEnded>(event)) {
         OnTurnEnded();
       } else if (std::holds_alternative<agent::SessionEnded>(event)) {
@@ -624,16 +627,36 @@ void SessionPane::OnDrain() {
   if (model_.blocks().size() != blocksBefore) bookmarks_.Set(0, reading);
 }
 
+void SessionPane::OnTurnStartedByAgent() {
+  // What SendText does for a turn of the reader's, for one nobody here sent:
+  // without it Ctrl+Enter went through into the middle of it, Esc said
+  // nothing was running, and the bar answered "is it working" with no.
+  busy_ = true;
+  interrupted_ = false;
+  thinkingSaid_ = false;
+  spokeThisTurn_ = false;
+  SetStatus(i18n::Text(Str::kWorking));
+  // Said, or the first thing heard is the answer and then "hotovo" -- which,
+  // right after an interruption, sounded as if it had not taken.  It came on
+  // its own, so it queues (invariant 7) and follows invariant 11 like the
+  // rest of the turn.  Spoken counts as spoken: the end is then a word, not
+  // a beep that would cut across this one in NVDA's queue.
+  if (WantsProgressSpeech() && speech_.available()) {
+    speech_.Say(i18n::Text(Str::kSayAgentStarted), false);
+    spokeThisTurn_ = true;
+  }
+}
+
 void SessionPane::OnTurnEnded() {
   busy_ = false;
   // Empty, not "done".  Done says nothing a reader can use -- what was done,
   // and when?  The field is there to answer "is it working right now", and the
   // answer to that, once the turn is over, is nothing.
   //
-  // Only here and in Send.  The start of a turn is not a place to touch it:
-  // system/init arrives at the start of every turn, and clearing the field
-  // there once wiped out the "pracujem" that Send had just written, so the bar
-  // stayed blank for the whole turn.
+  // Only here, in SendText and in OnTurnStartedByAgent.  The start of a turn
+  // must never clear it: TurnStarted comes for every turn, and clearing the
+  // field there once wiped out the "pracujem" that Send had just written, so
+  // the bar stayed blank for the whole turn.
   SetStatus(L"");
   // A turn that ended on a question waiting for the next prompt ends in the
   // dialog for it, and the dialog is what is heard -- its caption and the
@@ -1309,7 +1332,6 @@ void SessionPane::SendText(const std::wstring& text) {
   const bool following = Following();
   const std::wstring prompt = model::NormalizeNewlines(text);
 
-  turnFirstId_ = model_.nextBlockId();
   Apply(model_.AppendUserPrompt(prompt));
   if (following) {
     PutCaretAtEnd(transcript_);

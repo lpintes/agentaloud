@@ -286,7 +286,11 @@ std::vector<agent::Event> Translator::Translate(const Json& record) {
       break;
     // The permission mode in it is not read here: Session folds it in with
     // every other report of the mode.
+    // init opens every turn, including one the CLI starts by itself when a
+    // task in the background ends -- and that one has no user record to
+    // announce it (measured, tools/probe_selfturn.notes.md).
     case EventKind::SystemInit: {
+      events.push_back(agent::TurnStarted{});
       events.push_back(agent::WorkingDirectory{StringField(event.raw, "cwd")});
       // Only until an assistant record has named the model -- see Translator.
       const std::string model = StringField(event.raw, "model");

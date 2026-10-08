@@ -1681,6 +1681,10 @@ void TestTranslatorModelAndTurn() {
   std::vector<agent::Event> events = translator.Translate(init);
   CHECK_EQ(CountOf<agent::WorkingDirectory>(events), size_t{1});
   CHECK_EQ(ModelIn(events), std::string("claude-sonnet-5"));
+  // init otvara kazdy tah, aj ten, ktory CLI zacne samo po dobehnuti ulohy
+  // na pozadi (claude-gui-lkk.5.23) -- iny znak jeho zaciatku v streame nie je.
+  CHECK_EQ(CountOf<agent::TurnStarted>(events), size_t{1});
+  CHECK_EQ(CountOf<agent::TurnStarted>(translator.Translate(init)), size_t{1});
   CHECK_EQ(ModelIn(translator.Translate(opus)), std::string("claude-opus-5"));
   // Druhy tah: init znova so Sonnetom -- uz nie.
   CHECK_EQ(CountOf<agent::ModelChanged>(translator.Translate(init)), size_t{0});
@@ -3538,6 +3542,8 @@ void TestCodexFixtureInterrupt(const std::string& dir) {
   if (!ends.empty()) {
     CHECK(ends[0].outcome == agent::TurnOutcome::Interrupted);
   }
+  // Zaciatok tahu hovori turn/started, nie nas prompt (claude-gui-lkk.5.23).
+  CHECK_EQ(EventsOf<agent::TurnStarted>(replay.events).size(), size_t{1});
   // Za koncom tahu este chodi vystup prikazu, ktory nikdy neskoncil.  Do
   // prepisu z neho nesmie nic pribudnut.
   CHECK(std::holds_alternative<agent::TurnEnded>(replay.events.back()));
