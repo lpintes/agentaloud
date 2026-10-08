@@ -87,6 +87,14 @@ bool ShouldOffer(std::optional<version::Number> current,
   return !declined || *latest != *declined;
 }
 
+AskedAnswer AnswerAsked(std::optional<version::Number> current,
+                        std::wstring_view latestTag) {
+  const std::optional<version::Number> latest = version::Parse(latestTag);
+  if (!latest) return AskedAnswer::kUnreadable;
+  if (!current) return AskedAnswer::kDevelopment;
+  return *latest > *current ? AskedAnswer::kOffer : AskedAnswer::kNewest;
+}
+
 bool CheckDue(std::wstring_view lastCheck, std::wstring_view today) {
   return lastCheck != today;
 }

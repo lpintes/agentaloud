@@ -1031,6 +1031,13 @@ void TestArguments() {
   app::CheckBackend(&versionBackend, {"claude"});
   CHECK(versionBackend.error.empty());
 
+  // --check-updates je volba ako ktorakolvek ina: priecinok za nou zostane
+  // priecinkom a start pokracuje.
+  app::Arguments check = app::Parse(W{L"--check-updates", L"."});
+  CHECK(check.checkUpdates);
+  CHECK(check.error.empty());
+  CHECK_EQ(check.project, std::wstring(L"."));
+
   // Hole --resume: na konci aj pred oddelovacom.
   app::Arguments bare = app::Parse(W{L".", L"--resume"});
   CHECK(bare.resume);
@@ -1084,7 +1091,8 @@ void TestArguments() {
     CHECK(text.find(L"" APP_NAME L" 2026.10.1 ") == 0);
     for (const wchar_t* option :
          {L"--backend", L"--permission-mode", L"--model", L"--resume",
-          L"--continue", L"--help", L"--version", L"language=", L"F1"}) {
+          L"--continue", L"--help", L"--version", L"--check-updates",
+          L"language=", L"F1"}) {
       CHECK(text.find(option) != std::wstring::npos);
     }
     for (const std::string& name : known) {
@@ -1275,6 +1283,14 @@ void TestUpdateRules() {
   CHECK(!update::ShouldOffer(std::nullopt, L"v2026.10.2", L""));  // vyvojove
   CHECK(!update::ShouldOffer(current, L"v2026.10.2", L"2026.10.2"));
   CHECK(update::ShouldOffer(current, L"v2026.10.3", L"2026.10.2"));
+  // Rucna kontrola odpoveda vzdy, a preskocenu verziu ponukne znova.
+  using update::AskedAnswer;
+  CHECK(update::AnswerAsked(current, L"v2026.10.2") == AskedAnswer::kOffer);
+  CHECK(update::AnswerAsked(current, L"v2026.10.1") == AskedAnswer::kNewest);
+  CHECK(update::AnswerAsked(current, L"v2026.9.9") == AskedAnswer::kNewest);
+  CHECK(update::AnswerAsked(std::nullopt, L"v2026.10.2") ==
+        AskedAnswer::kDevelopment);
+  CHECK(update::AnswerAsked(current, L"nightly") == AskedAnswer::kUnreadable);
   CHECK(update::CheckDue(L"2026-10-04", L"2026-10-05"));
   CHECK(update::CheckDue(L"", L"2026-10-05"));
   CHECK(!update::CheckDue(L"2026-10-05", L"2026-10-05"));

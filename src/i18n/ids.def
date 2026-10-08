@@ -269,6 +269,12 @@ S(kDownloading)
 S(kInstalledButNotStarted)
 S(kFolderNotWritable)
 S(kUpdateFailed)
+// The check the reader asked for, which answers even when there is nothing.
+S(kCheckFailed)
+S(kNoReleaseYet)
+S(kNewestVersion)
+S(kDevelopmentBuild)
+S(kInstalledNextStart)
 // Block kinds, as navigation names them.
 S(kKindPrompt)
 S(kKindAnswer)

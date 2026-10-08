@@ -140,6 +140,49 @@ void SaveSettings(const std::wstring& file, const app::Settings& settings) {
   if (!file.empty()) win::WriteFileBytes(file, settings.Serialize(), &error);
 }
 
+// "v2026.10.2" is a tag; the reader and the settings say a version.
+std::wstring Bare(const std::wstring& tag) {
+  return tag.starts_with(L'v') ? tag.substr(1) : tag;
+}
+
+// The dialog with Aktualizovať, Neskôr and Preskočiť, and what each answer
+// does.  True means the new version has been started and this process should
+// leave -- which only `restart` can lead to.
+bool OfferUpdate(HWND owner, app::Settings& settings, const std::wstring& file,
+                 const std::wstring& tag, bool restart) {
+  switch (updater::AskToUpdate(owner, tag, restart)) {
+    case updater::Choice::kSkip:
+      settings.Set(app::kSkippedVersionKey, model::Utf8FromUtf16(Bare(tag)));
+      SaveSettings(file, settings);
+      return false;
+    case updater::Choice::kLater:
+      return false;
+    case updater::Choice::kUpdate:
+      // A failure has been said by the updater; the start then goes on with
+      // the version there is.
+      switch (updater::DownloadAndInstall(owner, tag, restart)) {
+        case updater::Installed::kRestarted:
+          return true;
+        case updater::Installed::kInstalled:
+          // Said here and not by the updater: with `restart` it has said
+          // already why the new version did not start.
+          if (!restart) {
+            MessageBoxW(owner,
+                        i18n::Format(i18n::Str::kInstalledNextStart,
+                                     {Bare(tag), L"" APP_NAME})
+                            .c_str(),
+                        L"" APP_NAME, MB_OK | MB_ICONINFORMATION);
+          }
+          return false;
+        case updater::Installed::kCancelled:
+        case updater::Installed::kFailed:
+          return false;
+      }
+      return false;
+  }
+  return false;
+}
+
 // The automatic update check (claude-gui-lkk.53).  Before the folder picker
 // and before the session, so taking an update is only swapping files and
 // starting again: no CLI runs yet, and the reader is not asked for a folder
@@ -168,23 +211,51 @@ bool UpdateBeforeStart(app::Settings& settings, const std::wstring& file) {
                            skipped)) {
     return false;
   }
-  switch (updater::AskToUpdate(nullptr, latest.tag, /*restartsItself=*/true)) {
-    case updater::Choice::kSkip: {
-      // Without the v: the key says a version, not a tag.
-      const std::wstring bare =
-          latest.tag.starts_with(L'v') ? latest.tag.substr(1) : latest.tag;
-      settings.Set(app::kSkippedVersionKey, model::Utf8FromUtf16(bare));
-      SaveSettings(file, settings);
+  return OfferUpdate(nullptr, settings, file, latest.tag, true);
+}
+
+// The check the reader asked for: --check-updates, and the Help menu.  It
+// answers every time -- an asked question met with silence sounds like a key
+// that did nothing (invariant 6) -- and it neither reads nor writes the day of
+// the last check: that day is the automatic check's, and asking is exactly how
+// one gets past it.  With `restart` it behaves like the startup check; without
+// it the new version waits for the next start, because sessions are running.
+bool CheckForUpdatesAsked(HWND owner, app::Settings& settings,
+                          const std::wstring& file, bool restart) {
+  const updater::Latest latest = updater::FetchLatestAsked(owner);
+  std::wstring said;
+  UINT icon = MB_ICONINFORMATION;
+  switch (latest.kind) {
+    case updater::Latest::Kind::kCancelled:
       return false;
-    }
-    case updater::Choice::kLater:
-      return false;
-    case updater::Choice::kUpdate:
-      // A failure has been said by the updater; the start then goes on with
-      // the version there is.
-      return updater::DownloadAndInstall(nullptr, latest.tag, true) ==
-             updater::Installed::kRestarted;
+    case updater::Latest::Kind::kFailed:
+      said = i18n::Format(i18n::Str::kCheckFailed, {latest.error});
+      icon = MB_ICONWARNING;
+      break;
+    case updater::Latest::Kind::kNoRelease:
+      said = i18n::Text(i18n::Str::kNoReleaseYet);
+      break;
+    case updater::Latest::Kind::kFound:
+      switch (update::AnswerAsked(version::Parse(version::Current()),
+                                  latest.tag)) {
+        case update::AskedAnswer::kOffer:
+          return OfferUpdate(owner, settings, file, latest.tag, restart);
+        case update::AskedAnswer::kNewest:
+          said = i18n::Format(i18n::Str::kNewestVersion,
+                              {std::wstring(version::Current())});
+          break;
+        case update::AskedAnswer::kDevelopment:
+          said = i18n::Format(i18n::Str::kDevelopmentBuild,
+                              {std::wstring(version::Current()),
+                               Bare(latest.tag)});
+          break;
+        case update::AskedAnswer::kUnreadable:
+          said = i18n::Text(i18n::Str::kNoReleaseYet);
+          break;
+      }
+      break;
   }
+  MessageBoxW(owner, said.c_str(), L"" APP_NAME, MB_OK | icon);
   return false;
 }
 
@@ -388,7 +459,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   // A previous update's folders go first, so they are gone whether or not this
   // start checks; then the check, which may end this process.
   updater::RemoveLeftover();
-  if (UpdateBeforeStart(settings, settingsFile)) {
+  const bool restarted =
+      arguments.checkUpdates
+          ? CheckForUpdatesAsked(nullptr, settings, settingsFile, true)
+          : UpdateBeforeStart(settings, settingsFile);
+  if (restarted) {
     CoUninitialize();
     return 0;
   }

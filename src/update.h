@@ -54,6 +54,15 @@ std::optional<std::string> HashFor(std::string_view sums, std::string_view file)
 bool ShouldOffer(std::optional<version::Number> current,
                  std::wstring_view latestTag, std::wstring_view skipped);
 
+// The check the reader asked for -- --check-updates or the Help menu -- has to
+// answer every time, so it tells apart what ShouldOffer folds into "no".  The
+// skipped version is not in it: asking again is how a skipped version is
+// taken back.  A development build is still offered nothing, asked or not --
+// it would be replaced by an older release -- but it says so.
+enum class AskedAnswer { kOffer, kNewest, kDevelopment, kUnreadable };
+AskedAnswer AnswerAsked(std::optional<version::Number> current,
+                        std::wstring_view latestTag);
+
 // Once a day: the check is due unless it already ran today.  Dates are
 // "YYYY-MM-DD" in local time, compared as they are written.
 bool CheckDue(std::wstring_view lastCheck, std::wstring_view today);

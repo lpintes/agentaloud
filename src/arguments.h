@@ -51,6 +51,10 @@ struct Arguments {
   bool help = false;
   // --version: the same as help in everything but the text.
   bool version = false;
+  // --check-updates: the check the reader asks for, in place of the daily one
+  // at this start.  An act and not a setting -- written into the file it
+  // would be forgotten there and check at every start.
+  bool checkUpdates = false;
   // Something on the command line was not understood.  Non-empty means no
   // window either: an option that was refused was typed for a reason, and
   // opening a session without it would be doing something other than what was

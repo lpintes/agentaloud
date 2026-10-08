@@ -97,6 +97,10 @@ Arguments Parse(const std::vector<std::wstring>& words) {
     } else if (word == L"--version") {
       arguments.version = true;
       break;
+    // The start goes on after it, so it is read like any other option and not
+    // like --help.
+    } else if (word == L"--check-updates") {
+      arguments.checkUpdates = true;
     // Anything else that starts with a dash is an option this process does not
     // have, and the one thing it must not become is the project folder: that
     // is how --fork-session used to end up as a path and the session started

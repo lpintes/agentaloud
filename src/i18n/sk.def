@@ -333,6 +333,12 @@ S(kHelp,
   L"  --version\n"
   L"      Iba verziu {0}.\n"
   L"\n"
+  L"  --check-updates\n"
+  L"      Hneď pri štarte zistí, či je novšia verzia, a povie výsledok aj\n"
+  L"      vtedy, keď nie je.  Nehľadí na to, kedy sa kontrolovalo\n"
+  L"      naposledy, ani na check-updates=0, a ponúkne aj preskočenú\n"
+  L"      verziu.  Potom štart pokračuje ako obvykle.\n"
+  L"\n"
   L"Voľba pred --, ktorú {0} nepozná — napríklad --fork-session —\n"
   L"sa neprepošle a ani sa z nej nestane cesta: povie to a skončí.  Kto\n"
   L"ju chce poslať CLI, napíše ju za --.  Priečinok projektu je prvý\n"
@@ -411,6 +417,14 @@ S(kFolderNotWritable,
   L"Do priečinka {0} sa nedá zapisovať, preto sa {1} nemôže aktualizovať "
   L"sám.\r\n\r\nOtvoriť stránku s novou verziou?")
 S(kUpdateFailed, L"Aktualizácia sa nepodarila: {0}")
+S(kCheckFailed, L"Novú verziu sa nepodarilo zistiť: {0}")
+S(kNoReleaseYet, L"Zatiaľ nie je vydaná žiadna verzia.")
+S(kNewestVersion, L"Máte najnovšiu verziu {0}.")
+S(kDevelopmentBuild,
+  L"Toto je vývojová zostava {0}. Aktualizácie sa ponúkajú len vydaným "
+  L"verziám. Najnovšie vydanie je {1}.")
+S(kInstalledNextStart,
+  L"Verzia {0} je nainštalovaná. Prejaví sa pri ďalšom spustení {1}.")
 
 S(kKindPrompt, L"prompt")
 S(kKindAnswer, L"odpoveď")

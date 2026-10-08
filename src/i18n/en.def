@@ -327,6 +327,12 @@ S(kHelp,
   L"  --version\n"
   L"      Only the version of {0}.\n"
   L"\n"
+  L"  --check-updates\n"
+  L"      Checks for a newer version right at startup and says the result\n"
+  L"      even when there is none.  It ignores when the last check was,\n"
+  L"      and check-updates=0, and offers a skipped version too.  Then the\n"
+  L"      start goes on as usual.\n"
+  L"\n"
   L"An option before -- that {0} does not know -- --fork-session, say --\n"
   L"is neither passed on nor taken for a path: {0} says so and ends.\n"
   L"Whoever wants it to reach the CLI writes it after --.  The project\n"
@@ -406,6 +412,14 @@ S(kFolderNotWritable,
   L"The folder {0} cannot be written to, so {1} cannot update itself."
   L"\r\n\r\nOpen the page with the new version?")
 S(kUpdateFailed, L"The update failed: {0}")
+S(kCheckFailed, L"Could not find out about a new version: {0}")
+S(kNoReleaseYet, L"No version has been released yet.")
+S(kNewestVersion, L"You have the newest version, {0}.")
+S(kDevelopmentBuild,
+  L"This is development build {0}. Updates are offered only to released "
+  L"versions. The newest release is {1}.")
+S(kInstalledNextStart,
+  L"Version {0} is installed. It takes effect the next time {1} starts.")
 
 S(kKindPrompt, L"prompt")
 S(kKindAnswer, L"answer")
