@@ -2061,6 +2061,30 @@ void TestFailedToolResultReadsLikeAnError() {
   const model::Block& second = transcript.blocks().back();
   CHECK(second.isError);
   CHECK_EQ(second.summary, std::wstring(L"chyba: File has not been read yet."));
+  // Slovo "chyba" musi byt aj na riadku prepisu, nielen v reci: jednoriadkova
+  // chyba je nezbalitelna, a kym sa kreslilo len telo, znela pri citani po
+  // riadkoch rovnako ako uspesny vystup (claude-gui-lzv).
+  const size_t last = transcript.blocks().size() - 1;
+  CHECK_EQ(transcript.FirstLine(last),
+           std::wstring(L"chyba: File has not been read yet."));
+
+  // Uspesny jednoriadkovy vystup slovo nedostane -- bolo by pri kazdom prikaze.
+  agent::ToolResult fine;
+  fine.callId = "toolu_ok";
+  fine.text = "hello";
+  transcript.Append({agent::ToolCallFinished{fine}});
+  CHECK_EQ(transcript.FirstLine(transcript.blocks().size() - 1),
+           std::wstring(L"hello"));
+
+  // Prazdna chyba nie je prazdny riadok.
+  agent::ToolResult blank;
+  blank.callId = "toolu_blank";
+  blank.isError = true;
+  transcript.Append({agent::ToolCallFinished{blank}});
+  CHECK_EQ(transcript.FirstLine(transcript.blocks().size() - 1),
+           std::wstring(L"chyba (prázdna)"));
+  std::string problem;
+  CHECK(transcript.CheckInvariants(&problem));
 }
 
 void TestEmptyBlocksAreDropped() {

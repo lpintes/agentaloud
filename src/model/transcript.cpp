@@ -528,6 +528,14 @@ std::wstring Transcript::Render(const Block& block) const {
     return i18n::Format(Str::kExpanded, {block.summary}) + L'\n' + block.body +
            L'\n';
   }
+  // A one-line error has no heading to say it failed: drawn as its bare body,
+  // "fatal: not a git repository" read line by line exactly like a successful
+  // output.  Its summary is the body behind the word, the same line speech
+  // says.  A successful one-line output stays bare -- a word in front of every
+  // command would be noise.
+  if (block.kind == BlockKind::ToolResult && block.isError) {
+    return block.summary + L'\n';
+  }
   return prefix + block.body + L'\n';
 }
 
