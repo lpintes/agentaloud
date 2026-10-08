@@ -15,6 +15,7 @@
 // CLI (invariants 4 and 8); so is the Slovak that a call is rendered in.  This
 // hands over structure, and the strings in it are as they came off the wire.
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -49,8 +50,20 @@ class Translator {
   std::vector<agent::Event> Translate(const Json& record);
 
  private:
+  // The name a subagent goes by from its Agent call on: its type and how
+  // many of that type this translator has seen, "Explore 2".  The type alone
+  // does not tell three Explores apart, and the description the call carries
+  // is a sentence -- too long to say in front of every line it writes
+  // (decided with the reader, claude-gui-b8n.3).
+  std::string NameSubagent(const std::string& callId, std::string type);
+  // Who wrote a record: empty for the conversation itself, the subagent's
+  // name for a record with parent_tool_use_id.
+  std::string Author(const Json& record);
+
   std::string model_;
   bool answered_ = false;
+  std::map<std::string, std::string> subagents_;  // Agent call id -> name
+  std::map<std::string, int> subagentCounts_;     // type -> how many so far
 };
 
 // One record through a translator of its own -- for a record whose meaning

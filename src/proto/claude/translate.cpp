@@ -216,6 +216,26 @@ agent::ToolCall ToolCallFromInput(const std::string& name,
   return call;
 }
 
+std::string Translator::NameSubagent(const std::string& callId,
+                                     std::string type) {
+  auto known = subagents_.find(callId);
+  if (known != subagents_.end()) return known->second;
+  // What the CLI runs when the call names no type.
+  if (type.empty()) type = "general-purpose";
+  std::string name = type + " " + std::to_string(++subagentCounts_[type]);
+  subagents_[callId] = name;
+  return name;
+}
+
+std::string Translator::Author(const Json& record) {
+  auto parent = record.find("parent_tool_use_id");
+  if (parent == record.end() || !parent->is_string()) return std::string();
+  // A subagent whose call we never saw.  Not one from before a resume: the
+  // subagent dies with its CLI, so this is only a guard against a stream
+  // that names a parent it did not send.
+  return NameSubagent(parent->get<std::string>(), std::string());
+}
+
 std::vector<agent::Event> Translator::Translate(const Json& record) {
   std::vector<agent::Event> events;
   const Event event = Classify(record);
@@ -224,6 +244,10 @@ std::vector<agent::Event> Translator::Translate(const Json& record) {
     case EventKind::Assistant: {
       const Json* content = Content(event.raw);
       if (content == nullptr) break;
+      // Every record of a subagent comes on the same stream as the
+      // conversation's and in among them (tools/probe_subagents.notes.md);
+      // parent_tool_use_id is the one thing that tells them apart.
+      const std::string by = Author(event.raw);
       for (const Json& item : *content) {
         if (!item.is_object()) continue;
         const std::string type = StringField(item, "type");
@@ -234,18 +258,30 @@ std::vector<agent::Event> Translator::Translate(const Json& record) {
         // that a command printed nothing is an answer.
         if (type == "thinking") {
           std::string text = StringField(item, "thinking");
-          if (!text.empty()) events.push_back(agent::Thinking{std::move(text)});
+          if (!text.empty()) {
+            events.push_back(agent::Thinking{std::move(text), by});
+          }
         } else if (type == "text") {
           std::string text = StringField(item, "text");
           if (!text.empty()) {
-            events.push_back(agent::AssistantText{std::move(text)});
+            events.push_back(agent::AssistantText{std::move(text), by});
           }
         } else if (type == "tool_use") {
           auto input = item.find("input");
           const Json arguments =
               input != item.end() ? *input : Json::object();
-          events.push_back(agent::ToolCallStarted{ToolCallFromInput(
-              StringField(item, "name"), StringField(item, "id"), arguments)});
+          const std::string name = StringField(item, "name");
+          agent::ToolCall call =
+              ToolCallFromInput(name, StringField(item, "id"), arguments);
+          // "Task" is what the tool was called before it was "Agent".
+          if (name == "Agent" || name == "Task") {
+            // The name goes into the call's summary as well, which is the
+            // one place that says what "Explore 2" was sent to do.
+            const std::string named = NameSubagent(
+                call.id, StringField(arguments, "subagent_type"));
+            call.primary = named + ": " + call.primary;
+          }
+          events.push_back(agent::ToolCallStarted{std::move(call), by});
         }
       }
       // Behind the content, so that what the turn said is said before the

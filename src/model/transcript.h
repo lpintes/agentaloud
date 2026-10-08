@@ -99,6 +99,10 @@ struct Block {
   std::wstring toolName;
   agent::ToolKind toolKind = agent::ToolKind::Other;
   bool isError = false;
+  // The subagent whose block this is, empty for the agent itself.  Set when
+  // the block is made and never after: it is part of the rendered text.  A
+  // result has its call's.
+  std::wstring speaker;
 
   // Offsets into Transcript::Text(), maintained by Transcript.  length always
   // includes the block's trailing newline, so the blocks tile the buffer with
@@ -141,12 +145,13 @@ class Transcript {
   // when blocks are already there.
   bool SetAgentName(const std::wstring& name);
 
-  // Who said it, written in front of the line: "<agent>: " and "you: ", empty
-  // for everything else.  Not part of the block's text -- the transcript puts
-  // it in when it renders, and speech puts it in when it announces, so a copy
-  // of the body stays free of it and the two never say a different name for
-  // the same speaker.
-  std::wstring SpeakerPrefix(BlockKind kind) const;
+  // Who said it, written in front of the line: "<agent>: " and "you: ", and
+  // "<subagent>: " in front of every block of a subagent, its tools as well;
+  // empty for everything else.  Not part of the block's text -- the
+  // transcript puts it in when it renders, and speech puts it in when it
+  // announces, so a copy of the body stays free of it and the two never say a
+  // different name for the same speaker.
+  std::wstring SpeakerPrefix(const Block& block) const;
 
   // A one-line mark where a turn was cut short.  Written by us rather than
   // read off the stream: the CLI does put a user record saying "[Request

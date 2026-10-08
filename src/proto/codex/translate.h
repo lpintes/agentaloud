@@ -224,6 +224,10 @@ class Translator {
   std::vector<agent::BackgroundTask> agents_;
   std::vector<agent::BackgroundTask> shells_;
   std::map<std::string, std::string> commands_;
+  // A subagent's name by its thread, for the `by` of what it says.  Apart
+  // from agents_ because that one forgets a subagent at subAgentActivity
+  // completed, and nothing promises its last items came before that.
+  std::map<std::string, std::string> subagentNames_;
   // Why the reviewer said no, by the item it judged, until that item ends.
   std::map<std::string, std::string> deniedByReviewer_;
   std::string model_;

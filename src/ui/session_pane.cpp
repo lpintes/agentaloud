@@ -884,7 +884,7 @@ void SessionPane::AnnounceProgress(size_t firstNewId) {
     // which of them the model actually said.  Empty for the mechanism kinds --
     // a tool summary already names itself.
     if (speech_.available()) {
-      speech_.Say(model_.SpeakerPrefix(block.kind) + *said, false);
+      speech_.Say(model_.SpeakerPrefix(block) + *said, false);
     }
   }
 }

@@ -669,6 +669,7 @@ void Translator::TrackTask(const Json& item, bool completed,
       if (size_t slash = path.rfind('/'); slash != std::string::npos) {
         path.erase(0, slash + 1);
       }
+      subagentNames_[thread] = path;
       agents_.push_back({thread, agent::TaskKind::Agent, path});
       ReportTasks(out);
     } else if ((kind == "completed" || kind == "interrupted") &&
@@ -862,6 +863,24 @@ std::vector<agent::Event> Translator::Translate(const Json& message) {
     events.push_back(out);
   } else if (IgnoredMethods().count(method) == 0) {
     events.push_back(agent::Unrecognised{method});
+  }
+
+  // A subagent's items come with its own thread id and are told as its.  The
+  // name is the last part of the agentPath the model gave it ("agent_1"); the
+  // nickname is only in thread/read (tools/probe_codex_subagents.notes.md).
+  if (foreign) {
+    auto known = subagentNames_.find(StringField(params, "threadId"));
+    const std::string by =
+        known != subagentNames_.end() ? known->second : std::string("agent");
+    for (agent::Event& event : events) {
+      if (auto* text = std::get_if<agent::AssistantText>(&event)) {
+        text->by = by;
+      } else if (auto* thinking = std::get_if<agent::Thinking>(&event)) {
+        thinking->by = by;
+      } else if (auto* started = std::get_if<agent::ToolCallStarted>(&event)) {
+        started->by = by;
+      }
+    }
   }
   return events;
 }

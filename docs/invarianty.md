@@ -146,6 +146,19 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    Kým ho nikto nedal, je to neutrálne „agent", lebo `model/` nevie, ktoré
    CLI beží.
 
+   **Blok subagenta hovorí menom subagenta, a to každý** — aj volanie
+   nástroja a jeho výstup, ktoré od hlavného agenta inak predponu nemajú
+   (claude-gui-b8n.3). Subagenti na pozadí sa striedajú medzi sebou aj
+   s hlavným agentom v poradí, v akom prišli, takže „Glob: **/*" bez mena
+   nepovie, kto hľadá. Meno nesie port (pole `by`, prázdne = hlavný agent),
+   model ho uloží pri vzniku bloku do `Block::speaker` a výsledok nástroja ho
+   zdedí po svojom volaní. Meno je typ a poradové číslo za session
+   („Explore 2"), vždy s číslom; dáva ho adaptér (Claude podľa
+   `subagent_type` volania `Agent`, Codex podľa konca `agentPath`), nie model.
+   Súhrn volania `Agent` to isté meno nesie pred popisom, aby sa ďalšie bloky
+   dali k volaniu priradiť. Overené naostro 8. 10. 2026 s troma Explore na
+   pozadí.
+
    Koniec ťahu preto musí povedať, že je koniec — „hotovo"
    (`ui::SessionPane::SignalTurnEnd`). Kým odpoveď chodila až na konci, koniec
    sa poznal po nej; keď chodí priebežne, ťah končiaci vetou znie ako ťah,

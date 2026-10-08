@@ -137,18 +137,36 @@ struct LimitWindow {
 
 // ---- The events -------------------------------------------------------------
 
-struct AssistantText { std::string text; };
+// `by` on the three events below is the subagent that said it, as the reader
+// is to hear it named ("Explore 2"); empty for the agent the reader talks to.
+// A subagent's records come on the same stream as its parent's and in among
+// them, several subagents at once (tools/probe_subagents.notes.md), and
+// without a name the transcript reads as one agent talking to itself.  The
+// adapter makes the name up, because neither CLI sends one fit to say
+// (claude-gui-b8n.3).  A tool result carries none: it is filed behind its
+// call and is the call's.  The `= {}` lets every place that makes one of
+// these for the agent itself leave `by` out without -Wmissing-field-initializers.
+struct AssistantText {
+  std::string text;
+  std::string by = {};
+};
 
 // Text of the model's reasoning, when there is any.  Claude no longer sends
 // it and Codex sends only a heading (claude-gui-lkk.44.1); an adapter that
 // has none sends ThinkingTick instead and never an empty Thinking.
-struct Thinking { std::string text; };
+struct Thinking {
+  std::string text;
+  std::string by = {};
+};
 
 // A sign that a turn is busy thinking, with nothing to show.  What "premýšľam"
 // is said on (invariant 6).
 struct ThinkingTick {};
 
-struct ToolCallStarted { ToolCall call; };
+struct ToolCallStarted {
+  ToolCall call;
+  std::string by = {};
+};
 struct ToolCallFinished { ToolResult result; };
 
 // A call that a rule or the reader turned down, when the CLI reports it as a

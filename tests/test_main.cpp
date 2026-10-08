@@ -2288,8 +2288,86 @@ void TestSpeakerPrefix() {
   CHECK(codex.SetAgentName(L"codex"));
   codex.Append({agent::AssistantText{"ahoj"}});
   CHECK_EQ(codex.Text(), std::wstring(L"codex: ahoj\n"));
-  CHECK_EQ(codex.SpeakerPrefix(model::BlockKind::AssistantText),
-           std::wstring(L"codex: "));
+  CHECK_EQ(codex.SpeakerPrefix(codex.blocks()[0]), std::wstring(L"codex: "));
+}
+
+void TestSubagentSpeaker() {
+  TEST("transcript: bloky subagenta nesu jeho meno, aj nastroje");
+  // Tvar z tools/probe_subagents.notes.md: volanie Agent v hlavnom zazname,
+  // zaznamy subagenta s parent_tool_use_id, vysledok bez neho.
+  proto::Translator translator;
+  model::Transcript transcript;
+  CHECK(transcript.SetAgentName(L"claude"));
+  auto feed = [&](const char* line) {
+    transcript.Append(translator.Translate(proto::Json::parse(line)));
+  };
+  feed(R"({"type":"assistant","parent_tool_use_id":null,"message":{"content":[
+      {"type":"tool_use","id":"ag1","name":"Agent","input":{
+       "description":"Prehladaj testy","subagent_type":"Explore",
+       "prompt":"..."}},
+      {"type":"tool_use","id":"ag2","name":"Agent","input":{
+       "description":"Prehladaj model","subagent_type":"Explore",
+       "prompt":"..."}},
+      {"type":"tool_use","id":"ag3","name":"Agent","input":{
+       "description":"Bez typu","prompt":"..."}}]}})");
+  CHECK_EQ(transcript.blocks().size(), size_t{3});
+  if (transcript.blocks().size() == 3) {
+    // Volanie Agent je hlavneho agenta a v zhrnuti nesie meno subagenta --
+    // jedine miesto, ktore povie, na co "Explore 2" poslali.
+    CHECK(transcript.blocks()[0].speaker.empty());
+    CHECK(transcript.blocks()[0].summary.find(L"Explore 1: Prehladaj testy") !=
+          std::wstring::npos);
+    CHECK(transcript.blocks()[1].summary.find(L"Explore 2: ") !=
+          std::wstring::npos);
+    CHECK(transcript.blocks()[2].summary.find(L"general-purpose 1: ") !=
+          std::wstring::npos);
+  }
+
+  feed(R"({"type":"assistant","parent_tool_use_id":"ag2","message":{"content":[
+      {"type":"text","text":"hladam"},
+      {"type":"tool_use","id":"b1","name":"Bash","input":{"command":"ls"}}]}})");
+  feed(R"({"type":"user","parent_tool_use_id":"ag2","message":{"content":[
+      {"type":"tool_result","tool_use_id":"b1","content":"a\nb\nc"}]}})");
+  // Subagent, ktoreho volanie sme nevideli (spusteny pred obnovenim).
+  feed(R"({"type":"assistant","parent_tool_use_id":"cudzi","message":{
+      "content":[{"type":"text","text":"neznamy"}]}})");
+  // Hand-back: vysledok volania Agent, bez parent_tool_use_id.
+  feed(R"({"type":"user","message":{"content":[
+      {"type":"tool_result","tool_use_id":"ag2","content":"hotovo"}]}})");
+
+  const auto& blocks = transcript.blocks();
+  auto find = [&](model::BlockKind kind, const std::string& id) {
+    for (const model::Block& block : blocks) {
+      if (block.kind == kind && block.toolUseId == id) return &block;
+    }
+    return static_cast<const model::Block*>(nullptr);
+  };
+  const model::Block* bash = find(model::BlockKind::ToolUse, "b1");
+  const model::Block* output = find(model::BlockKind::ToolResult, "b1");
+  const model::Block* handBack = find(model::BlockKind::ToolResult, "ag2");
+  CHECK(bash != nullptr && bash->speaker == L"Explore 2");
+  CHECK(output != nullptr && output->speaker == L"Explore 2");
+  CHECK(handBack != nullptr && handBack->speaker.empty());
+  // Mechanicky blok subagenta ma predponu aj zbaleny, aj rozbaleny.
+  if (bash != nullptr) {
+    CHECK_EQ(transcript.Text().substr(bash->start, 16),
+             std::wstring(L"Explore 2: Bash:"));
+    const size_t index = static_cast<size_t>(bash - blocks.data());
+    transcript.SetCollapsed(index, false);
+    CHECK_EQ(transcript.Text().substr(transcript.blocks()[index].start, 11),
+             std::wstring(L"Explore 2: "));
+  }
+  bool said = false, stranger = false;
+  for (const model::Block& block : transcript.blocks()) {
+    if (block.kind != model::BlockKind::AssistantText) continue;
+    const std::wstring line = transcript.Text().substr(block.start, block.length);
+    if (line == L"Explore 2: hladam\n") said = true;
+    if (line == L"general-purpose 2: neznamy\n") stranger = true;
+  }
+  CHECK(said);
+  CHECK(stranger);
+  std::string problem;
+  CHECK(transcript.CheckInvariants(&problem));
 }
 
 void TestSummariesAreOneLine() {
@@ -3494,6 +3572,38 @@ void TestCodexBackgroundTasks() {
   CHECK(EventsOf<agent::Unrecognised>(all).empty());
 }
 
+void TestCodexSubagentSpeaker() {
+  TEST("codex: polozky vlakna subagenta nesu jeho meno");
+  proto::codex::Translator translator;
+  translator.SetThread("main");
+  std::vector<agent::Event> all;
+  auto feed = [&](const char* line) {
+    for (agent::Event& event : translator.Translate(proto::Json::parse(line))) {
+      all.push_back(std::move(event));
+    }
+  };
+  feed(R"({"method":"item/started","params":{"threadId":"main","item":{
+      "type":"subAgentActivity","id":"call_1","kind":"started",
+      "agentThreadId":"sub1","agentPath":"/root/agent_1"}}})");
+  feed(R"({"method":"item/completed","params":{"threadId":"sub1","item":{
+      "type":"agentMessage","id":"m1","text":"hotovo","phase":"final_answer"}}})");
+  // Koniec subagenta ho vyradi zo zoznamu uloh, meno mu ostane.
+  feed(R"({"method":"item/completed","params":{"threadId":"main","item":{
+      "type":"subAgentActivity","id":"subagent-completed-st1",
+      "kind":"completed","agentThreadId":"sub1","agentPath":"/root/agent_1"}}})");
+  feed(R"({"method":"item/completed","params":{"threadId":"sub1","item":{
+      "type":"agentMessage","id":"m2","text":"este","phase":"final_answer"}}})");
+  feed(R"({"method":"item/completed","params":{"threadId":"main","item":{
+      "type":"agentMessage","id":"m3","text":"moje","phase":"final_answer"}}})");
+  const auto texts = EventsOf<agent::AssistantText>(all);
+  CHECK_EQ(texts.size(), size_t{3});
+  if (texts.size() == 3) {
+    CHECK_EQ(texts[0].by, std::string("agent_1"));
+    CHECK_EQ(texts[1].by, std::string("agent_1"));
+    CHECK(texts[2].by.empty());
+  }
+}
+
 void TestBackgroundText() {
   TEST("stavovy riadok: pocet uloh na pozadi");
   i18n::SetLanguage(i18n::Lang::kSlovak);
@@ -3819,6 +3929,8 @@ int main(int argc, char** argv) {
   TestFailedToolResultReadsLikeAnError();
   TestEmptyBlocksAreDropped();
   TestSpeakerPrefix();
+  TestSubagentSpeaker();
+  TestCodexSubagentSpeaker();
   TestSummariesAreOneLine();
   TestAskUserQuestionRoundTrip();
   TestQuestionsReadAsText();

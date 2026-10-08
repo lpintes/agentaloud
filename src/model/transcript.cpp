@@ -465,8 +465,14 @@ Block MakeToolResult(const agent::ToolResult& result, const Block* call) {
 // is exactly what a turn of alternating sentences and tools sounded like.
 // Speech asks for it by the same call the transcript does -- one place decides
 // what a speaker is called.
-std::wstring Transcript::SpeakerPrefix(BlockKind kind) const {
-  switch (kind) {
+//
+// A subagent's blocks are named all of them, its tools included.  The agent's
+// own tools need no name because they are the default; a subagent's Bash
+// among them would read as the agent's, and with three subagents at once
+// there is no other way to tell whose output is whose (claude-gui-b8n.3).
+std::wstring Transcript::SpeakerPrefix(const Block& block) const {
+  if (!block.speaker.empty()) return block.speaker + L": ";
+  switch (block.kind) {
     case BlockKind::UserPrompt: return i18n::Text(Str::kSpeakerUser);
     case BlockKind::AssistantText: return agentName_ + L": ";
     default: return L"";
@@ -510,7 +516,7 @@ const wchar_t* KindLabel(BlockKind kind) {
 }
 
 std::wstring Transcript::Render(const Block& block) const {
-  const std::wstring prefix = SpeakerPrefix(block.kind);
+  const std::wstring prefix = SpeakerPrefix(block);
   if (block.collapsed) return prefix + block.summary + L'\n';
   // An expanded mechanism block keeps its heading.  Without it there is no
   // way to tell, reading line by line, where a tool's output starts, where it
@@ -521,8 +527,8 @@ std::wstring Transcript::Render(const Block& block) const {
   // They get the speaker prefix instead, on the first line, which says the
   // same thing without spending a line on it.
   if (IsMechanism(block.kind) && block.collapsible) {
-    return i18n::Format(Str::kExpanded, {block.summary}) + L'\n' + block.body +
-           L'\n';
+    return prefix + i18n::Format(Str::kExpanded, {block.summary}) + L'\n' +
+           block.body + L'\n';
   }
   // A one-line error has no heading to say it failed: drawn as its bare body,
   // "fatal: not a git repository" read line by line exactly like a successful
@@ -530,7 +536,7 @@ std::wstring Transcript::Render(const Block& block) const {
   // says.  A successful one-line output stays bare -- a word in front of every
   // command would be noise.
   if (block.kind == BlockKind::ToolResult && block.isError) {
-    return block.summary + L'\n';
+    return prefix + block.summary + L'\n';
   }
   return prefix + block.body + L'\n';
 }
@@ -698,20 +704,33 @@ std::vector<Edit> Transcript::Append(const std::vector<agent::Event>& events) {
     // stays: that a command printed nothing is an answer.
     if (const auto* text = std::get_if<agent::AssistantText>(&event)) {
       const std::wstring wide = Widen(text->text);
-      if (!wide.empty()) made.push_back(MakeAssistantText(wide));
+      if (wide.empty()) continue;
+      made.push_back(MakeAssistantText(wide));
+      made.back().speaker = Widen(text->by);
     } else if (const auto* thinking = std::get_if<agent::Thinking>(&event)) {
       const std::wstring wide = Widen(thinking->text);
-      if (!wide.empty()) made.push_back(MakeThinking(wide));
+      if (wide.empty()) continue;
+      made.push_back(MakeThinking(wide));
+      made.back().speaker = Widen(thinking->by);
     } else if (const auto* started =
                    std::get_if<agent::ToolCallStarted>(&event)) {
       made.push_back(MakeToolUse(started->call, projectRoot_));
+      made.back().speaker = Widen(started->by);
     } else if (const auto* finished =
                    std::get_if<agent::ToolCallFinished>(&event)) {
       // The call is looked up among the blocks already placed.  A batch that
       // carried a call and its own result would not find it, and the result
       // would go to the end -- which is right behind the call anyway.
-      made.push_back(MakeToolResult(finished->result,
-                                    CallFor(finished->result.callId)));
+      const Block* call = CallFor(finished->result.callId);
+      std::wstring speaker = call != nullptr ? call->speaker : std::wstring();
+      for (const Block& earlier : made) {
+        if (earlier.kind == BlockKind::ToolUse &&
+            earlier.toolUseId == finished->result.callId) {
+          speaker = earlier.speaker;
+        }
+      }
+      made.push_back(MakeToolResult(finished->result, call));
+      made.back().speaker = std::move(speaker);
     } else if (const auto* denied = std::get_if<agent::ToolDenied>(&event)) {
       Block block;
       block.kind = BlockKind::PermissionDenied;
