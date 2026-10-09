@@ -1241,6 +1241,16 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
       a pošle `agent::BackgroundMoved{moved}`; panel povie „presunuté do
       pozadia" alebo „zatiaľ nie je čo presunúť". Kláves sám povie
       „presúvam do pozadia" (invariant 6, dvakrát).
+    - **Codex: prerušenie ťahu nezastaví nič, čo beží vedľa neho**
+      (`tools/probe_codex_subagents.notes.md`, spawn-int, spawn-kill,
+      bgterm-int; naostro 9. 10. 2026, claude-gui-b8n.11). `turn/interrupt`
+      hlavného vlákna subagentov nezastaví a `turn/interrupt` na vlákno
+      subagenta nezastaví jeho príkaz — `ping` bežal ďalej, kým ho nezabil
+      job object. `CodexBackend::StopTask` subagenta preto pošle
+      `turn/interrupt` **a** `thread/backgroundTerminals/clean` na jeho
+      vlákno, príkaz `terminate` podľa `processId`; `StopAllTasks` preruší
+      každý ťah a vyčistí terminály každého známeho vlákna. Ctrl+B Codex
+      nemá (`backgroundNow` false) — subagent beží vždy vedľa ťahu.
 
     Potvrdenie zastavenia všetkého je **druhé Esc, nie dialóg**: za zavretým
     dialógom NVDA vetu zahluší (invariant 6) a zastavenie trvá menej než

@@ -1,5 +1,6 @@
 #include "proto/codex/codex_backend.h"
 
+#include <algorithm>
 #include <chrono>
 
 #include "app_name.h"
@@ -213,6 +214,69 @@ bool CodexBackend::Interrupt() {
                  {{"threadId", thread}, {"turnId", turn}});
 }
 
+bool CodexBackend::StopTask(const std::string& id) {
+  std::string thread;
+  std::string process;
+  std::string turn;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    thread = threadId_;
+    if (auto found = processes_.find(id); found != processes_.end()) {
+      process = found->second;
+    } else if (auto agent = subagentTurns_.find(id);
+               agent != subagentTurns_.end()) {
+      turn = agent->second;
+    }
+    if (process.empty() && turn.empty()) {
+      // A subagent whose turn has not started yet, or one between turns, or
+      // a task that ended a moment ago.  Only the first can still be
+      // stopped, and it is, once its turn has an id.
+      stopWanted_.push_back(id);
+    }
+  }
+  if (!process.empty()) {
+    return Request(Purpose::StopTask, "thread/backgroundTerminals/terminate",
+                   {{"threadId", thread}, {"processId", process}});
+  }
+  bool sent = true;
+  if (!turn.empty()) {
+    sent = Request(Purpose::StopTask, "turn/interrupt",
+                   {{"threadId", id}, {"turnId", turn}});
+  }
+  // The interrupted turn leaves the subagent's command running -- a ping ran
+  // on to its end (spawn-kill, and live 2026-10-09) -- and that command is in
+  // no list of ours to stop by itself.
+  return Request(Purpose::StopTask, "thread/backgroundTerminals/clean",
+                 {{"threadId", id}}) &&
+         sent;
+}
+
+bool CodexBackend::StopAllTasks() {
+  std::vector<std::string> threads;
+  std::vector<std::pair<std::string, std::string>> turns;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!threadId_.empty()) threads.push_back(threadId_);
+    for (const auto& [thread, turn] : subagentTurns_) {
+      threads.push_back(thread);
+      if (!turn.empty()) turns.emplace_back(thread, turn);
+    }
+  }
+  Interrupt();
+  bool sent = true;
+  for (const auto& [thread, turn] : turns) {
+    sent = Request(Purpose::StopTask, "turn/interrupt",
+                   {{"threadId", thread}, {"turnId", turn}}) &&
+           sent;
+  }
+  for (const std::string& thread : threads) {
+    sent = Request(Purpose::StopTask, "thread/backgroundTerminals/clean",
+                   {{"threadId", thread}}) &&
+           sent;
+  }
+  return sent;
+}
+
 bool CodexBackend::SetMode(const std::string& id) {
   ModeSettings settings;
   if (!SettingsForMode(id, &settings)) return false;
@@ -295,7 +359,41 @@ void CodexBackend::OnLine(std::string_view line) {
     own = threadId_.empty() || thread == threadId_;
   }
   if (!own) {
-    // Nothing of the conversation's own state, only the translator's.
+    // Of a subagent, only what stopping it needs: the turn to interrupt.
+    const std::string thread = StringField(params, "threadId");
+    if (method == "turn/started") {
+      const std::string turn = StringField(Field(params, "turn"), "id");
+      bool interrupt = false;
+      {
+        std::lock_guard<std::mutex> lock(mutex_);
+        subagentTurns_[thread] = turn;
+        auto wanted =
+            std::find(stopWanted_.begin(), stopWanted_.end(), thread);
+        if (wanted != stopWanted_.end()) {
+          stopWanted_.erase(wanted);
+          interrupt = true;
+        }
+      }
+      if (interrupt) {
+        Request(Purpose::StopTask, "turn/interrupt",
+                {{"threadId", thread}, {"turnId", turn}});
+      }
+    } else if (method == "turn/completed") {
+      // Kept with no turn: its terminals are still cleaned by StopAllTasks.
+      std::lock_guard<std::mutex> lock(mutex_);
+      subagentTurns_[thread].clear();
+    }
+  } else if (method == "item/started" || method == "item/completed") {
+    const Json& item = Field(params, "item");
+    if (StringField(item, "type") == "commandExecution" &&
+        !Field(item, "processId").is_null()) {
+      std::lock_guard<std::mutex> lock(mutex_);
+      if (method == "item/started") {
+        processes_[StringField(item, "id")] = StringField(item, "processId");
+      } else {
+        processes_.erase(StringField(item, "id"));
+      }
+    }
   } else if (method == "thread/settings/updated") {
     const Json& settings = Field(params, "threadSettings");
     std::lock_guard<std::mutex> lock(mutex_);
@@ -454,6 +552,7 @@ void CodexBackend::OnResponse(const Json& message) {
       break;
     }
     case Purpose::Interrupt:
+    case Purpose::StopTask:
       break;
   }
 }

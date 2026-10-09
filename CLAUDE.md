@@ -357,7 +357,10 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
     (`shellTasks_`). Ctrl+B skôr než ~8 s po štarte príkazu nespraví nič;
     o presune hovorí `task_updated is_backgrounded` pred odpoveďou na `bg-…`
     → `agent::BackgroundMoved`. Zastaviť všetko = druhé Esc, nie dialóg;
-    Ctrl+F4/Alt+F4 s úlohami sa pýta (OK/Zrušiť kvôli Esc).
+    Ctrl+F4/Alt+F4 s úlohami sa pýta (OK/Zrušiť kvôli Esc). Codex:
+    prerušenie ťahu nezastaví subagentov ani príkazy, ani príkaz
+    prerušeného subagenta — `StopTask` subagenta = `turn/interrupt` +
+    `backgroundTerminals/clean` na jeho vlákno.
 
 **NESÚLAD MAPY ROZSAHOV** v titulku session znamená, že dĺžka modelu
 nesedí s `EM_GETTEXTLENGTHEX` — neladí invariant 3, 4 alebo 8. Hľadaj znak,

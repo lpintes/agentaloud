@@ -344,6 +344,7 @@ agent::Capabilities CodexCapabilities() {
   capabilities.slashCommands = false;
   capabilities.resume = true;
   capabilities.allowForSession = true;
+  capabilities.stopTask = true;
   // None: Codex says which models there are only through model/list, which
   // needs app-server running.  A name written here from memory would go
   // stale with the next release, silently.

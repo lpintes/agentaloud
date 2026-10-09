@@ -50,10 +50,18 @@ class CodexBackend : public agent::Backend {
   }
   bool SendPrompt(const std::string& utf8Text) override;
   bool Interrupt() override;
-  // Not yet: Capabilities say so, and the keys answer that there is nothing
-  // to do (claude-gui-b8n.11).
-  bool StopTask(const std::string&) override { return false; }
-  bool StopAllTasks() override { return false; }
+  // A subagent is stopped by interrupting the turn of its thread and cleaning
+  // the thread's terminals, which the interrupt leaves running; a command by
+  // terminating its unified exec process.  Neither says anything on our
+  // thread, the translator hears it on theirs
+  // (tools/probe_codex_subagents.notes.md, spawn-kill and bgterm).
+  bool StopTask(const std::string& id) override;
+  // Interrupting our turn stops neither subagents nor commands (spawn-int,
+  // bgterm-int), so each goes on its own: every subagent's turn, and every
+  // thread's terminals at once by clean.
+  bool StopAllTasks() override;
+  // Codex has no foreground to move from: a subagent always runs beside the
+  // turn, and a command is left running by the model, not by us.
   bool Background() override { return false; }
   bool SetMode(const std::string& id) override;
   void Stop(unsigned turnTimeoutMs) override;
@@ -78,6 +86,9 @@ class CodexBackend : public agent::Backend {
     StartTurn,
     Interrupt,
     Settings,
+    // Interrupting a subagent, terminate, clean: what they did arrives as
+    // notifications, and a refusal means the task was gone already.
+    StopTask,
   };
 
   bool Request(Purpose purpose, const char* method, Json params);
@@ -118,6 +129,14 @@ class CodexBackend : public agent::Backend {
   bool turnInFlight_ = false;
   bool interruptWanted_ = false;
   bool ready_ = false;
+  // What StopTask needs and BackgroundTask does not carry.  A subagent's
+  // thread by its id, with the turn it is in, empty between turns; a
+  // command's unified exec processId by its item id, for our thread only --
+  // the translator lists no other thread's commands.
+  std::map<std::string, std::string> subagentTurns_;
+  std::map<std::string, std::string> processes_;
+  // Subagents asked to stop before their turn had an id.
+  std::vector<std::string> stopWanted_;
   // Prompts sent before the thread existed, in order.
   std::vector<std::string> queued_;
   ModeTracker mode_;

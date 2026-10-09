@@ -1365,11 +1365,11 @@ void TestPermissionModeSwitch() {
     CHECK_EQ(all["request"].value("subtype", std::string()),
              std::string("background_tasks"));
     CHECK(!all["request"].contains("tool_use_id"));
-    // Claude to vie, Codex zatial nie (b8n.11) -- klavesy potom povedia,
-    // ze nie je co robit.
+    // Zastavit vedia oba (Codex od b8n.11); Ctrl+B len Claude -- Codex
+    // nema popredie, z ktoreho by sa presuvalo, a klavesa to povie.
     CHECK(proto::ClaudeCapabilities().stopTask);
     CHECK(proto::ClaudeCapabilities().backgroundNow);
-    CHECK(!proto::codex::CodexCapabilities().stopTask);
+    CHECK(proto::codex::CodexCapabilities().stopTask);
     CHECK(!proto::codex::CodexCapabilities().backgroundNow);
   }
 
