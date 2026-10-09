@@ -592,6 +592,15 @@ void SessionPane::OnDrain() {
     // inserted behind its call, so the new blocks are not the tail.
     const size_t idBefore = model_.nextBlockId();
     for (const model::Edit& edit : model_.Append(batch)) Apply(edit);
+    // Before what the batch says, so that the turn is announced ahead of it.
+    if (agentTurnEmpty_) {
+      const bool own = std::any_of(
+          model_.blocks().begin(), model_.blocks().end(),
+          [idBefore](const model::Block& block) {
+            return block.id >= idBefore && block.speaker.empty();
+          });
+      if (own) OnAgentTurnContent();
+    }
     // Whatever the batch added, in the order it was added: the assistant's
     // text, a tool call, a tool result.  What each kind of block is worth
     // saying is AnnounceProgress's business, and a batch that added nothing
@@ -606,6 +615,7 @@ void SessionPane::OnDrain() {
       } else if (const auto* context = std::get_if<agent::ContextUsed>(&event)) {
         details_.contextTokens = context->tokens;
       } else if (std::holds_alternative<agent::ThinkingTick>(event)) {
+        if (agentTurnEmpty_) OnAgentTurnContent();
         if (!thinkingSaid_ && WantsProgressSpeech()) {
           // Once per stretch of thinking, not once per tick -- there are
           // dozens of these per turn.  Cleared by anything else that speaks,
@@ -706,6 +716,13 @@ void SessionPane::OnTurnStartedByAgent() {
   thinkingSaid_ = false;
   spokeThisTurn_ = false;
   SetStatus(i18n::Text(Str::kWorking));
+  // Not said yet: the turn may turn out to be empty (agentTurnEmpty_).  The
+  // bar says it at once, because that answers "is it working" either way.
+  agentTurnEmpty_ = true;
+}
+
+void SessionPane::OnAgentTurnContent() {
+  agentTurnEmpty_ = false;
   // Said, or the first thing heard is the answer and then "hotovo" -- which,
   // right after an interruption, sounded as if it had not taken.  It came on
   // its own, so it queues (invariant 7) and follows invariant 11 like the
@@ -728,6 +745,12 @@ void SessionPane::OnTurnEnded() {
   // field there once wiped out the "pracujem" that Send had just written, so
   // the bar stayed blank for the whole turn.
   SetStatus(L"");
+  // An empty turn the agent began by itself ends as it began, unheard: its
+  // notification was answered in the turn before, which has had its "hotovo".
+  // One the reader stopped is not empty to them -- Esc was said, so is this.
+  const bool empty = agentTurnEmpty_;
+  agentTurnEmpty_ = false;
+  if (empty && !interrupted_) return;
   // A turn that ended on a question waiting for the next prompt ends in the
   // dialog for it, and the dialog is what is heard -- its caption and the
   // question.  "hotovo" first would be cut off by the focus moving to it
@@ -769,6 +792,7 @@ void SessionPane::OnSessionEnded() {
   // and nothing it was waiting for will come.
   busy_ = false;
   interrupted_ = false;
+  agentTurnEmpty_ = false;
   questionsByPrompt_.clear();
   // Not cleared like the end of a turn.  An empty field says "nothing is
   // running, ask away", and here the second half is no longer true.

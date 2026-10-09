@@ -205,6 +205,9 @@ class SessionPane {
   // A turn the agent began without a prompt -- a task in the background
   // finished.  The pane is put in the state SendText leaves it in.
   void OnTurnStartedByAgent();
+  // The first thing of its own that such a turn did has arrived: it is now a
+  // turn worth announcing, and this announces it -- see agentTurnEmpty_.
+  void OnAgentTurnContent();
   // The end of a turn, however it ended: the bar is cleared, and the reader
   // hears that it is over -- "prerušené" if they stopped it, otherwise
   // SignalTurnEnd.
@@ -331,6 +334,13 @@ class SessionPane {
   // marked: a turn that spoke gets a word, a turn that stayed silent gets the
   // beep -- see SignalTurnEnd.
   bool spokeThisTurn_ = false;
+  // A turn the agent began by itself that has done nothing of its own yet --
+  // no text, no tool, no thinking; a subagent's blocks are not its doing.
+  // Several tasks finishing at once can give one that never does: init and
+  // result with nothing between (num_turns 0, tools/probe_subagents.notes.md),
+  // its notification folded into the turn before.  Such a turn is not said at
+  // all, neither its start nor its end (claude-gui-b8n.5).
+  bool agentTurnEmpty_ = false;
   // The turn's own word; the bar shows it with tasks_ behind it.
   std::wstring status_;
   std::vector<agent::BackgroundTask> tasks_;
