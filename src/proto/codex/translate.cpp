@@ -649,6 +649,23 @@ std::string Translator::Author(const Json& params) const {
   return known != subagentNames_.end() ? known->second : std::string("agent");
 }
 
+std::vector<agent::Event> Translator::Nickname(const Json& thread) {
+  std::vector<agent::Event> out;
+  const std::string id = StringField(thread, "id");
+  const std::string nickname = StringField(thread, "agentNickname");
+  auto known = subagentNames_.find(id);
+  if (nickname.empty() || known == subagentNames_.end()) return out;
+  known->second = nickname;
+  auto task = std::find_if(
+      agents_.begin(), agents_.end(),
+      [&](const agent::BackgroundTask& agent) { return agent.id == id; });
+  if (task != agents_.end()) {
+    task->description = nickname;
+    ReportTasks(&out);
+  }
+  return out;
+}
+
 void Translator::ReportTasks(std::vector<agent::Event>* out) const {
   agent::BackgroundTasksChanged changed;
   changed.tasks = agents_;
@@ -671,13 +688,16 @@ void Translator::TrackTask(const Json& item, bool completed,
     if (kind == "started" && found == agents_.end() && !thread.empty()) {
       // "/root/agent_1": the model picks the path, and its last part is the
       // closest thing to a name the notification has.  The nickname is only
-      // in thread/read.
+      // in thread/read, and it replaces this one when it comes.
       std::string path = StringField(item, "agentPath");
       if (size_t slash = path.rfind('/'); slash != std::string::npos) {
         path.erase(0, slash + 1);
       }
-      subagentNames_[thread] = path;
-      agents_.push_back({thread, agent::TaskKind::Agent, path});
+      if (subagentNames_.emplace(thread, path).second) {
+        unnamed_.push_back(thread);
+      }
+      agents_.push_back({thread, agent::TaskKind::Agent,
+                         subagentNames_[thread]});
       ReportTasks(out);
     } else if ((kind == "completed" || kind == "interrupted") &&
                found != agents_.end()) {
@@ -873,8 +893,9 @@ std::vector<agent::Event> Translator::Translate(const Json& message) {
   }
 
   // A subagent's items come with its own thread id and are told as its.  The
-  // name is the last part of the agentPath the model gave it ("agent_1"); the
-  // nickname is only in thread/read (tools/probe_codex_subagents.notes.md).
+  // name is its nickname ("Peirce") once thread/read has told it, and the
+  // last part of the agentPath the model gave it ("agent_1") until then
+  // (tools/probe_codex_subagents.notes.md).
   if (foreign) {
     const std::string by = Author(params);
     for (agent::Event& event : events) {

@@ -426,6 +426,9 @@ void CodexBackend::OnLine(std::string_view line) {
   std::vector<agent::Event> batch = translator_.Translate(message);
   if (own && method == "turn/completed") TurnOver();
   Emit(std::move(batch));
+  for (const std::string& thread : translator_.TakeNewSubagents()) {
+    Request(Purpose::ReadSubagent, "thread/read", {{"threadId", thread}});
+  }
 }
 
 void CodexBackend::TurnOver() {
@@ -551,6 +554,10 @@ void CodexBackend::OnResponse(const Json& message) {
       Emit({});
       break;
     }
+    case Purpose::ReadSubagent:
+      // Refused, the subagent keeps the name off its agentPath.
+      if (!failed) Emit(translator_.Nickname(Field(result, "thread")));
+      break;
     case Purpose::Interrupt:
     case Purpose::StopTask:
       break;

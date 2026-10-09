@@ -89,6 +89,8 @@ class CodexBackend : public agent::Backend {
     // Interrupting a subagent, terminate, clean: what they did arrives as
     // notifications, and a refusal means the task was gone already.
     StopTask,
+    // thread/read of a subagent just started, for its nickname.
+    ReadSubagent,
   };
 
   bool Request(Purpose purpose, const char* method, Json params);

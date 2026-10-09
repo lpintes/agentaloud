@@ -154,7 +154,10 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    model ho uloží pri vzniku bloku do `Block::speaker` a výsledok nástroja ho
    zdedí po svojom volaní. Meno je typ a poradové číslo za session
    („Explore 2"), vždy s číslom; dáva ho adaptér (Claude podľa
-   `subagent_type` volania `Agent`, Codex podľa konca `agentPath`), nie model.
+   `subagent_type` volania `Agent`), nie model. Codex je výnimka: meno je
+   prezývka vlákna („Curie"), ktorú pozná len `thread/read` — adaptér sa
+   naň spýta pri `subAgentActivity started` a dovtedy, či keď prezývka
+   chýba, nesie subagent koniec `agentPath` („agent_1") (claude-gui-b8n.9).
    Súhrn volania `Agent` to isté meno nesie pred popisom, aby sa ďalšie bloky
    dali k volaniu priradiť. Overené naostro 8. 10. 2026 s troma Explore na
    pozadí.

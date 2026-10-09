@@ -3749,6 +3749,64 @@ void TestCodexSubagentSpeaker() {
   CHECK(translator.Author(proto::Json::parse(R"({"threadId":"main"})")).empty());
   CHECK_EQ(translator.Author(proto::Json::parse(R"({"threadId":"x"})")),
            std::string("agent"));
+  // Meno je agentPath, kym thread/read nepovie prezyvku (b8n.9).
+  const auto unnamed = translator.TakeNewSubagents();
+  CHECK_EQ(unnamed.size(), size_t{1});
+  if (unnamed.size() == 1) CHECK_EQ(unnamed[0], std::string("sub1"));
+  CHECK(translator.TakeNewSubagents().empty());
+}
+
+void TestCodexSubagentNickname() {
+  TEST("codex: prezyvka z thread/read premenuje subagenta");
+  proto::codex::Translator translator;
+  translator.SetThread("main");
+  std::vector<agent::Event> all;
+  auto feed = [&](const char* line) {
+    for (agent::Event& event : translator.Translate(proto::Json::parse(line))) {
+      all.push_back(std::move(event));
+    }
+  };
+  const char* spawn =
+      R"({"method":"item/started","params":{"threadId":"main","item":{
+          "type":"subAgentActivity","id":"call_1","kind":"started",
+          "agentThreadId":"sub1","agentPath":"/root/agent_1"}}})";
+  feed(spawn);
+  // Ta ista polozka v item/completed nepyta thread/read druhy raz.
+  feed(R"({"method":"item/completed","params":{"threadId":"main","item":{
+          "type":"subAgentActivity","id":"call_1","kind":"started",
+          "agentThreadId":"sub1","agentPath":"/root/agent_1"}}})");
+  CHECK_EQ(translator.TakeNewSubagents().size(), size_t{1});
+
+  // Tvar odpovede z probe_codex_subagents.notes.md (spawn).
+  const auto renamed = translator.Nickname(proto::Json::parse(R"({
+      "id":"sub1","parentThreadId":"main","threadSource":"subagent",
+      "agentNickname":"Peirce","agentRole":null})"));
+  const auto lists = EventsOf<agent::BackgroundTasksChanged>(renamed);
+  CHECK_EQ(lists.size(), size_t{1});
+  if (lists.size() == 1 && lists[0].tasks.size() == 1) {
+    CHECK_EQ(lists[0].tasks[0].description, std::string("Peirce"));
+  } else {
+    CHECK(false);
+  }
+  feed(R"({"method":"item/completed","params":{"threadId":"sub1","item":{
+      "type":"agentMessage","id":"m1","text":"hotovo","phase":"final_answer"}}})");
+  const auto texts = EventsOf<agent::AssistantText>(all);
+  CHECK_EQ(texts.size(), size_t{1});
+  if (texts.size() == 1) CHECK_EQ(texts[0].by, std::string("Peirce"));
+  CHECK_EQ(translator.Author(proto::Json::parse(R"({"threadId":"sub1"})")),
+           std::string("Peirce"));
+
+  // Bez prezyvky, alebo cudzie vlakno: nic sa nemeni.
+  CHECK(translator
+            .Nickname(proto::Json::parse(
+                R"({"id":"sub1","agentNickname":null})"))
+            .empty());
+  CHECK(translator
+            .Nickname(proto::Json::parse(
+                R"({"id":"other","agentNickname":"Mill"})"))
+            .empty());
+  CHECK_EQ(translator.Author(proto::Json::parse(R"({"threadId":"sub1"})")),
+           std::string("Peirce"));
 }
 
 void TestBackgroundText() {
@@ -4080,6 +4138,7 @@ int main(int argc, char** argv) {
   TestSubagentNumberingAfterResume();
   TestPermissionFromSubagentNamed();
   TestCodexSubagentSpeaker();
+  TestCodexSubagentNickname();
   TestSummariesAreOneLine();
   TestAskUserQuestionRoundTrip();
   TestQuestionsReadAsText();

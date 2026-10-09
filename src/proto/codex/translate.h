@@ -21,6 +21,7 @@
 
 #include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "agent/backend.h"
@@ -211,6 +212,16 @@ class Translator {
   // requests it sends, which carry a threadId too (claude-gui-b8n.10).
   std::string Author(const Json& params) const;
 
+  // Subagents started since the last call, by thread id.  Their nickname
+  // ("Peirce") is in no notification, only in thread/read, which the adapter
+  // asks for each of these (claude-gui-b8n.9).
+  std::vector<std::string> TakeNewSubagents() {
+    return std::exchange(unnamed_, {});
+  }
+  // The thread out of a thread/read answer.  Renames the subagent after its
+  // nickname; until then, and if it has none, the name is its agentPath.
+  std::vector<agent::Event> Nickname(const Json& thread);
+
  private:
   void ReportModel(const std::string& model, std::vector<agent::Event>* out);
   bool Foreign(const Json& params) const;
@@ -233,6 +244,7 @@ class Translator {
   // from agents_ because that one forgets a subagent at subAgentActivity
   // completed, and nothing promises its last items came before that.
   std::map<std::string, std::string> subagentNames_;
+  std::vector<std::string> unnamed_;
   // Why the reviewer said no, by the item it judged, until that item ends.
   std::map<std::string, std::string> deniedByReviewer_;
   std::string model_;
