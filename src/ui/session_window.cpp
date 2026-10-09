@@ -6,6 +6,7 @@
 
 #include "app_name.h"
 #include "i18n/i18n.h"
+#include "model/background.h"
 
 namespace ui {
 namespace {
@@ -192,6 +193,18 @@ LRESULT SessionWindow::HandleMessage(UINT message, WPARAM wParam,
       return 0;
 
     case WM_CLOSE:
+      // Closing kills what runs in the background with the process (invariant
+      // 10), and that may be minutes of work the reader forgot about.  OK and
+      // Cancel rather than Yes and No: only Cancel makes Esc work.
+      if (pane_ && !pane_->tasks().empty()) {
+        const std::wstring question =
+            i18n::Format(i18n::Str::kCloseSessionTasks,
+                         {model::BackgroundText(pane_->tasks())});
+        if (MessageBoxW(hwnd_, question.c_str(), L"" APP_NAME,
+                        MB_OKCANCEL | MB_ICONWARNING) != IDOK) {
+          return 0;
+        }
+      }
       // The backend first, while there is still a window for its reader
       // thread to post to; then the client destroys the child, which is the
       // one way it keeps its list and its window menu right.

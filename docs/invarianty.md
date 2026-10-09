@@ -1220,6 +1220,37 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     (kód 2); dialóg novej session overuje svoj. Hláška ide na konzolu len
     vtedy, keď sa priečinok písal — po dialógu sa čitateľ pozerá na okná.
 
+26. **Pri úlohách na pozadí odpovie Claude `success` aj vtedy, keď nič
+    nespravil — čo sa stalo, hovoria len záznamy pred odpoveďou.** Namerané
+    sondou (`tools/probe_subagents.py`, scenáre C1, fg-bash, bg-bash,
+    9. 10. 2026) a odhalené až overovaním naostro, nie testmi:
+
+    - **`interrupt` mimo ťahu zastaví subagentov, nie príkazy.** Príkaz Bash
+      na pozadí beží ďalej a odpoveď je tá istá. Prvá verzia dvojitého Esc
+      preto povedala „zastavujem" a stavový riadok na tom ostal visieť.
+      `Session::StopAllTasks` pošle `interrupt` (subagenti, bez samovoľného
+      ťahu) **a** `stop_task` na každý príkaz z posledného
+      `background_tasks_changed` (`ShellTaskIds`, `shellTasks_`). Zastavený
+      príkaz samovoľný ťah nevyvolá, zastavený subagent áno — preto nie
+      `stop_task` na všetko.
+    - **Ctrl+B skôr než ~8 s po spustení príkazu nespraví nič.** Príkaz sa
+      stane úlohou (`task_started`) až tak neskoro; dovtedy je
+      `background_tasks` bez účinku. O presune hovorí len `system/task_updated`
+      s `{is_backgrounded:true}` pred odpoveďou. Translator ho spáruje
+      s odpoveďou na žiadosť s predponou `bg-` (`kBackgroundRequestPrefix`)
+      a pošle `agent::BackgroundMoved{moved}`; panel povie „presunuté do
+      pozadia" alebo „zatiaľ nie je čo presunúť". Kláves sám povie
+      „presúvam do pozadia" (invariant 6, dvakrát).
+
+    Potvrdenie zastavenia všetkého je **druhé Esc, nie dialóg**: za zavretým
+    dialógom NVDA vetu zahluší (invariant 6) a zastavenie trvá menej než
+    desatinu sekundy. Zavretie session (Ctrl+F4) alebo appky (Alt+F4) pri
+    bežiacich úlohách sa naopak pýta `MessageBox` s **OK/Zrušiť** — Áno/Nie
+    by nepustilo Esc — lebo job object ich zabije bez opýtania (invariant
+    10); Alt+F4 jednou otázkou za všetky sessions, ktoré sa potom už len
+    `ShutDown()`. Veta „zastavené: …" z Ctrl+T sa hovorí aj vtedy, keď je
+    v popredí dialóg úloh, nie rám — `InForeground()` na ňu povie nie.
+
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa
 rozídu, titulok tej session sa zmení na **„<cesta> — NESÚLAD MAPY ROZSAHOV"**

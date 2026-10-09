@@ -102,6 +102,12 @@ class KeysDialog : public win::Dialog {
 std::wstring KeysText(const agent::Capabilities& capabilities) {
   using i18n::Str;
   std::wstring text = i18n::Text(Str::kKeysSending);
+  // The list itself is every agent's: the adapter that sends none keeps one.
+  text += i18n::Text(Str::kKeysTasks);
+  text += i18n::Text(capabilities.stopTask ? Str::kKeysStopTasks
+                                           : Str::kKeysNoStopTasks);
+  text += i18n::Text(capabilities.backgroundNow ? Str::kKeysBackground
+                                                : Str::kKeysNoBackground);
   // The modes are the agent's and come from Capabilities.
   text += ModesText(capabilities);
   text += i18n::Text(Str::kKeysMoving);

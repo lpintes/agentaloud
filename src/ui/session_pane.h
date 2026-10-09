@@ -34,6 +34,8 @@
 
 namespace ui {
 
+class TasksDialog;
+
 // Events have arrived; drain the queue.  Posted, not sent: the reader thread
 // must not wait for the screen.
 constexpr UINT kMsgDrain = WM_APP + 1;
@@ -112,7 +114,22 @@ class SessionPane {
   // the transcript where it was stopped.  Says so out loud in both cases,
   // including the case where nothing was running: a key that answers with
   // silence cannot be told from a key that never arrived.
+  //
+  // Outside a turn, with tasks in the background, the first Esc says what
+  // runs and the second one in a row stops all of it.  Confirmed by a second
+  // press and not by a dialog: a dialog closing moves the focus, and NVDA
+  // drowns any sentence said after it (invariant 6) -- both "zastavujem" and
+  // the end that follows a tenth of a second later.
   void Interrupt();
+  // Any key but Esc and a lone modifier calls the second Esc off.  Ctrl is
+  // spared because it is what silences NVDA between the two.
+  void DisarmStop(WPARAM key);
+
+  // Ctrl+B: what the turn in flight waits for goes on in the background.
+  void Background();
+
+  // Ctrl+T: the background tasks, live, with Stop for one of them.
+  void ShowTasks();
 
   // Shift+Tab: step the permission mode through default -> acceptEdits -> plan
   // -> auto -> default, the way the terminal does.  Says the new mode out loud
@@ -163,6 +180,8 @@ class SessionPane {
 
   const std::wstring& statusLine() const { return status_; }
   bool busy() const { return busy_; }
+  // What closing the session would kill (invariant 10), so that it asks first.
+  const std::vector<agent::BackgroundTask>& tasks() const { return tasks_; }
 
   // The window moved to a screen with a different scaling.  The controls need
   // a font for the new dpi; the layout follows from the WM_SIZE that comes
@@ -315,6 +334,15 @@ class SessionPane {
   // The turn's own word; the bar shows it with tasks_ behind it.
   std::wstring status_;
   std::vector<agent::BackgroundTask> tasks_;
+  // The first Esc of two has been pressed (Interrupt).
+  bool stopArmed_ = false;
+  // The second one has, and the list has not emptied yet.  The empty list is
+  // the end of the action and is said (invariant 6, twice).
+  bool stoppingAll_ = false;
+  // Stopped one by one from Ctrl+T, id and label, until they leave the list.
+  std::vector<std::pair<std::string, std::wstring>> stoppingTasks_;
+  // Open while Ctrl+T is, so that the list in it follows tasks_.
+  TasksDialog* tasksDialog_ = nullptr;
   // The folder name, kept because the bar is rewritten field by field and the
   // project one has to be put back after anything that clears it.
   std::wstring project_;

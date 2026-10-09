@@ -2,6 +2,7 @@
 
 #include "i18n/i18n.h"
 #include "proto/claude/ask.h"
+#include "proto/claude/control.h"
 #include "proto/claude/events.h"
 #include "proto/claude/sessions.h"
 
@@ -415,10 +416,17 @@ std::vector<agent::Event> Translator::Translate(const Json& record) {
       events.push_back(agent::Unrecognised{
           event.raw.value("type", std::string("<no type>"))});
       break;
-    case EventKind::SystemHook:
     case EventKind::SystemOther:
-    case EventKind::ControlRequest:
+      if (IsMovedToBackground(event.raw)) movedSinceAnswer_ = true;
+      break;
     case EventKind::ControlResponse:
+      if (IsBackgroundAnswer(event.raw)) {
+        events.push_back(agent::BackgroundMoved{movedSinceAnswer_});
+        movedSinceAnswer_ = false;
+      }
+      break;
+    case EventKind::SystemHook:
+    case EventKind::ControlRequest:
       break;
   }
   return events;
@@ -498,6 +506,8 @@ agent::Capabilities ClaudeCapabilities() {
   capabilities.slashCommands = true;
   capabilities.resume = true;
   capabilities.allowForSession = false;
+  capabilities.stopTask = true;
+  capabilities.backgroundNow = true;
   // The aliases --help names, plus opusplan.  Aliases rather than ids
   // because they follow the newest model on their own; the list that is
   // true for the account comes only with the initialize answer, which is

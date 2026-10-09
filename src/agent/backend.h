@@ -61,6 +61,12 @@ struct Capabilities {
   bool resume = false;
   // A permission request can be answered "yes, and stop asking about this".
   bool allowForSession = false;
+  // A task that runs without the turn (BackgroundTask) can be stopped, one
+  // or all of them: StopTask and StopAllTasks.
+  bool stopTask = false;
+  // What runs in the foreground can be sent to the background while the turn
+  // goes on: Background, Ctrl+B.
+  bool backgroundNow = false;
   // Model names to offer before anything has started -- suggestions, not the
   // list of what the CLI takes: a full model id is always accepted too, and
   // an alias the CLI adds tomorrow must not be refused today.  Empty when the
@@ -207,6 +213,27 @@ class Backend {
   // Asks the turn in flight to stop.  False when there is none.  The turn is
   // over only when its own TurnEnded arrives, not when this returns.
   virtual bool Interrupt() = 0;
+
+  // ---- Background tasks.  Only with Capabilities::stopTask or backgroundNow;
+  // false without them.  Fire and forget, all three: what changed arrives as
+  // BackgroundTasksChanged, and nothing else says it -- a task that ended on
+  // its own a moment before is not an error, so there is no answer to wait
+  // for.  False only when the request could not be sent.
+
+  // One task, by BackgroundTask::id.
+  virtual bool StopTask(const std::string& id) = 0;
+  // Every task at once, in or out of a turn; a turn in flight is interrupted
+  // with them.  Not StopTask in a loop: Claude answers each stopped subagent
+  // with a turn of its own, all at once it answers with none
+  // (tools/probe_subagents.notes.md, C1 and bg-stop).  How the adapter gets
+  // there is its own business -- Claude's interrupt leaves commands running,
+  // so they go one by one, and those bring no turn (bg-bash).
+  virtual bool StopAllTasks() = 0;
+  // Whatever the turn in flight waits for -- a command, a subagent -- goes on
+  // in the background, and the turn goes on without waiting.  The one of the
+  // three with an answer, BackgroundMoved: too early, nothing goes and
+  // nothing in the list would say so.
+  virtual bool Background() = 0;
 
   // Fire and forget; the change is reported as ModeChanged, and a refusal as a
   // ModeChanged back to the mode the CLI is really in.

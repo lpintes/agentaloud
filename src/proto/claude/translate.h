@@ -64,6 +64,9 @@ class Translator {
   bool answered_ = false;
   std::map<std::string, std::string> subagents_;  // Agent call id -> name
   std::map<std::string, int> subagentCounts_;     // type -> how many so far
+  // A task went to the background since the last answer to background_tasks
+  // -- the only sign that Ctrl+B did anything (MakeBackgroundTasks).
+  bool movedSinceAnswer_ = false;
 };
 
 // One record through a translator of its own -- for a record whose meaning

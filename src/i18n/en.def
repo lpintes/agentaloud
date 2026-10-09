@@ -104,6 +104,23 @@ S(kAgentNotRunning, L"the agent is no longer running, the prompt stays in the fi
 S(kPromptEmpty, L"empty prompt")
 S(kNothingRunning, L"nothing is running")
 S(kInterruptFailed, L"the interrupt could not be sent")
+S(kStopTasksConfirm, L"{0}; Esc again stops all of it")
+S(kStoppingTasks, L"stopping background tasks")
+S(kTasksStopped, L"background tasks stopped")
+S(kStopTasksUnsupported, L"this agent cannot stop background tasks")
+S(kRequestFailed, L"the request could not be sent")
+S(kBackgrounding, L"moving to the background")
+S(kBackgroundMoved, L"moved to the background")
+S(kBackgroundNothingYet, L"nothing to move yet; a command can be moved a few seconds after it starts")
+S(kBackgroundNoTurn, L"no turn is running, nothing to move to the background")
+S(kBackgroundUnsupported, L"this agent cannot move work to the background")
+S(kTasksNone, L"nothing runs in the background")
+S(kTaskAgent, L"agent: {0}")
+S(kTaskShell, L"command: {0}")
+S(kStoppingTask, L"stopping {0}")
+S(kTaskStopped, L"stopped: {0}")
+S(kCloseSessionTasks, L"{0}. Close the session and stop all of it?")
+S(kCloseAppTasks, L"{0}. Quit and stop all of it?")
 S(kModeNotKnownYet, L"the mode is not known yet, the CLI is still starting")
 S(kModeFixed, L"the mode cannot be switched while running")
 S(kModeSwitchFailed, L"the mode could not be switched")
@@ -122,6 +139,19 @@ S(kKeysSending,
   L"Ctrl+Enter — sends the prompt. Only from the Prompt field.\n"
   L"Esc — interrupts the running turn. From either field.\n"
   L"Tab — switches between the transcript and the prompt.\n")
+S(kKeysTasks,
+  L"Ctrl+T — background tasks; the list changes as they run, Stop stops the "
+  L"selected one, Esc closes it. From either field.\n")
+S(kKeysStopTasks,
+  L"Esc twice in a row outside a turn — stops every background task. "
+  L"From either field.\n")
+S(kKeysNoStopTasks,
+  L"Esc outside a turn — this agent cannot stop background tasks.\n")
+S(kKeysBackground,
+  L"Ctrl+B — during a turn, moves what the turn waits for to the background. "
+  L"From either field.\n")
+S(kKeysNoBackground,
+  L"Ctrl+B — this agent cannot move work to the background.\n")
 S(kKeysModesNone, L"Shift+Tab — this agent cannot change modes while running.\n")
 S(kKeysModesHeading,
   L"Shift+Tab — cycles the permission mode, from either field:\n")
@@ -230,6 +260,9 @@ S(kDlgNewCancel, L"&Cancel")
 S(kDlgFindCaption, L"find")
 S(kDlgFindText, L"&Search for:")
 S(kDlgFindOk, L"&Find")
+S(kDlgTasksCaption, L"background tasks")
+S(kDlgTasksList, L"&Tasks:")
+S(kDlgTasksStop, L"&Stop")
 
 // Dialogs at run time.
 S(kAskOtherItem, L"Other — your own answer, type it in the field below")

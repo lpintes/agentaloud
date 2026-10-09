@@ -17,6 +17,7 @@
 #define IDD_NEW_SESSION     105
 #define IDD_FIND            106
 #define IDD_ABOUT           107
+#define IDD_TASKS           108
 
 #define IDC_DETAILS_ID          1000
 #define IDC_DETAILS_MODEL       1001
@@ -103,5 +104,9 @@
 #define IDC_ABOUT_TEXT          1140
 #define IDC_ABOUT_PAGE          1141
 #define IDC_ABOUT_TEXT_LABEL    1150
+
+// Úlohy na pozadí.  See ui/tasks_dialog.h.
+#define IDC_TASKS_LIST          1160
+#define IDC_TASKS_LIST_LABEL    1161
 
 #endif

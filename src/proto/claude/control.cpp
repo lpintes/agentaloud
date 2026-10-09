@@ -220,6 +220,59 @@ Json MakeInterrupt(const std::string& requestId) {
                                {"reason", "interrupt"}}}};
 }
 
+Json MakeStopTask(const std::string& requestId, const std::string& taskId) {
+  return Json{{"type", "control_request"},
+              {"request_id", requestId},
+              {"request", Json{{"subtype", "stop_task"},
+                               {"task_id", taskId}}}};
+}
+
+Json MakeBackgroundTasks(const std::string& requestId) {
+  return Json{{"type", "control_request"},
+              {"request_id", requestId},
+              {"request", Json{{"subtype", "background_tasks"}}}};
+}
+
+std::vector<std::string> ShellTaskIds(const Json& record) {
+  std::vector<std::string> ids;
+  if (StringField(record, "type") != "system" ||
+      StringField(record, "subtype") != "background_tasks_changed") {
+    return ids;
+  }
+  auto tasks = record.find("tasks");
+  if (tasks == record.end() || !tasks->is_array()) return ids;
+  for (const Json& task : *tasks) {
+    if (!task.is_object() || StringField(task, "task_type") != "local_bash") {
+      continue;
+    }
+    const std::string id = StringField(task, "task_id");
+    if (!id.empty()) ids.push_back(id);
+  }
+  return ids;
+}
+
+const char kBackgroundRequestPrefix[] = "bg-";
+
+bool IsBackgroundAnswer(const Json& record) {
+  if (StringField(record, "type") != "control_response") return false;
+  auto outer = record.find("response");
+  if (outer == record.end() || !outer->is_object()) return false;
+  return StringField(*outer, "request_id").rfind(kBackgroundRequestPrefix, 0) ==
+         0;
+}
+
+bool IsMovedToBackground(const Json& record) {
+  if (StringField(record, "type") != "system" ||
+      StringField(record, "subtype") != "task_updated") {
+    return false;
+  }
+  auto patch = record.find("patch");
+  if (patch == record.end() || !patch->is_object()) return false;
+  auto backgrounded = patch->find("is_backgrounded");
+  return backgrounded != patch->end() && backgrounded->is_boolean() &&
+         backgrounded->get<bool>();
+}
+
 Json MakeAllow(const PermissionRequest& request, const Json& updatedInput,
                const Json& updatedPermissions) {
   Json body{{"behavior", "allow"},

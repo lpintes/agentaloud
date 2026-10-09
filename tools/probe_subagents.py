@@ -10,6 +10,10 @@
 #   bg-stop   ako bg, 3 s po prvom result control_request stop_task na agenta 2
 #   fg-bgall  ako fg, 4 s po task_started tretieho agenta control_request
 #             background_tasks bez tool_use_id (ekvivalent Ctrl+B)
+#   fg-bash   bez subagentov: jeden Bash v popredi, 2 s po jeho task_started
+#             background_tasks bez tool_use_id (Ctrl+B na prikaz)
+#   bg-bash   dva prikazy na pozadi; 3 s po result interrupt mimo tahu,
+#             o 8 s stop_task na prvy prikaz
 #
 # Povolenia: can_use_tool -> allow.  Stdin sa zatvara az na konci.  Surovy
 # zaznam ide do <priecinok>/raw-<scenar>.jsonl (mimo repozitara -- nesie
@@ -50,6 +54,18 @@ def prompt(background):
             "three Agent tool calls in parallel (subagent_type "
             "general-purpose, descriptions 'agent 1', 'agent 2', 'agent 3'). "
             "Do not run any Bash yourself. " + flag + " " + tasks)
+
+
+BASH_PROMPT = (
+    "Run the Bash command `ping -n 60 127.0.0.1` exactly once, in the "
+    "foreground (run_in_background false). Then reply with its last line.")
+
+
+BG_BASH_PROMPT = (
+    "Run two Bash commands, both with run_in_background true: "
+    "`ping -n 200 127.0.0.1` and `ping -n 201 127.0.0.1`. Do not wait for "
+    "them; reply 'started' and end your turn. When later notified about "
+    "them, reply with one short sentence only.")
 
 
 def send(child, record):
@@ -181,6 +197,7 @@ def main():
                          "request": {"subtype": "interrupt"}})
 
     agent_tasks = []
+    shell_tasks = []
 
     def control(now, request, why):
         print("%6.1fs >>> %s (%s)" % (now, request["subtype"], why),
@@ -214,8 +231,22 @@ def main():
                                 "response": {
                                     "behavior": "allow",
                                     "updatedInput": req.get("input", {})}}})
+            # Nie podla tool_use: task local_bash vznika az sekundy po nom
+            # (namerane 8 s) a background_tasks pred nim prejde ako success {}
+            # bez ucinku.
+            elif (scenario == "fg-bash" and kind == "system"
+                  and record.get("subtype") == "task_started"
+                  and record.get("task_type") == "local_bash"
+                  and not state.get("bash")):
+                state["bash"] = True
+                threading.Timer(2.0, lambda: control(
+                    time.time() - started, {"subtype": "background_tasks"},
+                    "Bash v popredi")).start()
             elif kind == "result":
                 results.append(now)
+            elif (kind == "system" and record.get("subtype") == "task_started"
+                  and record.get("task_type") == "local_bash"):
+                shell_tasks.append(record.get("task_id"))
             elif (kind == "system" and record.get("subtype") == "task_started"
                   and record.get("task_type") == "local_agent"):
                 agent_tasks.append(record.get("task_id"))
@@ -236,7 +267,9 @@ def main():
                      "request": {"subtype": "initialize", "hooks": {}}})
         send(child, {"type": "user", "message": {
             "role": "user",
-            "content": [{"type": "text", "text": prompt(background)}]}})
+            "content": [{"type": "text", "text": BASH_PROMPT
+                         if scenario == "fg-bash" else BG_BASH_PROMPT
+                         if scenario == "bg-bash" else prompt(background)}]}})
 
     deadline = time.time() + 240
     while not results and time.time() < deadline:
@@ -247,6 +280,14 @@ def main():
     if scenario == "bg-int":
         time.sleep(3)
         interrupt(time.time() - started, "mimo tahu")
+    if scenario == "bg-bash":
+        time.sleep(3)
+        interrupt(time.time() - started, "mimo tahu, bezia dva prikazy")
+        time.sleep(8)
+        if shell_tasks:
+            control(time.time() - started,
+                    {"subtype": "stop_task", "task_id": shell_tasks[0]},
+                    "prikaz 1 = " + shell_tasks[0])
     if scenario == "bg-stop" and len(agent_tasks) > 1:
         time.sleep(3)
         control(time.time() - started,

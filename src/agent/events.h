@@ -259,6 +259,12 @@ struct BackgroundTask {
 // keeps one.
 struct BackgroundTasksChanged { std::vector<BackgroundTask> tasks; };
 
+// The answer to Backend::Background: whether anything went.  Its own event,
+// because Claude answers success either way -- a command in the foreground
+// becomes something it can move only seconds after it started, and a request
+// before that does nothing (fg-bash, tools/probe_subagents.notes.md).
+struct BackgroundMoved { bool moved = false; };
+
 enum class TurnOutcome { Completed, Interrupted, Failed };
 
 // The end of a turn, and the only thing that ends one.  An interruption ends
@@ -296,7 +302,7 @@ using Event = std::variant<AssistantText, Thinking, ThinkingTick,
                            QuestionByPrompt, UserPrompt, Interrupted, WorkingDirectory,
                            ModelChanged, ModeChanged, ContextUsed,
                            UsageChanged, RateLimitChanged, Ready, TurnStarted,
-                           TurnEnded, BackgroundTasksChanged,
+                           TurnEnded, BackgroundTasksChanged, BackgroundMoved,
                            SessionEnded, Unrecognised>;
 
 }  // namespace agent

@@ -113,4 +113,24 @@ hlavný ťah pokračuje a skončí `result` (13.5 s). Odtiaľ ako B; od presunu
 chodia aj text bloky subagentov (v popredí nie). Samovoľné ťahy: 3× init,
 jeden opäť prázdny (num_turns 0).
 
-Stav: HOTOVO (A, B, C1, C2, bg-stop, fg-bgall).
+## fg-bash — background_tasks na Bash v popredí (9. 10. 2026) — OVERENÉ
+Bez subagentov, `ping -n 60` v popredí. `system/task_started` (local_bash,
+`is_backgrounded:false`) príde až **~8 s po** `tool_use` (obe merania 8 s).
+Žiadosť PRED ním: `control_response success {}` a nič — príkaz dobehne
+v popredí, žiadny `background_tasks_changed`. Odpoveď presun teda
+nerozlišuje. Žiadosť 2 s PO ňom: v tej istej milisekunde
+`background_tasks_changed` (n=1) → `task_updated` `{is_backgrounded:true}`
+→ `control_response success {}`; potom `user` [tool_result „Command was
+manually backgrounded by user with ID: …"] a ťah pokračuje k `result`.
+Čiže o presune hovorí len `task_updated` pred odpoveďou, nie odpoveď.
+
+## bg-bash — interrupt a stop_task na príkazy na pozadí (9. 10. 2026) — OVERENÉ
+Dva `ping` s `run_in_background`. Interrupt 3 s po `result` (mimo ťahu):
+`control_response success` a **nič** — oba príkazy bežia ďalej, žiadny
+task_updated ani background_tasks_changed. Interrupt teda zastaví len
+subagentov (C1), nie príkazy. `stop_task` na príkaz 1: task_updated
+(killed) → task_notification (stopped) → background_tasks_changed (n=1)
+→ success `{}`, a **žiadny samovoľný ťah** (29 s ticho) — na rozdiel od
+subagenta (bg-stop). Príkaz 2 zabilo až zatvorenie stdin.
+
+Stav: HOTOVO (A, B, C1, C2, bg-stop, fg-bgall, fg-bash, bg-bash).

@@ -219,6 +219,11 @@ void Session::OnLine(std::string_view line) {
     }
   }
 
+  if (event.kind == EventKind::SystemBackgroundTasks) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    shellTasks_ = ShellTaskIds(event.raw);
+  }
+
   if (event.kind == EventKind::SystemInit) {
     // A turn SendPrompt did not start -- the CLI began it when a task in the
     // background ended.  Without this Interrupt() would refuse it, and Stop()
@@ -296,6 +301,28 @@ bool Session::Interrupt() {
   // it here would let Stop() close stdin while the CLI is still winding the
   // turn down -- the one thing control.h says never to do.
   return SendJson(MakeInterrupt("stop-" + std::to_string(nextRequestId_++)));
+}
+
+bool Session::StopTask(const std::string& taskId) {
+  return SendJson(
+      MakeStopTask("task-" + std::to_string(nextRequestId_++), taskId));
+}
+
+bool Session::StopAllTasks() {
+  std::vector<std::string> shells;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    shells = shellTasks_;
+  }
+  bool sent = SendJson(MakeInterrupt("stop-" + std::to_string(nextRequestId_++)));
+  for (const std::string& id : shells) sent = StopTask(id) && sent;
+  return sent;
+}
+
+bool Session::BackgroundTasks() {
+  return SendJson(
+      MakeBackgroundTasks(kBackgroundRequestPrefix +
+                          std::to_string(nextRequestId_++)));
 }
 
 bool Session::SetPermissionMode(const std::string& mode) {

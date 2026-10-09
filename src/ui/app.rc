@@ -257,6 +257,22 @@ BEGIN
     PUSHBUTTON      "&Zavrieť", IDCANCEL, 196, 30, 56, 14
 END
 
+// Úlohy na pozadí (Ctrl+T).  Stop is the default button, so that Enter on the
+// list stops the selected task; the dialog stays open and its list follows
+// the session while it is.
+IDD_TASKS DIALOGEX 0, 0, 260, 140
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION APP_NAME " — úlohy na pozadí"
+FONT 9, "Segoe UI", 400, 0, 1
+BEGIN
+    LTEXT           "&Úlohy:", IDC_TASKS_LIST_LABEL, 8, 8, 244, 8
+    LISTBOX         IDC_TASKS_LIST, 8, 18, 244, 96,
+                    LBS_NOINTEGRALHEIGHT | LBS_NOTIFY | WS_VSCROLL | WS_TABSTOP
+
+    DEFPUSHBUTTON   "Z&astaviť", IDOK, 136, 120, 56, 14
+    PUSHBUTTON      "&Zavrieť", IDCANCEL, 196, 120, 56, 14
+END
+
 // O programe.  The facts are a read-only box like the key list, so that the
 // version and the address can be read by character and copied.
 IDD_ABOUT DIALOGEX 0, 0, 240, 104

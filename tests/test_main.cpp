@@ -1351,6 +1351,28 @@ void TestPermissionModeSwitch() {
   CHECK_EQ(proto::NextPermissionMode(""), std::string("acceptEdits"));
   CHECK_EQ(proto::NextPermissionMode("nieco"), std::string("acceptEdits"));
 
+  // Ulohy na pozadi (b8n.4): stop_task nesie task_id, background_tasks bez
+  // tool_use_id znamena vsetky ulohy v popredi.  Tvary su z probe_subagents.
+  {
+    const proto::Json stop = proto::MakeStopTask("task-1", "a1b2");
+    CHECK_EQ(stop.value("type", std::string()), std::string("control_request"));
+    CHECK_EQ(stop.value("request_id", std::string()), std::string("task-1"));
+    CHECK_EQ(stop["request"].value("subtype", std::string()),
+             std::string("stop_task"));
+    CHECK_EQ(stop["request"].value("task_id", std::string()),
+             std::string("a1b2"));
+    const proto::Json all = proto::MakeBackgroundTasks("task-2");
+    CHECK_EQ(all["request"].value("subtype", std::string()),
+             std::string("background_tasks"));
+    CHECK(!all["request"].contains("tool_use_id"));
+    // Claude to vie, Codex zatial nie (b8n.11) -- klavesy potom povedia,
+    // ze nie je co robit.
+    CHECK(proto::ClaudeCapabilities().stopTask);
+    CHECK(proto::ClaudeCapabilities().backgroundNow);
+    CHECK(!proto::codex::CodexCapabilities().stopTask);
+    CHECK(!proto::codex::CodexCapabilities().backgroundNow);
+  }
+
   // Poziadavka: subtype set_permission_mode a holy mod.
   const proto::Json request = proto::MakeSetPermissionMode("mode-3", "plan");
   CHECK_EQ(request.value("type", std::string()), std::string("control_request"));
@@ -3480,6 +3502,69 @@ void TestClaudeBackgroundTasks() {
   CHECK(!emptied.empty() && emptied[0].tasks.empty());
 }
 
+// Tvary zo sondy fg-bash (tools/probe_subagents.notes.md, 9. 10. 2026): CLI
+// odpovie success {} aj vtedy, ked sa nic nepresunulo.
+void TestClaudeBackgroundMoved() {
+  TEST("claude: odpoved na background_tasks hovori, ci sa nieco presunulo");
+  proto::Translator translator;
+  const char* answer =
+      R"({"type":"control_response","response":{"subtype":"success",
+          "request_id":"bg-7","response":{}}})";
+  // Priskoro: ziadny task_updated pred odpovedou.
+  auto moved = EventsOf<agent::BackgroundMoved>(
+      translator.Translate(proto::Json::parse(answer)));
+  CHECK_EQ(moved.size(), size_t{1});
+  CHECK(!moved.empty() && !moved[0].moved);
+
+  translator.Translate(proto::Json::parse(
+      R"({"type":"system","subtype":"task_updated","task_id":"b1",
+          "patch":{"is_backgrounded":true}})"));
+  moved = EventsOf<agent::BackgroundMoved>(
+      translator.Translate(proto::Json::parse(answer)));
+  CHECK_EQ(moved.size(), size_t{1});
+  CHECK(!moved.empty() && moved[0].moved);
+
+  // Presun sa nepocita dvakrat: dalsie Ctrl+B uz nic nepresunulo.
+  moved = EventsOf<agent::BackgroundMoved>(
+      translator.Translate(proto::Json::parse(answer)));
+  CHECK(!moved.empty() && !moved[0].moved);
+
+  // task_updated s inou zmenou (ukoncenie) nie je presun.
+  translator.Translate(proto::Json::parse(
+      R"({"type":"system","subtype":"task_updated","task_id":"b1",
+          "patch":{"status":"killed"}})"));
+  moved = EventsOf<agent::BackgroundMoved>(
+      translator.Translate(proto::Json::parse(answer)));
+  CHECK(!moved.empty() && !moved[0].moved);
+
+  // Odpoved na inu ziadost (stop_task) nie je odpoved na Ctrl+B.
+  CHECK(EventsOf<agent::BackgroundMoved>(
+            translator.Translate(proto::Json::parse(
+                R"({"type":"control_response","response":{"subtype":"success",
+                    "request_id":"task-3","response":{}}})")))
+            .empty());
+}
+
+// Interrupt nezastavi prikaz na pozadi (sonda bg-bash, 9. 10. 2026), preto si
+// Session z kazdeho zoznamu berie id prikazov.
+void TestClaudeShellTaskIds() {
+  TEST("claude: id prikazov na pozadi pre StopAllTasks");
+  const auto ids = proto::ShellTaskIds(proto::Json::parse(
+      R"({"type":"system","subtype":"background_tasks_changed","tasks":[
+          {"task_id":"a1","task_type":"local_agent","description":"agent"},
+          {"task_id":"b2","task_type":"local_bash","description":"ping"},
+          {"task_id":"b3","task_type":"local_bash","description":"ping 2"}]})"));
+  CHECK_EQ(ids.size(), size_t{2});
+  CHECK(ids.size() == 2 && ids[0] == "b2" && ids[1] == "b3");
+  CHECK(proto::ShellTaskIds(proto::Json::parse(
+            R"({"type":"system","subtype":"background_tasks_changed","tasks":[]})"))
+            .empty());
+  CHECK(proto::ShellTaskIds(proto::Json::parse(
+            R"({"type":"system","subtype":"task_updated","tasks":[
+                {"task_id":"b2","task_type":"local_bash"}]})"))
+            .empty());
+}
+
 void TestCodexBackgroundTasks() {
   TEST("codex: zoznam uloh na pozadi si adapter vedie sam");
   proto::codex::Translator translator;
@@ -3947,6 +4032,8 @@ int main(int argc, char** argv) {
   TestCodexElicitation();
   TestCodexReviewerDenial();
   TestClaudeBackgroundTasks();
+  TestClaudeBackgroundMoved();
+  TestClaudeShellTaskIds();
   TestCodexBackgroundTasks();
   TestBackgroundText();
   TestClaudeSessionPermissions();

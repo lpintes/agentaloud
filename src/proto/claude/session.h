@@ -90,6 +90,15 @@ class Session {
   // arrives, exactly as if it had ended on its own.
   bool Interrupt();
 
+  // Background tasks (MakeStopTask, MakeBackgroundTasks).  Fire and forget;
+  // false only when the request could not be written.  StopAllTasks is an
+  // interrupt sent whether or not a turn is in flight -- it stops the
+  // subagents, and like Interrupt it leaves turnInFlight_ alone -- and a
+  // stop_task for every command, which the interrupt does not stop.
+  bool StopTask(const std::string& taskId);
+  bool StopAllTasks();
+  bool BackgroundTasks();
+
   // Shift+Tab: switch the permission mode without restarting.  False when the
   // request could not be written.  Fire and forget otherwise -- the CLI's
   // control_response confirms the mode, and OnLine folds it into
@@ -175,6 +184,9 @@ class Session {
   // Under mutex_: written by the reader thread, read by whoever asks.
   std::string sessionId_;
   InitializeInfo handshake_;
+  // The commands in the newest list of background tasks: what StopAllTasks
+  // has to stop one by one, because the interrupt leaves them running.
+  std::vector<std::string> shellTasks_;
   // What permissionMode() answers.  Seeded in Start, fed every record in
   // OnLine and every Shift+Tab in SetPermissionMode.
   PermissionModeTracker mode_;

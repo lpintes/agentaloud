@@ -17,6 +17,7 @@
 #include "ui/keys_dialog.h"
 #include "ui/permission_dialog.h"
 #include "ui/resource.h"
+#include "ui/tasks_dialog.h"
 #include "win/clipboard.h"
 
 namespace ui {
@@ -192,6 +193,19 @@ bool IsCopyIdChord(WPARAM key) {
 // taking it here as well would be taking it for nothing.
 bool IsFindChord(WPARAM key) {
   return key == 'F' && GetKeyState(VK_CONTROL) < 0 &&
+         GetKeyState(VK_SHIFT) >= 0;
+}
+
+// Ctrl+B, the terminal's key for sending work to the background.
+bool IsBackgroundChord(WPARAM key) {
+  return key == 'B' && GetKeyState(VK_CONTROL) < 0 &&
+         GetKeyState(VK_SHIFT) >= 0;
+}
+
+// Ctrl+T, the terminal's task list.  Without Shift: Ctrl+Shift+T is the jump
+// to the next tool call.
+bool IsTasksChord(WPARAM key) {
+  return key == 'T' && GetKeyState(VK_CONTROL) < 0 &&
          GetKeyState(VK_SHIFT) >= 0;
 }
 
@@ -609,14 +623,63 @@ void SessionPane::OnDrain() {
                      std::get_if<agent::QuestionByPrompt>(&event)) {
         questionsByPrompt_.push_back(*asked);
       } else if (std::holds_alternative<agent::TurnStarted>(event)) {
+        // A first Esc said before a turn is not a question about after it.
+        stopArmed_ = false;
         // A turn of our own is already busy_: SendText said all there is.
         if (!busy_ && !ended_) OnTurnStartedByAgent();
       } else if (std::holds_alternative<agent::TurnEnded>(event)) {
+        stopArmed_ = false;
         OnTurnEnded();
+      } else if (const auto* moved =
+                     std::get_if<agent::BackgroundMoved>(&event)) {
+        // The second half of Ctrl+B's answer, after "presúvam".  Queued: it
+        // follows the key's own sentence rather than cutting it off.
+        if (speech_.available()) {
+          speech_.Say(i18n::Text(moved->moved ? Str::kBackgroundMoved
+                                              : Str::kBackgroundNothingYet),
+                      false);
+        }
       } else if (const auto* changed =
                      std::get_if<agent::BackgroundTasksChanged>(&event)) {
         tasks_ = changed->tasks;
-        SetStatus(status_);
+        if (tasksDialog_) tasksDialog_->SetTasks(tasks_);
+        // One stopped from Ctrl+T is said by name when it leaves the list.
+        // The reader is in the dialog, whose focus did not move, so the
+        // sentence is heard; queued, because it came on its own (invariant 7).
+        for (auto it = stoppingTasks_.begin(); it != stoppingTasks_.end();) {
+          const bool gone = std::none_of(
+              tasks_.begin(), tasks_.end(),
+              [&it](const agent::BackgroundTask& task) {
+                return task.id == it->first;
+              });
+          if (!gone) {
+            ++it;
+            continue;
+          }
+          // With the dialog in front the frame is not, and InForeground says
+          // no -- measured, the sentence went unsaid.
+          const bool dialogInFront =
+              tasksDialog_ != nullptr &&
+              GetForegroundWindow() == tasksDialog_->handle();
+          if ((InForeground() || dialogInFront) && speech_.available()) {
+            speech_.Say(i18n::Format(Str::kTaskStopped, {it->second}), false);
+          }
+          it = stoppingTasks_.erase(it);
+        }
+        // Nothing left for a second Esc to stop.
+        if (tasks_.empty()) stopArmed_ = false;
+        if (stoppingAll_ && tasks_.empty()) {
+          stoppingAll_ = false;
+          SetStatus(L"");
+          // It arrived on its own, after the key: queued (invariant 7).
+          if (InForeground() && speech_.available()) {
+            speech_.Say(i18n::Text(Str::kTasksStopped), false);
+          } else {
+            MessageBeep(InForeground() ? MB_ICONASTERISK : kBackgroundEndSound);
+          }
+        } else {
+          SetStatus(status_);
+        }
       } else if (std::holds_alternative<agent::SessionEnded>(event)) {
         // Nothing of the process outlives it (invariant 10).
         tasks_.clear();
@@ -1359,6 +1422,27 @@ void SessionPane::SendText(const std::wstring& text) {
 }
 
 void SessionPane::Interrupt() {
+  if (!busy_ && !tasks_.empty()) {
+    if (!backend_->capabilities().stopTask) {
+      Announce(i18n::Text(Str::kStopTasksUnsupported));
+      return;
+    }
+    if (!stopArmed_) {
+      stopArmed_ = true;
+      Announce(i18n::Format(Str::kStopTasksConfirm,
+                            {model::BackgroundText(tasks_)}));
+      return;
+    }
+    stopArmed_ = false;
+    if (!backend_->StopAllTasks()) {
+      Announce(i18n::Text(Str::kRequestFailed));
+      return;
+    }
+    stoppingAll_ = true;
+    SetStatus(i18n::Text(Str::kStoppingTasks));
+    Announce(i18n::Text(Str::kStoppingTasks));
+    return;
+  }
   if (!busy_) {
     Announce(i18n::Text(Str::kNothingRunning));
     return;
@@ -1377,6 +1461,53 @@ void SessionPane::Interrupt() {
   SetStatus(i18n::Text(Str::kInterrupting));
   Apply(model_.AppendInterrupted());
   Announce(i18n::Text(Str::kInterrupting));
+}
+
+void SessionPane::DisarmStop(WPARAM key) {
+  if (key == VK_ESCAPE || key == VK_CONTROL || key == VK_SHIFT ||
+      key == VK_MENU) {
+    return;
+  }
+  stopArmed_ = false;
+}
+
+void SessionPane::Background() {
+  if (!backend_->capabilities().backgroundNow) {
+    Announce(i18n::Text(Str::kBackgroundUnsupported));
+    return;
+  }
+  if (!busy_) {
+    Announce(i18n::Text(Str::kBackgroundNoTurn));
+    return;
+  }
+  // Said twice, like every long action (invariant 6): now, and when the CLI
+  // answers -- agent::BackgroundMoved says whether anything went.
+  Announce(i18n::Text(backend_->Background() ? Str::kBackgrounding
+                                             : Str::kRequestFailed));
+}
+
+void SessionPane::ShowTasks() {
+  // No dialog for an empty list: one sentence says it, and the focus does not
+  // move, so the sentence is heard (invariant 6).
+  if (tasks_.empty()) {
+    Announce(i18n::Text(Str::kTasksNone));
+    return;
+  }
+  TasksDialog dialog(tasks_, [this](const agent::BackgroundTask* task) {
+    if (!task) {
+      Announce(i18n::Text(Str::kTasksNone));
+    } else if (!backend_->capabilities().stopTask) {
+      Announce(i18n::Text(Str::kStopTasksUnsupported));
+    } else if (!backend_->StopTask(task->id)) {
+      Announce(i18n::Text(Str::kRequestFailed));
+    } else {
+      stoppingTasks_.emplace_back(task->id, TaskLabel(*task));
+      Announce(i18n::Format(Str::kStoppingTask, {TaskLabel(*task)}));
+    }
+  });
+  tasksDialog_ = &dialog;
+  dialog.ShowModal(host_, IDD_TASKS);
+  tasksDialog_ = nullptr;
 }
 
 void SessionPane::CyclePermissionMode() {
@@ -1594,7 +1725,16 @@ LRESULT CALLBACK SessionPane::PromptProc(HWND window, UINT message,
   SessionPane* pane = reinterpret_cast<SessionPane*>(data);
   if (message == WM_SETFOCUS) pane->lastFocus_ = window;
   if (message == WM_KEYDOWN) {
+    pane->DisarmStop(wParam);
     const bool control = GetKeyState(VK_CONTROL) < 0;
+    if (IsBackgroundChord(wParam)) {
+      pane->Background();
+      return 0;
+    }
+    if (IsTasksChord(wParam)) {
+      pane->ShowTasks();
+      return 0;
+    }
     if (wParam == VK_RETURN && control) {
       pane->Send();
       return 0;
@@ -1666,8 +1806,10 @@ LRESULT CALLBACK SessionPane::PromptProc(HWND window, UINT message,
   // stays and is carried into the next prompt.
   // Ctrl+F arrives as 0x06 the same way.  A cancelled search dialog leaves
   // the box as it was, and that character would not.
+  // Ctrl+B's 0x02 likewise; an EDIT box would type it as a box character.
   if (message == WM_CHAR &&
-      (wParam == VK_TAB || wParam == 0x0A || wParam == 0x06)) {
+      (wParam == VK_TAB || wParam == 0x0A || wParam == 0x06 ||
+       wParam == 0x02 || wParam == 0x14)) {
     return 0;
   }
   if (message == WM_DESTROY) RemoveWindowSubclass(window, PromptProc, id);
@@ -1679,6 +1821,15 @@ LRESULT CALLBACK SessionPane::TranscriptProc(HWND window, UINT message,
                                              UINT_PTR id, DWORD_PTR data) {
   SessionPane* pane = reinterpret_cast<SessionPane*>(data);
   if (message == WM_SETFOCUS) pane->lastFocus_ = window;
+  if (message == WM_KEYDOWN) pane->DisarmStop(wParam);
+  if (message == WM_KEYDOWN && IsBackgroundChord(wParam)) {
+    pane->Background();
+    return 0;
+  }
+  if (message == WM_KEYDOWN && IsTasksChord(wParam)) {
+    pane->ShowTasks();
+    return 0;
+  }
   if (message == WM_KEYDOWN && wParam == VK_TAB) {
     // Shift+Tab cycles the permission mode from here too; plain Tab is the
     // toggle back to the prompt.
@@ -1730,7 +1881,9 @@ LRESULT CALLBACK SessionPane::TranscriptProc(HWND window, UINT message,
   }
   // The 0x06 Ctrl+F leaves behind, which a read-only box would answer with
   // a beep after the dialog has closed.
-  if (message == WM_CHAR && wParam == 0x06) return 0;
+  if (message == WM_CHAR && (wParam == 0x06 || wParam == 0x02 || wParam == 0x14)) {
+    return 0;
+  }
   // Bookmarks reach the transcript the same way, and for the same reason: the
   // reader should not have to know which box has the focus.
   if (message == WM_KEYDOWN) {

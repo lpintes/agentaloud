@@ -351,6 +351,13 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
     Nie po vlastnom `Stop()` (`stopping_`). Stavový riadok „agent nebeží".
     Proces, ktorý nevznikol, blok nemá — `agent::StartFailure` a hláška pri
     štarte.
+26. **Pri úlohách na pozadí Claude odpovie `success`, aj keď nič
+    nespravil.** `interrupt` mimo ťahu zastaví subagentov, nie príkazy —
+    `Session::StopAllTasks` pošle aj `stop_task` na každý príkaz
+    (`shellTasks_`). Ctrl+B skôr než ~8 s po štarte príkazu nespraví nič;
+    o presune hovorí `task_updated is_backgrounded` pred odpoveďou na `bg-…`
+    → `agent::BackgroundMoved`. Zastaviť všetko = druhé Esc, nie dialóg;
+    Ctrl+F4/Alt+F4 s úlohami sa pýta (OK/Zrušiť kvôli Esc).
 
 **NESÚLAD MAPY ROZSAHOV** v titulku session znamená, že dĺžka modelu
 nesedí s `EM_GETTEXTLENGTHEX` — neladí invariant 3, 4 alebo 8. Hľadaj znak,

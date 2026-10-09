@@ -223,6 +223,14 @@ bool ClaudeBackend::SendPrompt(const std::string& utf8Text) {
 
 bool ClaudeBackend::Interrupt() { return session_.Interrupt(); }
 
+bool ClaudeBackend::StopTask(const std::string& id) {
+  return session_.StopTask(id);
+}
+
+bool ClaudeBackend::StopAllTasks() { return session_.StopAllTasks(); }
+
+bool ClaudeBackend::Background() { return session_.BackgroundTasks(); }
+
 bool ClaudeBackend::SetMode(const std::string& id) {
   return session_.SetPermissionMode(id);
 }

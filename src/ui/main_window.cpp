@@ -5,6 +5,7 @@
 
 #include "app_name.h"
 #include "i18n/i18n.h"
+#include "model/background.h"
 #include "session_names.h"
 #include "ui/about_dialog.h"
 
@@ -371,13 +372,30 @@ LRESULT MainWindow::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
       Reap();
       return 0;
 
-    case WM_CLOSE:
+    case WM_CLOSE: {
+      // One question for every session, as SessionWindow asks for one; the
+      // sessions are shut down below, not closed, so none of them asks again.
+      std::vector<agent::BackgroundTask> tasks;
+      for (const auto& session : sessions_) {
+        if (const SessionPane* pane = session->pane()) {
+          tasks.insert(tasks.end(), pane->tasks().begin(), pane->tasks().end());
+        }
+      }
+      if (!tasks.empty()) {
+        const std::wstring question = i18n::Format(
+            i18n::Str::kCloseAppTasks, {model::BackgroundText(tasks)});
+        if (MessageBoxW(hwnd_, question.c_str(), L"" APP_NAME,
+                        MB_OKCANCEL | MB_ICONWARNING) != IDOK) {
+          return 0;
+        }
+      }
       // Every session's backend shut down in the right order -- the turn
       // first, the pipe after -- while the windows and the queue they post to
       // are still there.
       for (const auto& session : sessions_) session->ShutDown();
       DestroyWindow(hwnd_);
       return 0;
+    }
 
     case WM_DESTROY:
       PostQuitMessage(0);

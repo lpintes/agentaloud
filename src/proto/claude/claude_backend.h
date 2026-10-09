@@ -35,6 +35,9 @@ class ClaudeBackend : public agent::Backend {
   }
   bool SendPrompt(const std::string& utf8Text) override;
   bool Interrupt() override;
+  bool StopTask(const std::string& id) override;
+  bool StopAllTasks() override;
+  bool Background() override;
   bool SetMode(const std::string& id) override;
   void Stop(unsigned turnTimeoutMs) override;
 

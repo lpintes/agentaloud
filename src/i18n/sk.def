@@ -107,6 +107,23 @@ S(kAgentNotRunning, L"agent už nebeží, prompt zostal v poli; novú session ot
 S(kPromptEmpty, L"prázdny prompt")
 S(kNothingRunning, L"nič nebeží")
 S(kInterruptFailed, L"prerušenie sa nepodarilo poslať")
+S(kStopTasksConfirm, L"{0}; ďalšie Esc všetko zastaví")
+S(kStoppingTasks, L"zastavujem úlohy na pozadí")
+S(kTasksStopped, L"úlohy na pozadí zastavené")
+S(kStopTasksUnsupported, L"tento agent úlohy na pozadí zastaviť nevie")
+S(kRequestFailed, L"požiadavku sa nepodarilo poslať")
+S(kBackgrounding, L"presúvam do pozadia")
+S(kBackgroundMoved, L"presunuté do pozadia")
+S(kBackgroundNothingYet, L"zatiaľ nie je čo presunúť; príkaz sa dá presunúť až pár sekúnd po spustení")
+S(kBackgroundNoTurn, L"nebeží ťah, nie je čo presunúť do pozadia")
+S(kBackgroundUnsupported, L"tento agent nevie presunúť prácu do pozadia")
+S(kTasksNone, L"na pozadí nič nebeží")
+S(kTaskAgent, L"agent: {0}")
+S(kTaskShell, L"príkaz: {0}")
+S(kStoppingTask, L"zastavujem {0}")
+S(kTaskStopped, L"zastavené: {0}")
+S(kCloseSessionTasks, L"{0}. Zavrieť session a všetko zastaviť?")
+S(kCloseAppTasks, L"{0}. Ukončiť a všetko zastaviť?")
 S(kModeNotKnownYet, L"režim zatiaľ nie je známy, CLI ešte štartuje")
 S(kModeFixed, L"režim sa za behu prepnúť nedá")
 S(kModeSwitchFailed, L"režim sa nepodarilo prepnúť")
@@ -125,6 +142,19 @@ S(kKeysSending,
   L"Ctrl+Enter — odošle prompt. Len z poľa Prompt.\n"
   L"Esc — preruší bežiaci ťah. Z oboch polí.\n"
   L"Tab — prepne medzi prepisom a promptom.\n")
+S(kKeysTasks,
+  L"Ctrl+T — úlohy na pozadí; zoznam sa za behu mení, Zastaviť zastaví "
+  L"vybranú, Esc ho zavrie. Z oboch polí.\n")
+S(kKeysStopTasks,
+  L"Esc dvakrát za sebou mimo ťahu — zastaví všetky úlohy na pozadí. "
+  L"Z oboch polí.\n")
+S(kKeysNoStopTasks,
+  L"Esc mimo ťahu — tento agent úlohy na pozadí zastaviť nevie.\n")
+S(kKeysBackground,
+  L"Ctrl+B — počas ťahu presunie to, na čo ťah čaká, do pozadia. "
+  L"Z oboch polí.\n")
+S(kKeysNoBackground,
+  L"Ctrl+B — tento agent nevie presunúť prácu do pozadia.\n")
 S(kKeysModesNone, L"Shift+Tab — tento agent režimy za behu meniť nevie.\n")
 S(kKeysModesHeading, L"Shift+Tab — mení režim povolení dokola, z oboch polí:\n")
 S(kKeysModesStartOnly, L"Len pri štarte, cez --permission-mode: {0}.\n")
@@ -233,6 +263,9 @@ S(kDlgNewCancel, L"&Zrušiť")
 S(kDlgFindCaption, L"hľadať")
 S(kDlgFindText, L"&Hľadať:")
 S(kDlgFindOk, L"&Nájsť")
+S(kDlgTasksCaption, L"úlohy na pozadí")
+S(kDlgTasksList, L"&Úlohy:")
+S(kDlgTasksStop, L"Z&astaviť")
 
 // Dialogs at run time.  The reader is addressed formally (vykanie), as
 // everywhere else in the application.

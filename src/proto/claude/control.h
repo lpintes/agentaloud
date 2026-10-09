@@ -130,6 +130,46 @@ bool ParseInitializeResponse(const Json& record, InitializeInfo* out);
 // request id.  The end of the turn arrives the usual way, as a Result.
 Json MakeInterrupt(const std::string& requestId);
 
+// The task_id of every command (local_bash) in a
+// system/background_tasks_changed; empty for any other record.  The commands
+// are what an interrupt leaves running (bg-bash, 2026-10-09), so StopAllTasks
+// stops them one by one.
+std::vector<std::string> ShellTaskIds(const Json& record);
+
+// Stops one background task, by the task_id of system/background_tasks_changed.
+// Measured 2026-10-08 (tools/probe_subagents.py bg-stop): the task is reported
+// killed and dropped from the list, the answer is a control_response success
+// with {}, and the CLI then starts a turn of its own to tell the model.
+//
+// An interrupt with no turn in flight is the other way to stop subagents, and
+// it stops all of them without a turn after (scenario C1): MakeInterrupt, sent
+// regardless of the turn.  It does not stop a command: the answer is success
+// and the command runs on (bg-bash).  A command stopped by stop_task brings no
+// turn after it either -- that is only what a stopped subagent does.
+Json MakeStopTask(const std::string& requestId, const std::string& taskId);
+
+// Ctrl+B: every foreground task of the turn in flight -- a command, a
+// subagent -- goes on in the background.  Without tool_use_id it means all of
+// them.  Measured 2026-10-08 (fg-bgall): each one shows up in
+// background_tasks_changed, the answer is a success with {}, and the turn
+// carries on.
+//
+// The answer is the same success when nothing went (fg-bash, 2026-10-09): a
+// Bash command becomes a task about 8 s after its tool_use, and a request
+// before that leaves it in the foreground.  What went is said only by a
+// system/task_updated with {is_backgrounded: true} before the answer.
+Json MakeBackgroundTasks(const std::string& requestId);
+
+// What our background_tasks request ids start with, so that their answers can
+// be told from the answers to everything else we ask.
+extern const char kBackgroundRequestPrefix[];
+
+// True for the answer to one of our background_tasks requests.
+bool IsBackgroundAnswer(const Json& record);
+
+// True for the system/task_updated that says a task went to the background.
+bool IsMovedToBackground(const Json& record);
+
 // Shift+Tab without restarting the session: change the permission mode of the
 // turn in flight and every turn after it.  The mode a terminal is switched
 // into this way is runtime state of that one process -- settings, hooks and

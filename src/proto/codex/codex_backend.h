@@ -50,6 +50,11 @@ class CodexBackend : public agent::Backend {
   }
   bool SendPrompt(const std::string& utf8Text) override;
   bool Interrupt() override;
+  // Not yet: Capabilities say so, and the keys answer that there is nothing
+  // to do (claude-gui-b8n.11).
+  bool StopTask(const std::string&) override { return false; }
+  bool StopAllTasks() override { return false; }
+  bool Background() override { return false; }
   bool SetMode(const std::string& id) override;
   void Stop(unsigned turnTimeoutMs) override;
 
