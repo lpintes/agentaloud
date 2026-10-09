@@ -3796,6 +3796,19 @@ void TestCodexSubagentNickname() {
   CHECK_EQ(translator.Author(proto::Json::parse(R"({"threadId":"sub1"})")),
            std::string("Peirce"));
 
+  // Premyslanie subagenta nie je "premyslam" -- po "hotovo" by klamalo
+  // (b8n.15).  Vlastne vlakno ano.
+  const char* reasoning =
+      R"({"method":"item/started","params":{"threadId":"%s","item":{
+          "type":"reasoning","id":"r1","summary":[],"content":[]}}})";
+  auto reasoningOf = [&](const std::string& thread) {
+    std::string line = reasoning;
+    line.replace(line.find("%s"), 2, thread);
+    return translator.Translate(proto::Json::parse(line));
+  };
+  CHECK_EQ(CountOf<agent::ThinkingTick>(reasoningOf("sub1")), size_t{0});
+  CHECK_EQ(CountOf<agent::ThinkingTick>(reasoningOf("main")), size_t{1});
+
   // Bez prezyvky, alebo cudzie vlakno: nic sa nemeni.
   CHECK(translator
             .Nickname(proto::Json::parse(

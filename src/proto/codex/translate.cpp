@@ -768,9 +768,12 @@ std::vector<agent::Event> Translator::Translate(const Json& message) {
       agent::ToolCall call = ToolCallFromItem(item);
       running_[call.id] = call;
       events.push_back(agent::ToolCallStarted{std::move(call)});
-    } else if (StringField(item, "type") == "reasoning") {
+    } else if (StringField(item, "type") == "reasoning" && !foreign) {
       // The earliest sign that the model is thinking, and with low effort
       // the item does not come at all -- then nothing is said, which is true.
+      // A subagent's is not: the tick has no speaker, so after "hotovo" it
+      // said "premýšľam" of a turn that had ended (claude-gui-b8n.15), and
+      // during one it is a sign of a turn that does not think.
       events.push_back(agent::ThinkingTick{});
     }
   } else if (method == "item/completed") {
