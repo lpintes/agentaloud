@@ -49,6 +49,15 @@ class Translator {
   // can, the same as when it read the record itself.
   std::vector<agent::Event> Translate(const Json& record);
 
+  // Go on counting subagents where an earlier translator stopped.  A resume
+  // replays the history through a translator of its own, and the live one
+  // would otherwise name the first new Explore "Explore 1" a second time in
+  // the same transcript (claude-gui-b8n.8).  Only the numbering: the model
+  // the history ended on is a seed, not an answer (SeedModel).
+  void ContinueNumbering(const Translator& earlier) {
+    subagentCounts_ = earlier.subagentCounts_;
+  }
+
  private:
   // The name a subagent goes by from its Agent call on: its type and how
   // many of that type this translator has seen, "Explore 2".  The type alone
@@ -79,8 +88,9 @@ std::vector<agent::Event> TranslateRecord(const Json& record);
 // prompt a human typed and the mark of an interruption, both of which the live
 // path puts into the transcript itself (invariant 18).  The models that
 // answered come along as ModelChanged, so the last of them can seed the live
-// translator.
-std::vector<agent::Event> TranslateHistory(const std::vector<Json>& records);
+// translator.  So does the subagent numbering, into `live` when given.
+std::vector<agent::Event> TranslateHistory(const std::vector<Json>& records,
+                                           Translator* live = nullptr);
 
 // What the adapter tells the model when the reader turns a tool down or
 // closes a question unanswered.  English whatever the reader's language: an

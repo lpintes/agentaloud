@@ -2392,6 +2392,35 @@ void TestSubagentSpeaker() {
   CHECK(transcript.CheckInvariants(&problem));
 }
 
+void TestSubagentNumberingAfterResume() {
+  TEST("translate: po obnoveni sa subagenti cisluju dalej, nie od 1");
+  // Historia uz ma dvoch Explore; prvy novy po --resume je Explore 3
+  // (claude-gui-b8n.8).
+  std::vector<proto::Json> records = {proto::Json::parse(
+      R"({"type":"assistant","message":{"content":[
+      {"type":"tool_use","id":"h1","name":"Agent","input":{
+       "description":"a","subagent_type":"Explore","prompt":"..."}},
+      {"type":"tool_use","id":"h2","name":"Agent","input":{
+       "description":"b","subagent_type":"Explore","prompt":"..."}}]}})")};
+  proto::Translator live;
+  proto::TranslateHistory(records, &live);
+  model::Transcript transcript;
+  CHECK(transcript.SetAgentName(L"claude"));
+  transcript.Append(live.Translate(proto::Json::parse(
+      R"({"type":"assistant","message":{"content":[
+      {"type":"tool_use","id":"n1","name":"Agent","input":{
+       "description":"c","subagent_type":"Explore","prompt":"..."}},
+      {"type":"tool_use","id":"n2","name":"Agent","input":{
+       "description":"d","subagent_type":"Plan","prompt":"..."}}]}})")));
+  CHECK_EQ(transcript.blocks().size(), size_t{2});
+  if (transcript.blocks().size() == 2) {
+    CHECK(transcript.blocks()[0].summary.find(L"Explore 3: c") !=
+          std::wstring::npos);
+    CHECK(transcript.blocks()[1].summary.find(L"Plan 1: d") !=
+          std::wstring::npos);
+  }
+}
+
 void TestSummariesAreOneLine() {
   TEST("transcript: zhrnutie je vzdy jeden riadok");
   model::Transcript transcript;
@@ -4015,6 +4044,7 @@ int main(int argc, char** argv) {
   TestEmptyBlocksAreDropped();
   TestSpeakerPrefix();
   TestSubagentSpeaker();
+  TestSubagentNumberingAfterResume();
   TestCodexSubagentSpeaker();
   TestSummariesAreOneLine();
   TestAskUserQuestionRoundTrip();

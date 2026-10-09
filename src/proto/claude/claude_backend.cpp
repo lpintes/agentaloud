@@ -100,7 +100,7 @@ bool ClaudeBackend::Start(const agent::StartOptions& options,
           SessionFilePath(session.workingDir,
                           ResumedConversation(session.extraArgs)),
           &records)) {
-    std::vector<agent::Event> history = TranslateHistory(records);
+    std::vector<agent::Event> history = TranslateHistory(records, &translator_);
     for (const agent::Event& event : history) {
       if (const auto* changed = std::get_if<agent::ModelChanged>(&event)) {
         translator_.SeedModel(changed->model);

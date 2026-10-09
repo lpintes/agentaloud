@@ -436,7 +436,8 @@ std::vector<agent::Event> TranslateRecord(const Json& record) {
   return Translator().Translate(record);
 }
 
-std::vector<agent::Event> TranslateHistory(const std::vector<Json>& records) {
+std::vector<agent::Event> TranslateHistory(const std::vector<Json>& records,
+                                           Translator* live) {
   std::vector<agent::Event> events;
   Translator translator;
   for (const Json& record : records) {
@@ -458,6 +459,7 @@ std::vector<agent::Event> TranslateHistory(const std::vector<Json>& records) {
       events.push_back(std::move(event));
     }
   }
+  if (live != nullptr) live->ContinueNumbering(translator);
   return events;
 }
 
