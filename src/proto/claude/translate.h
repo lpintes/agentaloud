@@ -58,6 +58,13 @@ class Translator {
     subagentCounts_ = earlier.subagentCounts_;
   }
 
+  // The name of the subagent a can_use_tool came from, by the agent_id both
+  // it and the subagent's records carry -- the request has no
+  // parent_tool_use_id.  Empty for an empty id.  The subagent's tool_use
+  // always came first (tools/probe_subagents.notes.md); an id never seen is
+  // still a subagent, and says so.
+  std::string AgentName(const std::string& agentId) const;
+
  private:
   // The name a subagent goes by from its Agent call on: its type and how
   // many of that type this translator has seen, "Explore 2".  The type alone
@@ -73,6 +80,7 @@ class Translator {
   bool answered_ = false;
   std::map<std::string, std::string> subagents_;  // Agent call id -> name
   std::map<std::string, int> subagentCounts_;     // type -> how many so far
+  std::map<std::string, std::string> agentIds_;   // agent_id -> name
   // A task went to the background since the last answer to background_tasks
   // -- the only sign that Ctrl+B did anything (MakeBackgroundTasks).
   bool movedSinceAnswer_ = false;

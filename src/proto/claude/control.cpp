@@ -30,6 +30,7 @@ bool ParsePermissionRequest(const Json& record, PermissionRequest* out) {
   out->displayName = StringField(*request, "display_name");
   out->description = StringField(*request, "description");
   out->toolUseId = StringField(*request, "tool_use_id");
+  out->agentId = StringField(*request, "agent_id");
   out->decisionReasonType = StringField(*request, "decision_reason_type");
   auto interaction = request->find("requires_user_interaction");
   out->requiresUserInteraction = interaction != request->end() &&

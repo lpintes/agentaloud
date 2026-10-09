@@ -643,6 +643,12 @@ bool Translator::Foreign(const Json& params) const {
   return !thread_.empty() && !thread.empty() && thread != thread_;
 }
 
+std::string Translator::Author(const Json& params) const {
+  if (!Foreign(params)) return std::string();
+  auto known = subagentNames_.find(StringField(params, "threadId"));
+  return known != subagentNames_.end() ? known->second : std::string("agent");
+}
+
 void Translator::ReportTasks(std::vector<agent::Event>* out) const {
   agent::BackgroundTasksChanged changed;
   changed.tasks = agents_;
@@ -870,9 +876,7 @@ std::vector<agent::Event> Translator::Translate(const Json& message) {
   // name is the last part of the agentPath the model gave it ("agent_1"); the
   // nickname is only in thread/read (tools/probe_codex_subagents.notes.md).
   if (foreign) {
-    auto known = subagentNames_.find(StringField(params, "threadId"));
-    const std::string by =
-        known != subagentNames_.end() ? known->second : std::string("agent");
+    const std::string by = Author(params);
     for (agent::Event& event : events) {
       if (auto* text = std::get_if<agent::AssistantText>(&event)) {
         text->by = by;

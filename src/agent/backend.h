@@ -125,6 +125,10 @@ struct PermissionRequest {
   // hovorí pýtať sa").  Empty when the CLI gives no reason.
   std::string reason;
   std::vector<Verdict> offered;
+  // The subagent asking, by the name its blocks go by ("Explore 2"); empty
+  // for the conversation itself.  Several may wait at once, and a dialog that
+  // does not say whose call it is cannot be answered (claude-gui-b8n.10).
+  std::string by;
 };
 
 struct PermissionAnswer {
@@ -137,6 +141,7 @@ struct PermissionAnswer {
 
 struct QuestionRequest {
   std::vector<Question> questions;
+  std::string by;  // as PermissionRequest::by
 };
 
 // What the model is told when the reader declines is the adapter's to write:

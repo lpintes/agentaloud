@@ -206,6 +206,11 @@ class Translator {
 
   const std::string& model() const { return model_; }
 
+  // Who a message with this threadId is from: empty for the conversation,
+  // the subagent's name otherwise -- the `by` of its blocks and of the
+  // requests it sends, which carry a threadId too (claude-gui-b8n.10).
+  std::string Author(const Json& params) const;
+
  private:
   void ReportModel(const std::string& model, std::vector<agent::Event>* out);
   bool Foreign(const Json& params) const;

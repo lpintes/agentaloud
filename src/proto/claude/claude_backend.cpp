@@ -163,6 +163,7 @@ PermissionDecision ClaudeBackend::OnPermission(
   if (request.toolName == kAskUserQuestionTool &&
       ParseAskUserQuestion(request.input, &asked) && callbacks_.onQuestion) {
     agent::QuestionRequest question;
+    question.by = translator_.AgentName(request.agentId);
     for (const AskQuestion& item : asked) {
       agent::Question out;
       // Claude files an answer under the text of its question.
@@ -197,6 +198,7 @@ PermissionDecision ClaudeBackend::OnPermission(
   out.title = request.displayName;
   out.description = request.description;
   out.reason = ReasonSentence(request.decisionReasonType);
+  out.by = translator_.AgentName(request.agentId);
   // "For this session" is what the CLI suggests and nothing broader: for a
   // command that is the exact command line, for a file edit acceptEdits.
   const Json kept = SessionPermissions(request.suggestions);

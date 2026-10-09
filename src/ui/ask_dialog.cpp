@@ -43,8 +43,9 @@ std::wstring OneLine(std::wstring text) {
 // indices because that is what the wire wants -- see proto/claude/ask.h.
 class AskDialog : public win::Dialog {
  public:
-  AskDialog(const agent::Question& question, size_t ordinal, size_t total)
-      : question_(question), ordinal_(ordinal), total_(total) {}
+  AskDialog(const agent::Question& question, size_t ordinal, size_t total,
+            const std::string& by)
+      : question_(question), ordinal_(ordinal), total_(total), by_(by) {}
 
   const std::vector<std::string>& chosen() const { return chosen_; }
 
@@ -70,6 +71,7 @@ class AskDialog : public win::Dialog {
   const agent::Question& question_;
   const size_t ordinal_;  // 1-based, for the title
   const size_t total_;
+  const std::string& by_;
   std::vector<std::string> chosen_;
 };
 
@@ -86,7 +88,7 @@ bool AskDialog::OnInit() {
                            {heading, std::to_wstring(ordinal_),
                             std::to_wstring(total_)});
   }
-  const std::wstring caption = std::wstring(L"" APP_NAME L" — ") + heading;
+  const std::wstring caption = RequestCaption(by_) + heading;
   SetWindowTextW(hwnd_, caption.c_str());
 
   SetTextLines(IDC_ASK_QUESTION, model::Utf16FromUtf8(question_.text));
@@ -178,10 +180,11 @@ bool AskDialog::OnOk() {
 }  // namespace
 
 bool AskQuestions(HWND owner, const std::vector<agent::Question>& questions,
+                  const std::string& by,
                   std::vector<std::vector<std::string>>* chosen) {
   chosen->clear();
   for (size_t i = 0; i < questions.size(); ++i) {
-    AskDialog dialog(questions[i], i + 1, questions.size());
+    AskDialog dialog(questions[i], i + 1, questions.size(), by);
     if (dialog.ShowModal(owner, IDD_ASK_QUESTION) != IDOK) {
       chosen->clear();
       return false;

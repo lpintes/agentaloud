@@ -874,7 +874,8 @@ LRESULT SessionPane::OnQuestion(LPARAM pointer) {
   SignalWaiting();
 
   pending->answer.declined =
-      !AskQuestions(host_, pending->request->questions, &pending->answer.chosen);
+      !AskQuestions(host_, pending->request->questions, pending->request->by,
+                    &pending->answer.chosen);
   return 0;
 }
 
@@ -1384,7 +1385,8 @@ void SessionPane::OnQuestionByPrompt() {
 
   SignalWaiting();
   std::vector<std::vector<std::string>> chosen;
-  const bool answered = AskQuestions(host_, questions, &chosen);
+  // Always the conversation's: only its own next prompt can answer one.
+  const bool answered = AskQuestions(host_, questions, std::string(), &chosen);
 
   // The outcome behind each call, the same as the blocking question gets
   // from its adapter -- what was chosen, or "bez odpovede".  Without it a

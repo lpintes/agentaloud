@@ -2421,6 +2421,32 @@ void TestSubagentNumberingAfterResume() {
   }
 }
 
+void TestPermissionFromSubagentNamed() {
+  TEST("translate: can_use_tool subagenta nesie jeho meno cez agent_id");
+  // Tvar odpozorovany v tools/probe_subagents.py (2.1.293): can_use_tool
+  // nema parent_tool_use_id, len agent_id, ten isty ako zaznamy subagenta
+  // (claude-gui-b8n.10).
+  proto::Translator translator;
+  translator.Translate(proto::Json::parse(
+      R"({"type":"assistant","message":{"content":[
+      {"type":"tool_use","id":"call1","name":"Agent","input":{
+       "description":"a","subagent_type":"Explore","prompt":"..."}}]}})"));
+  translator.Translate(proto::Json::parse(
+      R"({"type":"assistant","message":{"content":[
+      {"type":"tool_use","id":"t1","name":"Bash","input":{"command":"ls"}}]},
+      "parent_tool_use_id":"call1","agent_id":"a6ea9"})"));
+  proto::PermissionRequest request;
+  CHECK(proto::ParsePermissionRequest(
+      proto::Json::parse(R"({"type":"control_request","request_id":"r1",
+      "request":{"subtype":"can_use_tool","tool_name":"Bash",
+      "input":{"command":"ls"},"tool_use_id":"t1","agent_id":"a6ea9"}})"),
+      &request));
+  CHECK_EQ(request.agentId, std::string("a6ea9"));
+  CHECK_EQ(translator.AgentName(request.agentId), std::string("Explore 1"));
+  CHECK(translator.AgentName("").empty());
+  CHECK_EQ(translator.AgentName("nezname"), std::string("agent"));
+}
+
 void TestSummariesAreOneLine() {
   TEST("transcript: zhrnutie je vzdy jeden riadok");
   model::Transcript transcript;
@@ -3716,6 +3742,13 @@ void TestCodexSubagentSpeaker() {
     CHECK_EQ(texts[1].by, std::string("agent_1"));
     CHECK(texts[2].by.empty());
   }
+  // Ziadost o povolenie ci otazka nesie threadId tiez (schema 0.160.0) a
+  // dialog povie, kto sa pyta (claude-gui-b8n.10).
+  CHECK_EQ(translator.Author(proto::Json::parse(R"({"threadId":"sub1"})")),
+           std::string("agent_1"));
+  CHECK(translator.Author(proto::Json::parse(R"({"threadId":"main"})")).empty());
+  CHECK_EQ(translator.Author(proto::Json::parse(R"({"threadId":"x"})")),
+           std::string("agent"));
 }
 
 void TestBackgroundText() {
@@ -4045,6 +4078,7 @@ int main(int argc, char** argv) {
   TestSpeakerPrefix();
   TestSubagentSpeaker();
   TestSubagentNumberingAfterResume();
+  TestPermissionFromSubagentNamed();
   TestCodexSubagentSpeaker();
   TestSummariesAreOneLine();
   TestAskUserQuestionRoundTrip();

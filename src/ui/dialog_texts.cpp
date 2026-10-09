@@ -5,6 +5,7 @@
 
 #include "app_name.h"
 #include "i18n/i18n.h"
+#include "model/utf.h"
 #include "ui/resource.h"
 
 namespace ui {
@@ -104,6 +105,12 @@ void LocalizeDialog(HWND dialog, int templateId) {
     }
     return;
   }
+}
+
+std::wstring RequestCaption(const std::string& by) {
+  std::wstring caption = L"" APP_NAME L" — ";
+  if (!by.empty()) caption += model::Utf16FromUtf8(by) + L": ";
+  return caption;
 }
 
 }  // namespace ui

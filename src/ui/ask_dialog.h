@@ -33,7 +33,11 @@ namespace ui {
 // call rather than sending a half-answer.  Half-answers are legal on the wire
 // -- the CLI tells the model to ask again about what is missing -- but Esc
 // here means "I am not answering this", and asking again is not that.
+//
+// `by` names the subagent asking (agent::QuestionRequest::by); empty for the
+// conversation itself.
 bool AskQuestions(HWND owner, const std::vector<agent::Question>& questions,
+                  const std::string& by,
                   std::vector<std::vector<std::string>>* chosen);
 
 }  // namespace ui

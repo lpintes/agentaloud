@@ -52,6 +52,9 @@ struct PermissionRequest {
   std::string displayName;
   std::string description;
   std::string toolUseId;   // ties back to the tool_use block in the transcript
+  // Set when a subagent asks -- the same agent_id its records carry; absent
+  // for the conversation's own calls (tools/probe_subagents.notes.md).
+  std::string agentId;
   // Why we are being asked: "rule" means it hit an ask rule in settings or a
   // hook.  Worth showing -- "you asked to be asked about commits" is a better
   // prompt than a bare command line.

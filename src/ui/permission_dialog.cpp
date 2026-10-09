@@ -2,7 +2,6 @@
 
 #include <string>
 
-#include "app_name.h"
 #include "i18n/i18n.h"
 #include "model/transcript.h"
 #include "model/utf.h"
@@ -45,7 +44,7 @@ bool PermissionDialog::OnInit() {
   const std::string& name =
       request_.title.empty() ? request_.call.name : request_.title;
   const std::wstring caption =
-      std::wstring(L"" APP_NAME L" — ") +
+      RequestCaption(request_.by) +
       i18n::Format(i18n::Str::kPermTitle, {model::Utf16FromUtf8(name)});
   SetWindowTextW(hwnd_, caption.c_str());
 

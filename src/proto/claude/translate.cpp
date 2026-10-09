@@ -234,7 +234,16 @@ std::string Translator::Author(const Json& record) {
   // A subagent whose call we never saw.  Not one from before a resume: the
   // subagent dies with its CLI, so this is only a guard against a stream
   // that names a parent it did not send.
-  return NameSubagent(parent->get<std::string>(), std::string());
+  std::string name = NameSubagent(parent->get<std::string>(), std::string());
+  const std::string agentId = StringField(record, "agent_id");
+  if (!agentId.empty()) agentIds_[agentId] = name;
+  return name;
+}
+
+std::string Translator::AgentName(const std::string& agentId) const {
+  if (agentId.empty()) return std::string();
+  auto known = agentIds_.find(agentId);
+  return known != agentIds_.end() ? known->second : std::string("agent");
 }
 
 std::vector<agent::Event> Translator::Translate(const Json& record) {

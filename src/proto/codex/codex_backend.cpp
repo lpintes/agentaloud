@@ -613,6 +613,7 @@ void CodexBackend::OnServerRequest(const Json& message) {
     // Codex's own sentence about why it asks, when the model asked to step
     // outside the sandbox.  Not a code to translate: it is already words.
     request.reason = StringField(params, "reason");
+    request.by = translator_.Author(params);
     // A command lists what it takes, and "acceptForSession" is not always
     // there (measured: accept, acceptWithExecpolicyAmendment, cancel -- the
     // amendment is a rule written to disk, not offered here).  A file change
@@ -640,11 +641,12 @@ void CodexBackend::OnServerRequest(const Json& message) {
   if (method == "item/tool/requestUserInput") {
     agent::QuestionRequest request;
     request.questions = ReadQuestions(params);
+    request.by = translator_.Author(params);
     const agent::ToolCall call = QuestionCall(params);
     // No item comes for it, so the transcript gets the call from here, before
     // the dialog -- as Claude's AskUserQuestion is in the transcript before
     // its dialog.
-    Emit({agent::ToolCallStarted{call}});
+    Emit({agent::ToolCallStarted{call, request.by}});
     agent::QuestionAnswer answer;
     answer.declined = true;
     if (callbacks_.onQuestion) answer = callbacks_.onQuestion(request);
@@ -658,6 +660,7 @@ void CodexBackend::OnServerRequest(const Json& message) {
   if (method == "mcpServer/elicitation/request") {
     agent::PermissionRequest request;
     if (ElicitationPermission(params, &request)) {
+      request.by = translator_.Author(params);
       agent::PermissionAnswer answer;
       if (callbacks_.onPermission) answer = callbacks_.onPermission(request);
       Send({{"id", id}, {"result", MakeElicitationAnswer(answer.verdict)}});

@@ -159,6 +159,21 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    dali k volaniu priradiť. Overené naostro 8. 10. 2026 s troma Explore na
    pozadí.
 
+   To isté meno nesie **dialóg povolenia a otázky**, na začiatku titulku
+   („AgentAloud — general-purpose 1: povolenie: Write", `ui::RequestCaption`),
+   lebo NVDA titulok číta prvý a čakať môže viac subagentov naraz
+   (claude-gui-b8n.10). Pole `by` v `agent::PermissionRequest`
+   a `QuestionRequest`. Claude: `can_use_tool` nemá `parent_tool_use_id`, len
+   `agent_id` — ten istý, aký nesú záznamy subagenta, takže translátor si pri
+   nich pamätá `agent_id` → meno (`Translator::AgentName`). Codex: každá
+   serverová požiadavka nesie `threadId` (`codex::Translator::Author`).
+   Overené naostro 9. 10. 2026: Claude (Write zo subagenta v režime default)
+   aj Codex 0.160.0 (eskalácia príkazu zo subagenta, „outside_write:
+   povolenie: shell"). Otázku zo subagenta dnes nepoloží ani jedno CLI —
+   subagent Clauda `AskUserQuestion` nemá, subagent Codexu beží vždy
+   v Default a `request_user_input` je len v Plan — takže `QuestionRequest::by`
+   je poistka overená len testami.
+
    Koniec ťahu preto musí povedať, že je koniec — „hotovo"
    (`ui::SessionPane::SignalTurnEnd`). Kým odpoveď chodila až na konci, koniec
    sa poznal po nej; keď chodí priebežne, ťah končiaci vetou znie ako ťah,

@@ -248,7 +248,9 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
    s menom hovoriaceho (`Transcript::SpeakerPrefix`, meno z
    `Capabilities::agentName`, nastavené pred `Start` a potom nemenné).
    Blok subagenta — každý, aj volanie a výstup — nesie meno subagenta
-   („Explore 2: …", pole `by` v porte → `Block::speaker`, meno dáva adaptér).
+   („Explore 2: …", pole `by` v porte → `Block::speaker`, meno dáva adaptér),
+   aj dialóg povolenia a otázky na začiatku titulku (`RequestCaption`;
+   Claude cez `agent_id`, Codex cez `threadId`).
    Pípnutie nie je náhrada reči; chýbajúca `nvdaControllerClient.dll` sa
    ohlási dialógom (`WarnIfMute`). **Za zavretým dialógom sa hovoriť nedá**
    a časovač proti čítačke sa nepoužíva — dialóg, ktorého odpoveď je veta,

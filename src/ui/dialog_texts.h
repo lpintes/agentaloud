@@ -12,9 +12,17 @@
 
 #include <windows.h>
 
+#include <string>
+
 namespace ui {
 
 void LocalizeDialog(HWND dialog, int templateId);
+
+// The front of a request's caption: the application, and the subagent asking
+// when it is one -- "AgentAloud — Explore 2: " -- in the transcript's own
+// speaker form.  NVDA reads the caption first, so whose request it is comes
+// before what it is (claude-gui-b8n.10).  `by` is the port's, UTF-8.
+std::wstring RequestCaption(const std::string& by);
 
 }  // namespace ui
 
