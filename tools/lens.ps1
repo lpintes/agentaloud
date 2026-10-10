@@ -161,3 +161,50 @@ function Send-LensChord([IntPtr]$Control, [int]$VirtualKey, [switch]$Ctrl,
 function Set-LensText([IntPtr]$Control, [string]$Text) {
   [void][Lens]::SendMessageW($Control, 0x000C, [IntPtr]::Zero, $Text)
 }
+
+# Casti stavoveho riadka. SB_GETTEXTW system cez hranicu procesu NEmarshaluje
+# (na rozdiel od WM_GETTEXT) -- buffer musi lezat v pamati appky, preto
+# VirtualAllocEx + ReadProcessMemory. Overene 9. a 10. 10. 2026 (b8n.4, b8n.6).
+#
+#   Get-LensStatus <pid>    # -> '[0] na pozadi: 1 prikaz', '[1] model ...'
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class LensBar {
+  [DllImport("user32.dll")] static extern IntPtr SendMessageW(IntPtr h, uint m, IntPtr w, IntPtr l);
+  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [DllImport("kernel32.dll")] static extern IntPtr OpenProcess(uint a, bool i, uint pid);
+  [DllImport("kernel32.dll")] static extern IntPtr VirtualAllocEx(IntPtr p, IntPtr a, UIntPtr s, uint t, uint pr);
+  [DllImport("kernel32.dll")] static extern bool VirtualFreeEx(IntPtr p, IntPtr a, UIntPtr s, uint t);
+  [DllImport("kernel32.dll")] static extern bool ReadProcessMemory(IntPtr p, IntPtr a, byte[] b, UIntPtr s, out UIntPtr r);
+  [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+  public static string[] Parts(IntPtr bar) {
+    uint pid; GetWindowThreadProcessId(bar, out pid);
+    IntPtr proc = OpenProcess(0x0008 | 0x0010 | 0x0020 | 0x0400, false, pid);
+    int n = (int)SendMessageW(bar, 0x0406, IntPtr.Zero, IntPtr.Zero); // SB_GETPARTS
+    string[] result = new string[n];
+    IntPtr mem = VirtualAllocEx(proc, IntPtr.Zero, (UIntPtr)8192, 0x3000, 0x04);
+    for (int i = 0; i < n; i++) {
+      SendMessageW(bar, 0x040D, (IntPtr)i, mem); // SB_GETTEXTW
+      byte[] buf = new byte[8192]; UIntPtr r;
+      ReadProcessMemory(proc, mem, buf, (UIntPtr)8192, out r);
+      string s = Encoding.Unicode.GetString(buf);
+      int z = s.IndexOf('\0'); result[i] = z >= 0 ? s.Substring(0, z) : s;
+    }
+    VirtualFreeEx(proc, mem, UIntPtr.Zero, 0x8000);
+    CloseHandle(proc);
+    return result;
+  }
+}
+"@ -ErrorAction SilentlyContinue
+
+function Get-LensStatus([int]$TargetPid) {
+  foreach ($w in Get-LensWindows $TargetPid) {
+    foreach ($c in Get-LensChildren $w.Hwnd) {
+      if ($c.Class -ne 'msctls_statusbar32') { continue }
+      $i = 0
+      foreach ($p in [LensBar]::Parts($c.Hwnd)) { "[$i] $p"; $i++ }
+    }
+  }
+}

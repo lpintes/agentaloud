@@ -134,5 +134,20 @@ jediného stlačenia u používateľa. Na overenie naostro stačí `--model haik
 Dialóg povolenia pritom nevyvolá hocijaký príkaz: `echo hello` CLI povolí
 samo ako read-only, `echo hello > hello.txt` už nie.
 
+Stavový riadok prečíta `Get-LensStatus <pid>`. `SB_GETTEXTW` systém cez
+hranicu procesu nemarshaluje, takže buffer leží v pamäti appky
+(`VirtualAllocEx`).
+
+**Reč naostro cez MCP `screenreader` (NVDA) posiela skutočné klávesy**, teda do
+okna v popredí — a tým môže byť **používateľova vlastná AgentAloud, v ktorej
+beží práve táto session**. Stalo sa 10. 10. 2026: kým používateľ odpovedal na
+otázku, prepol sa do svojho okna a prompt pre test pristál v jeho poli. Pred
+každým `type_text` preto `nvda+t` a skontrolovať priečinok v titulku; keď
+nesedí, ovládať testovaciu inštanciu cez `lens.ps1`. Spojenie s NVDA počas
+čakania na odpoveď vyprší, po nej treba `connect_reader` znova. A zachytená reč
+nie je počutá reč: `get_speech` ukáže aj to, čo syntéza nestihla povedať, takže
+o tom, či sa veta prehlušila, rozhodne len používateľ — a ten musí vopred
+vedieť, že test beží a čo má počúvať.
+
 Testovaciu inštanciu zatváraj **podľa PID**, nikdy `taskkill /IM` — používateľ
 má vlastnú AgentAloud (či staršiu ClaudeLens) spustenú.
