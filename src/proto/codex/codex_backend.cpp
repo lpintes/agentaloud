@@ -607,16 +607,17 @@ void CodexBackend::OnServerRequest(const Json& message) {
       method == "item/fileChange/requestApproval") {
     agent::PermissionRequest request;
     const std::string itemId = StringField(params, "itemId");
-    if (!translator_.FindCall(itemId, &request.call)) {
+    Json item;
+    if (!translator_.FindItem(itemId, &item)) {
       // Not announced: built from the request itself, which for a command
       // carries the command and for a file change carries nothing.
-      Json item = params;
+      item = params;
       item["id"] = itemId;
       item["type"] = method == "item/fileChange/requestApproval"
                          ? "fileChange"
                          : "commandExecution";
-      request.call = ToolCallFromItem(item);
     }
+    request.call = ToolCallFromItem(item);
     // Codex's own sentence about why it asks, when the model asked to step
     // outside the sandbox.  Not a code to translate: it is already words.
     request.reason = StringField(params, "reason");
@@ -637,6 +638,9 @@ void CodexBackend::OnServerRequest(const Json& message) {
     }
     request.offered = {agent::Verdict::Allow};
     if (session) request.offered.push_back(agent::Verdict::AllowForSession);
+    if (session && method == "item/fileChange/requestApproval") {
+      request.sessionScope = FileChangeScope(item);
+    }
     request.offered.push_back(agent::Verdict::Deny);
     request.offered.push_back(agent::Verdict::Abort);
     agent::PermissionAnswer answer;

@@ -580,6 +580,38 @@ agent::ToolResult QuestionResult(const std::string& callId,
   return result;
 }
 
+namespace {
+
+// "Allow the fakecu MCP server to run tool \"open_app\"?" -> "open_app".
+std::string QuotedToolName(const std::string& message) {
+  static const std::string kBefore = "run tool \"";
+  const size_t start = message.find(kBefore);
+  if (start == std::string::npos) return {};
+  const size_t begin = start + kBefore.size();
+  const size_t end = message.find('"', begin);
+  if (end == std::string::npos) return {};
+  return message.substr(begin, end - begin);
+}
+
+}  // namespace
+
+std::vector<std::string> FileChangeScope(const Json& item) {
+  // Measured (tools/probe_codex_scope.py): "acceptForSession" covers further
+  // changes to the files of the patch, all of them, in this turn and the
+  // next -- and nothing else: another file in the same folder asks again, and
+  // `grantRoot` never came.  The request names no file; the item does.
+  std::vector<std::string> lines;
+  const Json& changes = Field(item, "changes");
+  if (!changes.is_array()) return lines;
+  for (const Json& change : changes) {
+    const std::string path = StringField(change, "path");
+    if (!path.empty()) {
+      lines.push_back(i18n::Utf8(i18n::Str::kScopeFile, {path}));
+    }
+  }
+  return lines;
+}
+
 bool ElicitationPermission(const Json& params, agent::PermissionRequest* out) {
   // "openai/form" and "openaiForm" carry a schema of their own shape; one with
   // no properties is still a yes or a no, and anything else is not.
@@ -600,16 +632,30 @@ bool ElicitationPermission(const Json& params, agent::PermissionRequest* out) {
   // for its own layer, nothing for the server's question.  "always" writes to
   // config.toml, which an answer in a dialog should not do behind the
   // reader's back, so only "session" is offered.
-  request.offered = {agent::Verdict::Allow};
+  bool session = false;
   const Json& persist = Field(meta, "persist");
   if (persist.is_array()) {
     for (const Json& each : persist) {
       if (each.is_string() && each.get<std::string>() == "session") {
-        request.offered.push_back(agent::Verdict::AllowForSession);
+        session = true;
       }
     }
   }
+  request.offered = {agent::Verdict::Allow};
+  if (session) request.offered.push_back(agent::Verdict::AllowForSession);
   request.offered.push_back(agent::Verdict::Deny);
+  // Measured (tools/probe_codex_scope.py): "session" covers the same tool of
+  // the same server with any arguments, in this turn and the next, not the
+  // server's other tools.  The
+  // tool's name is in no field, only in Codex's own sentence; when that
+  // sentence changes shape, the reader gets no line rather than a wrong one.
+  if (session) {
+    const std::string tool = QuotedToolName(request.reason);
+    if (!tool.empty()) {
+      request.sessionScope = {i18n::Utf8(i18n::Str::kScopeServerTool,
+                                         {tool, request.call.name})};
+    }
+  }
   *out = std::move(request);
   return true;
 }
@@ -725,6 +771,13 @@ void Translator::TrackTask(const Json& item, bool completed,
 
 bool Translator::FindCall(const std::string& itemId,
                           agent::ToolCall* out) const {
+  Json item;
+  if (!FindItem(itemId, &item)) return false;
+  *out = ToolCallFromItem(item);
+  return true;
+}
+
+bool Translator::FindItem(const std::string& itemId, Json* out) const {
   auto found = running_.find(itemId);
   if (found == running_.end()) return false;
   *out = found->second;
@@ -766,7 +819,7 @@ std::vector<agent::Event> Translator::Translate(const Json& message) {
     if (!foreign) TrackTask(item, false, &events);
     if (IsToolItem(item)) {
       agent::ToolCall call = ToolCallFromItem(item);
-      running_[call.id] = call;
+      running_[call.id] = item;
       events.push_back(agent::ToolCallStarted{std::move(call)});
     } else if (StringField(item, "type") == "reasoning" && !foreign) {
       // The earliest sign that the model is thinking, and with low effort

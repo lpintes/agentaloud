@@ -3529,6 +3529,16 @@ void TestCodexElicitation() {
         (std::vector<agent::Verdict>{agent::Verdict::Allow,
                                      agent::Verdict::AllowForSession,
                                      agent::Verdict::Deny}));
+  // "session" pokryje ten isty nastroj s inymi argumentmi, iny nastroj
+  // servera sa pyta znova (tools/probe_codex_scope.py, 10. 10. 2026).
+  i18n::SetLanguage(i18n::Lang::kSlovak);
+  CHECK(request.sessionScope ==
+        (std::vector<std::string>{
+            "nástroj open_app servera fakecu, s akýmikoľvek argumentmi"}));
+  proto::Json reworded = codexAsks;
+  reworded["message"] = "Run open_app?";
+  CHECK(proto::codex::ElicitationPermission(reworded, &request));
+  CHECK(request.sessionScope.empty());
 
   // Otazka samotneho pluginu: _meta null, ziadne argumenty.  Prave tuto
   // appka odmietala a plugin z toho hlasil "not approved".
@@ -3541,6 +3551,7 @@ void TestCodexElicitation() {
   CHECK(request.call.fields.empty());
   CHECK(request.offered == (std::vector<agent::Verdict>{agent::Verdict::Allow,
                                                         agent::Verdict::Deny}));
+  CHECK(request.sessionScope.empty());
 
   proto::Json form = pluginAsks;
   form["requestedSchema"]["properties"] = {{"name", {{"type", "string"}}}};
@@ -3560,6 +3571,37 @@ void TestCodexElicitation() {
   CHECK_EQ(proto::codex::MakeElicitationAnswer(agent::Verdict::Deny),
            proto::Json::parse(
                R"({"action":"decline","content":null,"_meta":null})"));
+}
+
+// acceptForSession na upravu suborov pokryje dalsie upravy prave suborov
+// patchu, vsetkych, aj v dalsom tahu; iny subor v tom istom priecinku sa
+// pyta znova (tools/probe_codex_scope.py, rezimy file a multi, 10. 10. 2026).
+// Ziadost cesty nenesie, su len v changes polozky z item/started.
+void TestCodexFileChangeScope() {
+  TEST("codex rozsah povolenia na session pri uprave suborov");
+  i18n::SetLanguage(i18n::Lang::kSlovak);
+  using V = std::vector<std::string>;
+  CHECK_EQ(proto::codex::FileChangeScope(proto::Json::parse(
+               R"J({"type":"fileChange","id":"i","status":"inProgress",
+                   "changes":[{"path":"C:\\b\\scope\\a.txt",
+                               "kind":{"type":"update","move_path":null},
+                               "diff":"@@ -1 +1 @@\n-a\n+b\n"}]})J")),
+           (V{"ďalšie úpravy súboru C:\\b\\scope\\a.txt"}));
+  // Tvar doslova zo sondy (scope-multi.log); cesta s ciarkou sa nerozpadne.
+  CHECK_EQ(proto::codex::FileChangeScope(proto::Json::parse(
+               R"J({"type":"fileChange","id":"i","status":"inProgress",
+                   "changes":[
+      {"path":"C:\\b\\codex-probe\\scope-repo\\a.txt","kind":{"type":"add"},"diff":"hello\n"},
+      {"path":"C:\\b\\codex-probe\\scope-repo\\b, c.txt","kind":{"type":"add"},"diff":"hello\n"},
+      {"path":"C:\\b\\codex-probe\\scope-repo\\sub\\c.txt","kind":{"type":"add"},"diff":"hello\n"}]})J")),
+           (V{"ďalšie úpravy súboru C:\\b\\codex-probe\\scope-repo\\a.txt",
+              "ďalšie úpravy súboru C:\\b\\codex-probe\\scope-repo\\b, c.txt",
+              "ďalšie úpravy súboru C:\\b\\codex-probe\\scope-repo\\sub\\c.txt"}));
+  // Neohlasena polozka: appka ju sklada zo ziadosti, ktora cesty nenesie.
+  CHECK(proto::codex::FileChangeScope(proto::Json::parse(
+            R"({"type":"fileChange","id":"i","threadId":"t","turnId":"u",
+                "startedAtMs":1,"reason":null,"grantRoot":null})"))
+            .empty());
 }
 
 // Nie fixtura: zamietnutie recenzentom sa da vyvolat len politikou
@@ -4201,6 +4243,7 @@ int main(int argc, char** argv) {
   TestFixtureDisk(fixtures);
   TestCodexModes();
   TestCodexElicitation();
+  TestCodexFileChangeScope();
   TestCodexReviewerDenial();
   TestClaudeBackgroundTasks();
   TestClaudeBackgroundMoved();

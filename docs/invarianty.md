@@ -543,9 +543,22 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     `system/status`); pri WebFetch celá doména. Riadky píše adaptér v jazyku
     čitateľa (`agent::PermissionRequest::sessionScope`, pre Claude
     `proto::SessionScope`), ako `reason`; neznámy tvar návrhu ide v slovách
-    CLI, nevynechá sa. Kde adaptér rozsah nevie (Codex — nezmerané), pole je
-    skryté, nie prázdne. Pravidlo `ask` v nastaveniach návrhy nepošle a má
-    prednosť aj pred session pravidlom.
+    CLI, nevynechá sa. Kde adaptér rozsah nevie, pole je skryté, nie prázdne.
+    Pravidlo `ask` v nastaveniach návrhy nepošle a má prednosť aj pred
+    session pravidlom.
+
+    Codex rozsah nenavrhuje, takže ho adaptér skladá z odmeraného správania
+    (claude-gui-lkk.44.16, codex 0.160.0, `tools/probe_codex_scope.py`
+    a `.notes.md`): MCP `persist: session` pokryje **ten istý nástroj toho
+    istého servera s akýmikoľvek argumentmi**, iný nástroj servera sa pýta
+    znova. Meno nástroja je len vo vete `message` (`QuotedToolName`); keď
+    vetu nespozná, pole je skryté. `acceptForSession` pri úprave súborov
+    pokryje **len súbory toho patchu** (iný súbor v tom istom priečinku sa
+    pýta), patch na viac súborov je jedna žiadosť a pokryje všetky. Žiadosť
+    cesty nenesie, páruje sa cez `itemId` s itemom `fileChange`
+    (`Translator::FindItem`, `FileChangeScope`); `grantRoot` chodí `null`.
+    Obe povolenia prežijú do ďalšieho ťahu v tom istom vlákne. Pri príkaze
+    Codex `acceptForSession` neponúka, takže pole nie je.
 
 14. **Id session si appka určuje sama a pozná ho pred štartom procesu.** Zo
     streamu príde až so záznamom, ktorý ho nesie, a odpoveď na `initialize` ho

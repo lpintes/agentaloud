@@ -181,6 +181,10 @@ agent::ToolResult QuestionResult(const std::string& callId,
 bool ElicitationPermission(const Json& params, agent::PermissionRequest* out);
 Json MakeElicitationAnswer(agent::Verdict verdict);
 
+// What "acceptForSession" on a file change item allows, as lines for the
+// dialog (agent::PermissionRequest::sessionScope).  Empty when it is not known.
+std::vector<std::string> FileChangeScope(const Json& item);
+
 // ---- The stream -----------------------------------------------------------
 
 // The live stream, message by message.  A class, because a call is complete
@@ -204,6 +208,9 @@ class Translator {
 
   // The call an item/started announced and that has not finished yet.
   bool FindCall(const std::string& itemId, agent::ToolCall* out) const;
+  // The same, as Codex sent it: what an approval allows is read from the
+  // item, and the call made of it has lost the shape (paths joined by commas).
+  bool FindItem(const std::string& itemId, Json* out) const;
 
   const std::string& model() const { return model_; }
 
@@ -230,7 +237,7 @@ class Translator {
                  std::vector<agent::Event>* out);
   void ReportTasks(std::vector<agent::Event>* out) const;
 
-  std::map<std::string, agent::ToolCall> running_;
+  std::map<std::string, Json> running_;  // items announced, by id
   std::string thread_;
   // Codex sends no list of what runs in the background, so it is kept here:
   // subagents from subAgentActivity, by thread id, in the order they started;
