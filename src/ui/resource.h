@@ -62,6 +62,9 @@
 #define IDC_PERM_REASON         1052
 // Shown only when the backend offers it (agent::Verdict::AllowForSession).
 #define IDC_PERM_SESSION        1053
+// What the session button lets through; hidden with it (claude-gui-lkk.62).
+#define IDC_PERM_SCOPE          1054
+#define IDC_PERM_SCOPE_LABEL        1063
 
 #define IDC_PERM_INPUT_LABEL        1060
 #define IDC_PERM_DESCRIPTION_LABEL  1061

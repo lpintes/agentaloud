@@ -68,6 +68,19 @@ bool PermissionDialog::OnInit() {
   for (agent::Verdict offered : request_.offered) {
     if (offered == agent::Verdict::AllowForSession) session = true;
   }
+  // The scope goes with the button.  Where the adapter cannot say it, the
+  // field is hidden too, rather than shown empty and read as "nothing".
+  std::wstring scope;
+  for (const std::string& line : request_.sessionScope) {
+    if (!scope.empty()) scope += L'\n';
+    scope += model::Utf16FromUtf8(line);
+  }
+  if (session && !scope.empty()) {
+    SetTextLines(IDC_PERM_SCOPE, scope);
+  } else {
+    ShowWindow(Item(IDC_PERM_SCOPE_LABEL), SW_HIDE);
+    ShowWindow(Item(IDC_PERM_SCOPE), SW_HIDE);
+  }
   if (!session) ShowWindow(Item(IDC_PERM_SESSION), SW_HIDE);
 
   // Focus into the arguments rather than onto a button.  This is the text the

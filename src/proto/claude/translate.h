@@ -121,6 +121,15 @@ extern const char kQuestionDeclinedInstruction[];
 // it replaced without starting a process.
 agent::Capabilities ClaudeCapabilities();
 
+// The CLI's permission_suggestions as lines for the reader: what "allow for
+// this session" lets through (agent::PermissionRequest::sessionScope).  One
+// line per rule, directory or mode, because one suggestion can carry several
+// -- a chain of commands comes back as a rule for each command (measured,
+// tools/probe_permission_session.py, claude-gui-lkk.62).  A shape not known
+// here is shown in the CLI's words rather than left out: a line nobody can
+// translate is still a line about what gets allowed.
+std::vector<std::string> SessionScope(const Json& suggestions);
+
 // A tool call out of its name and arguments.  The one way a call is built:
 // the transcript gets it from a tool_use block and the permission dialog from
 // a can_use_tool request, and both render what this made -- so allowing a

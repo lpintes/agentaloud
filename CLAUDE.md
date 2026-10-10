@@ -291,7 +291,9 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
     `proto::ToolCallFromInput`. Zápis do súboru začína „súbor: <cesta>"; meno
     nástroja v titulku. „Povoliť na túto session" len to, čo CLI navrhlo
     (`PermissionRequest::offered`), `destination` prepísané na `session`
-    (`proto::SessionPermissions`) — nikdy zápis na disk.
+    (`proto::SessionPermissions`) — nikdy zápis na disk. Čo tlačidlo povolí,
+    povie pole pred ním (`PermissionRequest::sessionScope`, píše adaptér):
+    reťazec príkazov = pravidlo na každú časť.
 14. **Id session určuje appka pred štartom** (`--session-id` z
     `NewSessionId`), okrem prípadu, keď rozhovor pomenúvajú `extraArgs`. To
     isté id druhýkrát nejde; obnovuje `--resume` (`Resume::ById`, prepis

@@ -160,4 +160,25 @@ std::string Utf8(std::wstring_view text) {
 
 std::string Utf8(Str id) { return Utf8(Text(id)); }
 
+std::string Utf8(Str id, std::initializer_list<std::string_view> args) {
+  // The placeholders are ASCII, and no byte of a multi-byte UTF-8 sequence
+  // is, so substituting in UTF-8 cannot split a character.
+  const std::string pattern = Utf8(id);
+  std::string out;
+  out.reserve(pattern.size());
+  for (size_t i = 0; i < pattern.size(); ++i) {
+    if (pattern[i] == '{' && i + 2 < pattern.size() && pattern[i + 1] >= '0' &&
+        pattern[i + 1] <= '9' && pattern[i + 2] == '}') {
+      const size_t index = static_cast<size_t>(pattern[i + 1] - '0');
+      if (index < args.size()) {
+        out += *(args.begin() + index);
+        i += 2;
+        continue;
+      }
+    }
+    out.push_back(pattern[i]);
+  }
+  return out;
+}
+
 }  // namespace i18n

@@ -527,4 +527,72 @@ agent::Capabilities ClaudeCapabilities() {
   return capabilities;
 }
 
+namespace {
+
+// One allow rule as a line.  The shapes are the ones the CLI was seen to
+// suggest: a command exactly ("ping -n 1 127.0.0.1"), a command prefix with a
+// redirection ("echo hello *"), a domain for WebFetch ("domain:example.com")
+// and no content at all, which is the whole tool.
+std::string RuleLine(const Json& rule) {
+  using i18n::Str;
+  const std::string tool = StringField(rule, "toolName");
+  const std::string content = StringField(rule, "ruleContent");
+  if (content.empty()) return i18n::Utf8(Str::kScopeTool, {tool});
+  if (content.compare(0, 7, "domain:") == 0) {
+    return i18n::Utf8(Str::kScopeDomain, {content.substr(7)});
+  }
+  if (tool == "Bash" || tool == "PowerShell") {
+    for (const char* wildcard : {" *", ":*"}) {
+      const std::string tail(wildcard);
+      if (content.size() > tail.size() &&
+          content.compare(content.size() - tail.size(), tail.size(), tail) ==
+              0) {
+        return i18n::Utf8(Str::kScopeCommandPrefix,
+                          {content.substr(0, content.size() - tail.size())});
+      }
+    }
+    return i18n::Utf8(Str::kScopeCommand, {content});
+  }
+  return i18n::Utf8(Str::kScopeRule, {tool, content});
+}
+
+}  // namespace
+
+std::vector<std::string> SessionScope(const Json& suggestions) {
+  using i18n::Str;
+  std::vector<std::string> lines;
+  if (!suggestions.is_array()) return lines;
+  for (const Json& suggestion : suggestions) {
+    if (!suggestion.is_object()) continue;
+    const std::string type = StringField(suggestion, "type");
+    const Json rules = suggestion.value("rules", Json());
+    const Json directories = suggestion.value("directories", Json());
+    if ((type == "addRules" || type == "replaceRules") && rules.is_array()) {
+      for (const Json& rule : rules) {
+        if (rule.is_object()) lines.push_back(RuleLine(rule));
+      }
+    } else if (type == "addDirectories" && directories.is_array()) {
+      for (const Json& directory : directories) {
+        if (directory.is_string()) {
+          lines.push_back(i18n::Utf8(Str::kScopeDirectory,
+                                     {directory.get<std::string>()}));
+        }
+      }
+    } else if (type == "setMode") {
+      // The mode's own name and gloss, the words Shift+Tab says, so that the
+      // dialog and the status bar afterwards name the same thing.
+      const std::string id = StringField(suggestion, "mode");
+      const agent::Capabilities capabilities = ClaudeCapabilities();
+      const agent::Mode* mode = agent::FindMode(capabilities, id);
+      lines.push_back(mode != nullptr
+                          ? i18n::Utf8(Str::kScopeMode,
+                                       {mode->label, mode->gloss})
+                          : i18n::Utf8(Str::kScopeModeBare, {id}));
+    } else {
+      lines.push_back(suggestion.dump());
+    }
+  }
+  return lines;
+}
+
 }  // namespace proto

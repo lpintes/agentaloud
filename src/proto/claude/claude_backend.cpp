@@ -203,7 +203,10 @@ PermissionDecision ClaudeBackend::OnPermission(
   // command that is the exact command line, for a file edit acceptEdits.
   const Json kept = SessionPermissions(request.suggestions);
   out.offered = {agent::Verdict::Allow};
-  if (!kept.is_null()) out.offered.push_back(agent::Verdict::AllowForSession);
+  if (!kept.is_null()) {
+    out.offered.push_back(agent::Verdict::AllowForSession);
+    out.sessionScope = SessionScope(request.suggestions);
+  }
   out.offered.push_back(agent::Verdict::Deny);
   const agent::PermissionAnswer answer = callbacks_.onPermission(out);
   decision.allow = answer.verdict == agent::Verdict::Allow ||

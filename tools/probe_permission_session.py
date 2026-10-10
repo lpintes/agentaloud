@@ -15,7 +15,7 @@
 #
 # Pouzitie:
 #   python tools/probe_permission_session.py <scenar>
-#   scenare: bash, write, rule, tool, none
+#   scenare: bash, ping, write, chain, fetch, rule, tool, prefix, none, asis
 #
 # Pred a po sa porovnaju bajty ~/.claude/settings.json, settings.local.json
 # a .claude/settings*.json v pracovnom priecinku.  Navrh s destination
@@ -77,6 +77,28 @@ SCENARIOS = {
             "single word beta. Do nothing else.",
             "Use the Edit tool to replace alpha with gamma in a.txt. "
             "Read it first if required. Do nothing else.",
+        ],
+    },
+    # Retazec prikazov (claude-gui-lkk.62): jeden navrh na cely retazec,
+    # alebo jeden na kazdu cast?  Treti prompt je druha cast samotna.
+    "chain": {
+        "policy": "suggest",
+        "prompts": [
+            run_prompt("ping -n 1 127.0.0.1; tracert -h 1 -w 100 127.0.0.1"),
+            run_prompt("ping -n 1 127.0.0.1; tracert -h 1 -w 100 127.0.0.1"),
+            run_prompt("tracert -h 1 -w 100 127.0.0.1"),
+        ],
+    },
+    # WebFetch: navrh na domenu, na URL, alebo na cely nastroj?
+    "fetch": {
+        "policy": "suggest",
+        "prompts": [
+            "Use the WebFetch tool to fetch https://example.com/ and say its "
+            "title. Do nothing else.",
+            "Use the WebFetch tool to fetch https://example.com/index.html "
+            "and say its title. Do nothing else.",
+            "Use the WebFetch tool to fetch https://example.org/ and say its "
+            "title. Do nothing else.",
         ],
     },
     # Ask pravidlo v projekte: navrhy by mali chybat, posle sa vlastne

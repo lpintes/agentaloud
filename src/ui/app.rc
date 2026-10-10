@@ -133,7 +133,11 @@ END
 //
 // The default button is Zamietnuť, so Enter and Esc agree.  Allowing is the
 // answer that has to be aimed at.
-IDD_PERMISSION DIALOGEX 0, 0, 320, 212
+//
+// What "Povoliť na túto session" lets through sits just before the buttons,
+// so that Tab reaches it on the way to them: it is often more than the call
+// above -- every command of a chain, every file edit (claude-gui-lkk.62).
+IDD_PERMISSION DIALOGEX 0, 0, 320, 238
 STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION APP_NAME " — povolenie"
 FONT 9, "Segoe UI", 400, 0, 1
@@ -147,12 +151,16 @@ BEGIN
                     ES_AUTOHSCROLL | ES_READONLY
 
     LTEXT           "&Argumenty:", IDC_PERM_INPUT_LABEL, 8, 46, 304, 8
-    EDITTEXT        IDC_PERM_INPUT, 8, 56, 304, 128,
+    EDITTEXT        IDC_PERM_INPUT, 8, 56, 304, 112,
                     ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL
 
-    PUSHBUTTON      "&Povoliť", IDOK, 96, 190, 56, 14
-    PUSHBUTTON      "Povoliť na &túto session", IDC_PERM_SESSION, 156, 190, 96, 14
-    DEFPUSHBUTTON   "&Zamietnuť", IDCANCEL, 256, 190, 56, 14
+    LTEXT           "&Na session sa povolí:", IDC_PERM_SCOPE_LABEL, 8, 174, 304, 8
+    EDITTEXT        IDC_PERM_SCOPE, 8, 184, 304, 30,
+                    ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL
+
+    PUSHBUTTON      "&Povoliť", IDOK, 96, 218, 56, 14
+    PUSHBUTTON      "Povoliť na &túto session", IDC_PERM_SESSION, 156, 218, 96, 14
+    DEFPUSHBUTTON   "&Zamietnuť", IDCANCEL, 256, 218, 56, 14
 END
 
 // The slash command picker.  A filter box above a list, because the list is

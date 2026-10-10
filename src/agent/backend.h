@@ -125,6 +125,11 @@ struct PermissionRequest {
   // hovorí pýtať sa").  Empty when the CLI gives no reason.
   std::string reason;
   std::vector<Verdict> offered;
+  // What AllowForSession lets through from now on, one line each, in the
+  // reader's language: often more than the call shown -- a chain of commands
+  // becomes one rule per command, a file edit the acceptEdits mode for every
+  // file (claude-gui-lkk.62).  Empty when not offered or not known.
+  std::vector<std::string> sessionScope;
   // The subagent asking, by the name its blocks go by ("Explore 2"); empty
   // for the conversation itself.  Several may wait at once, and a dialog that
   // does not say whose call it is cannot be answered (claude-gui-b8n.10).

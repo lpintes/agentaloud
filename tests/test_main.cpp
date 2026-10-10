@@ -3463,6 +3463,41 @@ void TestClaudeSessionPermissions() {
   CHECK(proto::SessionPermissions(request.suggestions).is_null());
 }
 
+// Tvary doslova zo sondy (CLI 2.1.288 a 2.1.294, claude-gui-lkk.61 a .62).
+// Retazec s ';' prisiel ako jeden navrh s pravidlom pre kazdu cast -- dialog
+// to musi povedat, lebo povolena cast potom prejde aj sama.
+void TestClaudeSessionScope() {
+  TEST("claude rozsah povolenia na session: riadok na pravidlo, mod, domenu");
+  i18n::SetLanguage(i18n::Lang::kSlovak);
+  using V = std::vector<std::string>;
+  CHECK_EQ(proto::SessionScope(proto::Json::parse(R"J([{"type":"addRules",
+      "rules":[{"toolName":"Bash","ruleContent":"ping -n 1 127.0.0.1"},
+               {"toolName":"Bash","ruleContent":"tracert -h 1 -w 100 127.0.0.1"}],
+      "behavior":"allow","destination":"localSettings"}])J")),
+           (V{"príkaz ping -n 1 127.0.0.1",
+              "príkaz tracert -h 1 -w 100 127.0.0.1"}));
+  CHECK_EQ(proto::SessionScope(proto::Json::parse(R"J([{"type":"addRules",
+      "rules":[{"toolName":"Bash","ruleContent":"echo hello *"}],
+      "behavior":"allow","destination":"localSettings"},
+      {"type":"addDirectories","directories":["C:\\b\\perm-probe\\bash"],
+       "destination":"session"}])J")),
+           (V{"každý príkaz, ktorý začína echo hello",
+              "prístup do priečinka C:\\b\\perm-probe\\bash"}));
+  CHECK_EQ(proto::SessionScope(proto::Json::parse(
+               R"J([{"type":"setMode","mode":"acceptEdits",
+                     "destination":"session"}])J")),
+           (V{"režim automatické úpravy: súbory mení sám, na príkazy sa "
+              "pýta"}));
+  CHECK_EQ(proto::SessionScope(proto::Json::parse(R"J([{"type":"addRules",
+      "destination":"localSettings","behavior":"allow",
+      "rules":[{"toolName":"WebFetch","ruleContent":"domain:example.com"}]}])J")),
+           (V{"stránky z domény example.com"}));
+  CHECK_EQ(proto::SessionScope(proto::Json::parse(R"J([{"type":"addRules",
+      "rules":[{"toolName":"mcp__x__y"}],"behavior":"allow"}])J")),
+           (V{"celý nástroj mcp__x__y, s akýmikoľvek argumentmi"}));
+  CHECK(proto::SessionScope(nullptr).empty());
+}
+
 // Nie fixtura: computer use sa na tento stroj bez Codex Desktop nedostane.
 // Tvary su doslova zo sondy s nahradnym MCP serverom
 // (tools/probe_computer_use.py, 6. 10. 2026, claude-gui-lkk.44.12).
@@ -4173,6 +4208,7 @@ int main(int argc, char** argv) {
   TestCodexBackgroundTasks();
   TestBackgroundText();
   TestClaudeSessionPermissions();
+  TestClaudeSessionScope();
   TestCodexFixtureMulti(fixtures);
   TestCodexFixtureEdit(fixtures);
   TestCodexFixtureAsk(fixtures);

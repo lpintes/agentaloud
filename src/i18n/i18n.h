@@ -88,6 +88,9 @@ size_t PluralFormsGiven(Lang lang, Plural id);
 // is no malformed text to guard against.
 std::string Utf8(std::wstring_view text);
 std::string Utf8(Str id);
+// Format for proto/: the arguments are UTF-8 off the wire -- a path, a
+// command -- and proto/ has no way to widen them (see sessions.h).
+std::string Utf8(Str id, std::initializer_list<std::string_view> args);
 
 }  // namespace i18n
 

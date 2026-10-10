@@ -31,6 +31,16 @@ Pocet otazok `can_use_tool` na scenar (tri, resp. dva prompty):
 - Ziadny scenar nezapisal do `.claude/settings*.json` projektu ani do
   `~/.claude/settings.json`.
 
+Doplnene 10. 10. 2026 (claude-gui-lkk.62, CLI 2.1.294):
+
+- `chain` (`ping -n 1 127.0.0.1; tracert -h 1 -w 100 127.0.0.1`): 1 -- CLI
+  retazec rozlozi, `decision_reason_type: "subcommandResults"`, jeden navrh
+  `addRules` s DVOMA pravidlami, kazde na presnu cast. Treti prompt (samotny
+  `tracert ...`) presiel bez otazky. Povolenie retazca teda povoli kazdu jeho
+  cast samostatne, nie retazec ako celok.
+- `fetch` (WebFetch): 2 -- navrh `ruleContent: "domain:example.com"`, ina
+  stranka tej istej domeny sa nepyta, `example.org` znova.
+
 Zaver: "Povolit na tuto session" = navrhy CLI s `destination` prepisanym na
 `"session"`, ponuknute len ked navrhy prisli. Vlastne sirsie pravidla
 (cely nastroj, prefix) funguju tiez, ale su to rozhodnutia, ktore CLI

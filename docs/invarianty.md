@@ -534,11 +534,18 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     pravidlo (celý nástroj, prefix) by CLI prijalo, ale je to rozhodnutie,
     ktoré nikto nenavrhol. Odmerané `tools/probe_permission_session.py`.
 
-    Rozsah je teda **taký, aký ho CLI navrhlo**, a dialóg ho zatiaľ nepovie
-    (claude-gui-lkk.62): pri Bash je to celý presný príkaz, pri `Write`
-    prepnutie do `acceptEdits` (CLI to ohlási `system/status` a stavový
-    riadok to zachytí), pri nástroji MCP celý nástroj. Pravidlo `ask`
-    v nastaveniach návrhy nepošle a má prednosť aj pred session pravidlom.
+    Rozsah je teda **taký, aký ho CLI navrhlo, a dialóg ho povie** v poli „Na
+    session sa povolí:" tesne pred tlačidlami (claude-gui-lkk.62), lebo býva
+    širší než volanie nad ním: pri Bash presný príkaz, ale **reťazec s `;` CLI
+    rozloží na pravidlo pre každú časť** a povolená časť potom prejde aj sama;
+    presmerovanie do súboru pridá priečinok a pýta sa zakaždým; pri `Write`
+    a `Edit` prepnutie do `acceptEdits`, teda všetky úpravy (CLI to ohlási
+    `system/status`); pri WebFetch celá doména. Riadky píše adaptér v jazyku
+    čitateľa (`agent::PermissionRequest::sessionScope`, pre Claude
+    `proto::SessionScope`), ako `reason`; neznámy tvar návrhu ide v slovách
+    CLI, nevynechá sa. Kde adaptér rozsah nevie (Codex — nezmerané), pole je
+    skryté, nie prázdne. Pravidlo `ask` v nastaveniach návrhy nepošle a má
+    prednosť aj pred session pravidlom.
 
 14. **Id session si appka určuje sama a pozná ho pred štartom procesu.** Zo
     streamu príde až so záznamom, ktorý ho nesie, a odpoveď na `initialize` ho
