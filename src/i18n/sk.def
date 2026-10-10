@@ -27,6 +27,7 @@ S(kWritten, L"zapísané")
 S(kCreated, L"vytvorené")
 S(kOutput, L"výstup")
 S(kError, L"chyba")
+S(kBlock, L"blok")
 S(kOutputEmpty, L"výstup (prázdny)")
 S(kErrorEmpty, L"chyba (prázdna)")
 S(kExpanded, L"{0}, rozbalené")
@@ -167,8 +168,9 @@ S(kKeysMoving,
   L"A — ďalšia odpoveď, Shift+A — predchádzajúca.\n"
   L"K — ďalšie premýšľanie, Shift+K — predchádzajúce.\n"
   L"E — ďalšia chyba alebo zamietnuté volanie, Shift+E — predchádzajúce.\n"
-  L"Shift znamená dozadu. Týchto šesť písmen platí len v prepise.\n"
-  L"Ctrl+Shift+T, R, P, A, K, E — to isté dopredu, aj z poľa Prompt.\n"
+  L"B — ďalší blok akéhokoľvek druhu, Shift+B — predchádzajúci.\n"
+  L"Shift znamená dozadu. Týchto sedem písmen platí len v prepise.\n"
+  L"Ctrl+Shift+T, R, P, A, K, E, B — to isté dopredu, aj z poľa Prompt.\n"
   L"Enter — zbalí alebo rozbalí blok pod kurzorom. Len v prepise.\n"
   L"Ctrl+C — skopíruje označený text. Robí to samotné pole prepisu.\n"
   L"\n"

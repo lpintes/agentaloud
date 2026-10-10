@@ -172,12 +172,12 @@ bool IsBlank(const std::wstring& text) {
 // to look at what the last tool did does not cost the prompt being typed.  It
 // has to be read as a key and not as a character: Ctrl with a letter arrives
 // in WM_CHAR as a control code, with nothing left to switch on.  The VK codes
-// for these six letters sit where the US layout puts them on the Slovak one
-// too -- QWERTZ moves only Y and Z.
+// for these letters sit where the US layout puts them on the Slovak one too --
+// QWERTZ moves only Y and Z.
 bool IsJumpChord(WPARAM key) {
   if (GetKeyState(VK_CONTROL) >= 0 || GetKeyState(VK_SHIFT) >= 0) return false;
   return key == 'T' || key == 'R' || key == 'P' || key == 'A' || key == 'K' ||
-         key == 'E';
+         key == 'E' || key == 'B';
 }
 
 // Ctrl+Shift+C, read as a key for the same reason as the jump chords: with
@@ -1040,6 +1040,12 @@ bool SessionPane::Navigate(wchar_t key) {
     case L'p': ofKind(model::BlockKind::UserPrompt); break;
     case L'a': ofKind(model::BlockKind::AssistantText); break;
     case L'k': ofKind(model::BlockKind::Thinking); break;
+    case L'b':
+      // Any block: the transcript in the order it arrived, without first
+      // having to pick what to look for.
+      match = [](const model::Block&) { return true; };
+      what = i18n::Text(Str::kBlock);
+      break;
     case L'e':
     // '!' stays as a silent alias forwards: it is one case in this switch, it
     // is already in the fingers, and dropping it would gain nothing.  It is

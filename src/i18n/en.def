@@ -26,6 +26,7 @@ S(kWritten, L"written")
 S(kCreated, L"created")
 S(kOutput, L"output")
 S(kError, L"error")
+S(kBlock, L"block")
 S(kOutputEmpty, L"output (empty)")
 S(kErrorEmpty, L"error (empty)")
 S(kExpanded, L"{0}, expanded")
@@ -165,8 +166,9 @@ S(kKeysMoving,
   L"A — next answer, Shift+A — previous.\n"
   L"K — next thinking, Shift+K — previous.\n"
   L"E — next error or denied call, Shift+E — previous.\n"
-  L"Shift means backwards. These six letters work only in the transcript.\n"
-  L"Ctrl+Shift+T, R, P, A, K, E — the same forwards, from the Prompt field too.\n"
+  L"B — next block of any kind, Shift+B — previous.\n"
+  L"Shift means backwards. These seven letters work only in the transcript.\n"
+  L"Ctrl+Shift+T, R, P, A, K, E, B — the same forwards, from the Prompt field too.\n"
   L"Enter — collapses or expands the block under the cursor. Only in the transcript.\n"
   L"Ctrl+C — copies the selected text. The transcript field does that itself.\n"
   L"\n"
