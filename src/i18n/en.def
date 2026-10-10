@@ -66,8 +66,8 @@ S(kCodexModeCustom, L"custom")
 S(kCodexModeCustomGloss, L"settings from Codex's configuration")
 
 // ui/session_pane
-S(kLabelTranscript, L"&Transcript:")
-S(kLabelPrompt, L"P&rompt (Ctrl+Enter sends):")
+S(kLabelTranscript, L"Transcript:")
+S(kLabelPrompt, L"Prompt (Ctrl+Enter sends):")
 S(kTitleRangeMismatch, L"RANGE MAP MISMATCH")
 S(kStatusProject, L"project {0}")
 S(kSessionOrdinal, L"{0} ({1})")

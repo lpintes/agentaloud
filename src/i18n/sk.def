@@ -70,8 +70,8 @@ S(kCodexModeCustom, L"vlastný")
 S(kCodexModeCustomGloss, L"nastavenie z konfigurácie Codexu")
 
 // ui/session_pane
-S(kLabelTranscript, L"&Prepis:")
-S(kLabelPrompt, L"P&rompt (Ctrl+Enter odošle):")
+S(kLabelTranscript, L"Prepis:")
+S(kLabelPrompt, L"Prompt (Ctrl+Enter odošle):")
 S(kTitleRangeMismatch, L"NESÚLAD MAPY ROZSAHOV")
 S(kStatusProject, L"projekt {0}")
 S(kSessionOrdinal, L"{0} ({1})")
