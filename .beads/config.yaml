@@ -68,3 +68,5 @@
 export.auto: true
 export:
     git-add: true
+sync:
+    remote: "git+https://github.com/lpintes/agentaloud.git"
