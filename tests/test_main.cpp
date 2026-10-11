@@ -1991,6 +1991,46 @@ void TestToolPathsAreShortened() {
   const std::wstring& summary = transcript.blocks().back().summary;
   CHECK(summary.find(L"dolezity_subor.txt") != std::wstring::npos);
   CHECK(summary.find(L"...") == size_t{6});  // hned za "Read: "
+
+  // Susedny priecinok s tou istou predponou v projekte nie je.
+  proto::Json sibling = proto::Json::parse(R"({
+    "type": "assistant",
+    "message": {"content": [
+      {"type": "tool_use", "id": "toolu_3", "name": "Read",
+       "input": {"file_path": "C:\\projekt\\appka2\\x.cpp"}}
+    ]}
+  })");
+  transcript.Append(proto::TranslateRecord(sibling));
+  CHECK_EQ(transcript.blocks().back().summary,
+           std::wstring(L"Read: C:\\projekt\\appka2\\x.cpp"));
+}
+
+// Codex pise odkazy na subory ako markdown s absolutnou cestou (zo zaznamov
+// v ~/.codex/sessions, 11. 10. 2026): "[window.h](/C:/vcs/.../window.h)".
+// Jeho appka ukaze len popis, citacka u nas precitala celu cestu.
+void TestProjectLinksBecomeRelativePaths() {
+  TEST("transcript: odkaz na subor projektu v odpovedi je relativna cesta");
+  const auto answer = [](const std::string& text) {
+    model::Transcript transcript;
+    transcript.Append({agent::WorkingDirectory{"C:\\vcs\\appka"},
+                       agent::AssistantText{text}});
+    return transcript.blocks().back().body;
+  };
+  CHECK_EQ(answer("Je v [window.h](/C:/vcs/appka/src/win/window.h) a "
+                  "[main.cpp](/C:/vcs/appka/src/main.cpp)."),
+           std::wstring(L"Je v src/win/window.h a src/main.cpp."));
+  // Riadok ako "#L" sa prepise na ":", popis s riadkom je stale chvost.
+  CHECK_EQ(answer("[window.h:42](/C:/vcs/appka/src/win/window.h#L42)"),
+           std::wstring(L"src/win/window.h:42"));
+  CHECK_EQ(answer("[x.cpp](C:\\vcs\\appka\\src\\x.cpp#L3C5)"),
+           std::wstring(L"src\\x.cpp:3:5"));
+  // Popis, ktory nie je chvostom cesty, zostane -- je to slovo modelu.
+  CHECK_EQ(answer("pozri [tu](/C:/vcs/appka/docs/a.md)"),
+           std::wstring(L"pozri tu (docs/a.md)"));
+  // Mimo projektu a obycajny odkaz zostanu, ako prisli.
+  const std::string outside =
+      "[a.txt](/C:/ine/a.txt) [web](https://example.com) [b](/C:/vcs/appka2/b)";
+  CHECK_EQ(answer(outside), model::Utf16FromUtf8(outside));
 }
 
 // Pokyn, ktory adapter posle modelu pri zamietnuti, vrati CLI v streame ako
@@ -4233,6 +4273,7 @@ int main(int argc, char** argv) {
   TestNewlinesAreOneCharacter();
   TestAnsiEscapesAreStripped();
   TestToolPathsAreShortened();
+  TestProjectLinksBecomeRelativePaths();
   TestEditAndWriteSayWhatChanged();
   TestOwnInstructionsStayOutOfTranscript();
   TestPermissionTextMatchesTranscript();

@@ -1,5 +1,6 @@
 #include "model/transcript.h"
 
+#include <algorithm>
 #include <cwchar>
 
 #include "i18n/i18n.h"
@@ -188,7 +189,11 @@ std::wstring Count(size_t lines) {
 // Comparison is case-insensitive and treats the two separators as one: the
 // working directory arrives from system/init with forward slashes and tool
 // arguments come back with backslashes, for the same file.
-std::wstring ShortenPath(const std::wstring& path, const std::wstring& root) {
+bool IsSeparator(wchar_t c) { return c == L'\\' || c == L'/'; }
+
+// Where the part of `path` below `root` starts, or npos.  The root has to end
+// at a separator: "C:\p\appka2\x" is not under "C:\p\appka".
+size_t BelowRoot(const std::wstring& path, const std::wstring& root) {
   const auto same = [](wchar_t left, wchar_t right) {
     if (left == L'/') left = L'\\';
     if (right == L'/') right = L'\\';
@@ -196,11 +201,21 @@ std::wstring ShortenPath(const std::wstring& path, const std::wstring& root) {
     if (right >= L'A' && right <= L'Z') right = static_cast<wchar_t>(right + 32);
     return left == right;
   };
-  if (!root.empty() && path.size() > root.size() &&
-      std::equal(root.begin(), root.end(), path.begin(), same)) {
-    size_t at = root.size();
-    if (path[at] == L'\\' || path[at] == L'/') ++at;
-    if (at < path.size()) return path.substr(at);
+  if (root.empty() || path.size() <= root.size() ||
+      !std::equal(root.begin(), root.end(), path.begin(), same)) {
+    return std::wstring::npos;
+  }
+  size_t at = root.size();
+  if (!IsSeparator(root.back())) {
+    if (!IsSeparator(path[at])) return std::wstring::npos;
+    ++at;
+  }
+  return at < path.size() ? at : std::wstring::npos;
+}
+
+std::wstring ShortenPath(const std::wstring& path, const std::wstring& root) {
+  if (const size_t at = BelowRoot(path, root); at != std::wstring::npos) {
+    return path.substr(at);
   }
   // Not under the project: keep the tail, mark that the head is gone.  The
   // limit is the summary's, less the room the tool name and the marker take.
@@ -209,6 +224,70 @@ std::wstring ShortenPath(const std::wstring& path, const std::wstring& root) {
     return L"..." + path.substr(path.size() - kPathLimit);
   }
   return path;
+}
+
+// A markdown link to a file of the project, as the path below the project.
+// Codex writes its file references as "[window.h](/C:/vcs/.../src/win/window.h)"
+// -- its own app shows the label and hides the target, and here both are read
+// out, the whole absolute path at every file it mentions.  Claude writes
+// "src/win/window.h:42" and nothing needs doing.
+//
+// The relative path is more than the label ("window.h" is its tail), so the
+// label goes when it is the path's tail and stays in front otherwise: a link
+// worded "here" would otherwise lose the only word the model chose.  A line
+// "#L42" becomes ":42", the way the rest of the transcript writes it.  Links
+// out of the project are left as they came -- shortening those is guessing.
+std::wstring UnlinkProjectPaths(const std::wstring& text,
+                                const std::wstring& root) {
+  if (root.empty()) return text;
+  std::wstring out;
+  size_t from = 0;
+  for (size_t mid = text.find(L"]("); mid != std::wstring::npos;
+       mid = text.find(L"](", mid + 2)) {
+    const size_t open = text.find_last_of(L"[]\n", mid == 0 ? 0 : mid - 1);
+    if (open == std::wstring::npos || text[open] != L'[' || open < from) {
+      continue;
+    }
+    const size_t close = text.find_first_of(L") \t\n", mid + 2);
+    if (close == std::wstring::npos || text[close] != L')') continue;
+
+    std::wstring target = text.substr(mid + 2, close - mid - 2);
+    if (target.size() > 2 && target[0] == L'/' && target[2] == L':') {
+      target.erase(0, 1);  // "/C:/..." is a URL path, the file is "C:/..."
+    }
+    std::wstring line;
+    if (const size_t hash = target.find(L"#L"); hash != std::wstring::npos) {
+      line = L":" + target.substr(hash + 2);
+      std::replace(line.begin(), line.end(), L'C', L':');
+      target.erase(hash);
+    }
+    const size_t below = BelowRoot(target, root);
+    if (below == std::wstring::npos) continue;
+    const std::wstring path = target.substr(below);
+
+    const std::wstring label = text.substr(open + 1, mid - open - 1);
+    // The label is the path's tail when the path ends with it at a separator,
+    // with or without the line.
+    const auto isTail = [&label](const std::wstring& whole) {
+      if (label.empty() || label.size() > whole.size()) return false;
+      const size_t at = whole.size() - label.size();
+      for (size_t i = 0; i < label.size(); ++i) {
+        const wchar_t a = whole[at + i], b = label[i];
+        if (a != b && !(IsSeparator(a) && IsSeparator(b))) return false;
+      }
+      return at == 0 || IsSeparator(whole[at - 1]);
+    };
+    const bool keepLabel = !isTail(path + line) && !isTail(path);
+    out.append(text, from, open - from);
+    if (keepLabel) out += label + L" (";
+    out += path + line;
+    if (keepLabel) out += L')';
+    from = close + 1;
+    mid = close - 1;
+  }
+  if (from == 0) return text;
+  out.append(text, from, std::wstring::npos);
+  return out;
 }
 
 // The questions of a call that puts them to the reader, as text.  Without
@@ -705,7 +784,7 @@ std::vector<Edit> Transcript::Append(const std::vector<agent::Event>& events) {
     if (const auto* text = std::get_if<agent::AssistantText>(&event)) {
       const std::wstring wide = Widen(text->text);
       if (wide.empty()) continue;
-      made.push_back(MakeAssistantText(wide));
+      made.push_back(MakeAssistantText(UnlinkProjectPaths(wide, projectRoot_)));
       made.back().speaker = Widen(text->by);
     } else if (const auto* thinking = std::get_if<agent::Thinking>(&event)) {
       const std::wstring wide = Widen(thinking->text);

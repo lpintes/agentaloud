@@ -160,8 +160,11 @@ zmenách.
 v `.git-blame-ignore-revs` (claude-gui-lkk.64).
 
 Repozitár je od 5. 10. 2026 verejný a stojí na tom updater (invariant 23).
-Databáza beadov (Dolt) sa na GitHub neposiela — remote je odstránený a jedinou
-kópiou v gite je pasívny export `.beads/issues.jsonl`.
+Databáza beadov (Dolt) sa na GitHub neposiela. Dolt remote `origin` je
+pridaný len preto, aby každý zápis neopakoval „auto-export warning: no Dolt
+remote configured"; **`bd dolt push` sa nespúšťa**, zverejnil by celú históriu.
+`dolt.local-only` na to nestačí — varovanie neumlčí a remote s ním nejde
+pridať. Jedinou kópiou v gite je pasívny export `.beads/issues.jsonl`.
 
 ## Architecture Overview
 
