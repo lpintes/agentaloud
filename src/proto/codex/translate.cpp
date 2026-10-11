@@ -485,6 +485,12 @@ agent::ToolResult ToolResultFromItem(const Json& item) {
     if (error.is_object()) {
       result.text = StringField(error, "message");
       result.isError = true;
+      // The reader's own "no" in the permission dialog, in Codex's English
+      // (measured, tools/probe_computer_use.notes.md); said as every other
+      // denial is.
+      if (result.text == "user rejected MCP tool call") {
+        result.text = i18n::Utf8(i18n::Str::kToolDeclined);
+      }
     } else {
       result.text = ContentText(Field(Field(item, "result"), "content"));
     }
@@ -626,6 +632,12 @@ bool ElicitationPermission(const Json& params, agent::PermissionRequest* out) {
   request.call.name = StringField(params, "serverName");
   ArgumentFields(Field(meta, "tool_params"), &request.call);
   request.description = StringField(meta, "tool_description");
+  // Codex's question and the server's come one after the other, both about
+  // the same server; with the same caption the reader could not tell who was
+  // asking (claude-gui-lkk.44.14).  Only Codex's carries an approval kind.
+  if (StringField(meta, "codex_approval_kind").empty()) {
+    request.title = i18n::Utf8(i18n::Str::kPermServerAsks, {request.call.name});
+  }
   // Codex's (or the server's) own question.  Already words, in English.
   request.reason = StringField(params, "message");
   // `_meta.persist` lists what Codex can remember -- "session" and "always"

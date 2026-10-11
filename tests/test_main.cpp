@@ -3552,6 +3552,21 @@ void TestCodexElicitation() {
   CHECK(request.offered == (std::vector<agent::Verdict>{agent::Verdict::Allow,
                                                         agent::Verdict::Deny}));
   CHECK(request.sessionScope.empty());
+  // Oba dialogy su o tom istom serveri; titulok musi povedat, kto sa pyta
+  // (claude-gui-lkk.44.14).
+  CHECK_EQ(request.title, std::string("otázka servera fakecu"));
+  CHECK(proto::codex::ElicitationPermission(codexAsks, &request));
+  CHECK(request.title.empty());
+
+  // Zamietnutie prveho dialogu: vysledok po anglicky od Codexu, prepis ho
+  // povie ako kazde ine zamietnutie.
+  const agent::ToolResult rejected =
+      proto::codex::ToolResultFromItem(proto::Json::parse(
+          R"({"type":"mcpToolCall","id":"x","server":"fakecu",
+              "tool":"open_app","status":"failed","result":null,
+              "error":{"message":"user rejected MCP tool call"}})"));
+  CHECK(rejected.isError);
+  CHECK_EQ(rejected.text, std::string("zamietnuté"));
 
   proto::Json form = pluginAsks;
   form["requestedSchema"]["properties"] = {{"name", {{"type", "string"}}}};
