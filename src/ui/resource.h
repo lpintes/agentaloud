@@ -18,6 +18,7 @@
 #define IDD_FIND            106
 #define IDD_ABOUT           107
 #define IDD_TASKS           108
+#define IDD_PLAN_APPROVAL   109
 
 #define IDC_DETAILS_ID          1000
 #define IDC_DETAILS_MODEL       1001
@@ -111,5 +112,15 @@
 // Úlohy na pozadí.  See ui/tasks_dialog.h.
 #define IDC_TASKS_LIST          1160
 #define IDC_TASKS_LIST_LABEL    1161
+
+// Schválenie plánu.  See ui/plan_dialog.h.
+#define IDC_PLAN_TEXT           1170
+#define IDC_PLAN_MODE           1171
+#define IDC_PLAN_FEEDBACK       1172
+#define IDC_PLAN_REVISE         1173
+
+#define IDC_PLAN_TEXT_LABEL     1180
+#define IDC_PLAN_MODE_LABEL     1181
+#define IDC_PLAN_FEEDBACK_LABEL 1182
 
 #endif

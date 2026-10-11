@@ -560,6 +560,17 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     Obe povolenia prežijú do ďalšieho ťahu v tom istom vlákne. Pri príkaze
     Codex `acceptForSession` neponúka, takže pole nie je.
 
+    Plán na schválenie (Claude `ExitPlanMode`) prichádza ako povolenie, ale
+    dialóg má vlastný (`ui::AskPlanApproval`, claude-gui-lkk.43). Panel ho
+    spozná len podľa `PermissionRequest::modesAfter`, nie podľa mena nástroja.
+    Schválenie nesie režim, v ktorom session pokračuje (adaptér ho pošle ako
+    `setMode` so schválením; odmerané, `tools/probe_plan_exit.py`: vyhrá nad
+    `prePlanMode`, do ktorého by sa CLI inak vrátilo). Predvolený je ten,
+    ktorý by CLI zvolilo samo. „Plánovať ďalej" je zamietnutie so slovami
+    čitateľa, Esc bez nich. Text plánu je ten istý `RenderToolCall` — no
+    naostro sa po vrátení plánu text v dialógu a v riadku prepisu rozišiel
+    (claude-gui-lkk.67).
+
 14. **Id session si appka určuje sama a pozná ho pred štartom procesu.** Zo
     streamu príde až so záznamom, ktorý ho nesie, a odpoveď na `initialize` ho
     nemá: v projekte bez `SessionStart` hookov je teda známe až po prvom ťahu

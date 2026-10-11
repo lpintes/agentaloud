@@ -222,6 +222,12 @@ S(kDlgFindOk)
 S(kDlgTasksCaption)
 S(kDlgTasksList)
 S(kDlgTasksStop)
+S(kDlgPlanCaption)
+S(kDlgPlanText)
+S(kDlgPlanMode)
+S(kDlgPlanFeedback)
+S(kDlgPlanApprove)
+S(kDlgPlanRevise)
 
 // What the dialogs say at run time.
 S(kAskOtherItem)

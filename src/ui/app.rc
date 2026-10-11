@@ -281,6 +281,38 @@ BEGIN
     PUSHBUTTON      "&Zavrieť", IDCANCEL, 196, 120, 56, 14
 END
 
+// Schválenie plánu (ExitPlanMode).  The plan, the mode to go on in, and what
+// to change if it goes back.  There is no Cancel button: Esc still arrives as
+// IDCANCEL and sends the plan back without words, which is what a box closed
+// without an answer should mean -- nothing starts running on it.
+//
+// "Plánovať ďalej" is the default button, as Zamietnuť is in the permission
+// prompt: Enter in the feedback field sends the words, and approving -- the
+// answer that lets the agent act -- has to be aimed at.  The feedback field
+// has no ES_WANTRETURN for the same reason; Ctrl+Enter breaks a line in it.
+IDD_PLAN_APPROVAL DIALOGEX 0, 0, 320, 226
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION APP_NAME " — schválenie plánu"
+FONT 9, "Segoe UI", 400, 0, 1
+BEGIN
+    LTEXT           "P&lán:", IDC_PLAN_TEXT_LABEL, 8, 8, 304, 8
+    EDITTEXT        IDC_PLAN_TEXT, 8, 18, 304, 112,
+                    ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL
+
+    LTEXT           "Po schválení pokračovať v &režime:", IDC_PLAN_MODE_LABEL,
+                    8, 138, 304, 8
+    COMBOBOX        IDC_PLAN_MODE, 8, 148, 304, 60,
+                    CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+
+    LTEXT           "Čo v pláne &zmeniť (nepovinné):", IDC_PLAN_FEEDBACK_LABEL,
+                    8, 166, 304, 8
+    EDITTEXT        IDC_PLAN_FEEDBACK, 8, 176, 304, 26,
+                    ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL
+
+    PUSHBUTTON      "&Schváliť", IDOK, 176, 206, 56, 14
+    DEFPUSHBUTTON   "Plánovať ď&alej", IDC_PLAN_REVISE, 236, 206, 76, 14
+END
+
 // O programe.  The facts are a read-only box like the key list, so that the
 // version and the address can be read by character and copied.
 IDD_ABOUT DIALOGEX 0, 0, 240, 104

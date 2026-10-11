@@ -298,6 +298,9 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
     povie pole pred ním (`PermissionRequest::sessionScope`, píše adaptér):
     reťazec príkazov = pravidlo na každú časť. Codex: MCP = celý nástroj
     servera, úprava = len súbory patchu (cesty z itemu cez `itemId`).
+    Plán (`ExitPlanMode`) má vlastný dialóg (`ui::AskPlanApproval`), panel ho
+    spozná podľa `modesAfter`: schválenie nesie režim (`setMode`), „Plánovať
+    ďalej" je zamietnutie so slovami čitateľa, Esc bez nich.
 14. **Id session určuje appka pred štartom** (`--session-id` z
     `NewSessionId`), okrem prípadu, keď rozhovor pomenúvajú `extraArgs`. To
     isté id druhýkrát nejde; obnovuje `--resume` (`Resume::ById`, prepis

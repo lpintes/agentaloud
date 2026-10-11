@@ -16,6 +16,7 @@
 #include "ui/find_dialog.h"
 #include "ui/keys_dialog.h"
 #include "ui/permission_dialog.h"
+#include "ui/plan_dialog.h"
 #include "ui/resource.h"
 #include "ui/tasks_dialog.h"
 #include "win/clipboard.h"
@@ -858,6 +859,13 @@ LRESULT SessionPane::OnPermission(LPARAM pointer) {
   // there is an answer.
   SignalWaiting();
 
+  // A plan put up for approval asks for a mode and maybe words, not a yes
+  // (claude-gui-lkk.43).  The pane knows it only by the modes it comes with.
+  if (!pending->request->modesAfter.empty()) {
+    AskPlanApproval(host_, *pending->request, backend_->capabilities().modes,
+                    &pending->answer);
+    return 0;
+  }
   pending->answer.verdict = AskPermission(host_, *pending->request);
   // No message: what the model is told on a denial is the adapter's to say
   // (proto::kDeniedInstruction for Claude).
