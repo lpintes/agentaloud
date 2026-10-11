@@ -13,6 +13,49 @@ const char kDeniedInstruction[] =
 const char kQuestionDeclinedInstruction[] =
     "The user closed the question without answering. Do not ask it again; "
     "ask in plain text what to do next.";
+const char kExitPlanModeTool[] = "ExitPlanMode";
+
+namespace {
+
+// The opening is what MakeToolResult recognises; the reader's words follow
+// it on a line of their own.
+const char kKeepPlanningInstruction[] =
+    "The user wants to keep planning and did not approve the plan. Do not "
+    "start the work.";
+const char kKeepPlanningAsk[] = " Ask what to change in the plan.";
+const char kKeepPlanningRevise[] =
+    " Revise the plan and present it again. What the user wants changed:\n";
+
+}  // namespace
+
+std::string KeepPlanningInstruction(const std::string& feedback) {
+  if (feedback.empty()) {
+    return std::string(kKeepPlanningInstruction) + kKeepPlanningAsk;
+  }
+  return std::string(kKeepPlanningInstruction) + kKeepPlanningRevise + feedback;
+}
+
+std::vector<std::string> PlanModesAfter(const std::vector<std::string>& refused,
+                                        const std::string& before,
+                                        std::string* preselected) {
+  auto isRefused = [&refused](const std::string& mode) {
+    return std::find(refused.begin(), refused.end(), mode) != refused.end();
+  };
+  // "manual" is the CLI's other word for default (ClaudeCapabilities).  A
+  // refused mode the CLI would not go back to either: auto with its gate
+  // closed falls to default.
+  std::string usual = before;
+  if (usual.empty() || usual == "manual" || isRefused(usual)) usual = "default";
+  std::vector<std::string> modes;
+  for (const char* mode : {"auto", "acceptEdits", "default"}) {
+    if (!isRefused(mode)) modes.push_back(mode);
+  }
+  if (std::find(modes.begin(), modes.end(), usual) == modes.end()) {
+    modes.insert(modes.begin(), usual);
+  }
+  *preselected = usual;
+  return modes;
+}
 
 namespace {
 
@@ -146,6 +189,13 @@ agent::ToolResult MakeToolResult(const Json& block) {
     result.text = i18n::Utf8(i18n::Str::kToolDeclined);
   } else if (result.isError && result.text == kQuestionDeclinedInstruction) {
     result.text = i18n::Utf8(i18n::Str::kNoAnswer);
+  } else if (result.isError &&
+             result.text.rfind(kKeepPlanningInstruction, 0) == 0) {
+    // The reader's own words stay; only the part for the model goes.
+    const size_t words = result.text.find('\n');
+    std::string text = i18n::Utf8(i18n::Str::kPlanReturned);
+    if (words != std::string::npos) text += result.text.substr(words);
+    result.text = std::move(text);
   }
   return result;
 }

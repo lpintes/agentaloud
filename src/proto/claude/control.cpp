@@ -157,6 +157,13 @@ void PermissionModeTracker::Seed(const std::string& mode) {
   reported_ = mode;
 }
 
+void PermissionModeTracker::SetReported(const std::string& mode) {
+  if (mode == "plan" && !reported_.empty() && reported_ != "plan") {
+    beforePlan_ = reported_;
+  }
+  reported_ = mode;
+}
+
 void PermissionModeTracker::Requested(const std::string& requestId,
                                       const std::string& mode) {
   pendingId_ = requestId;
@@ -166,7 +173,7 @@ void PermissionModeTracker::Requested(const std::string& requestId,
 
 void PermissionModeTracker::Report(const std::string& mode) {
   if (mode.empty()) return;
-  reported_ = mode;
+  SetReported(mode);
   if (pendingId_.empty()) current_ = mode;
 }
 
@@ -196,7 +203,7 @@ void PermissionModeTracker::Observe(const Json& record) {
   if (subtype == "success" &&
       ParseSetPermissionModeResponse(record, &ignore, &echoed) &&
       !echoed.empty()) {
-    reported_ = echoed;
+    SetReported(echoed);
   }
   auto asked = asked_.find(id);
   if (asked != asked_.end()) {

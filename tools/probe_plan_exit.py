@@ -19,8 +19,14 @@
 #   ... 300                                  start rovno v plan
 #   ... 300 auto plan                        z auto priamo do plan
 #   ... 300 auto default,acceptEdits,plan    z auto cestou Shift+Tabu
+#   ... 300 auto default,acceptEdits,plan auto
+#                                            to iste, schvalenie nesie setMode auto
 #
 # Prepnutia sa poslu ako set_permission_mode po initialize, pred promptom.
+#
+# Stvrta otazka (claude-gui-lkk.43): vyhra rezim poslany so schvalenim ako
+# updatedPermissions [{type: setMode, destination: session, mode}] nad
+# prePlanMode?  Terminal tak posiela volbu 'Yes, and use auto mode'.
 #
 # Na can_use_tool pre ExitPlanMode sa odpovie allow s nezmenenym vstupom; na
 # vsetko ostatne deny, nech druhy tah nic nezapise.  Vypisuje sa len to, co sa
@@ -63,6 +69,7 @@ def main():
     seconds = float(sys.argv[1]) if len(sys.argv) > 1 else 240.0
     start_mode = sys.argv[2] if len(sys.argv) > 2 else "plan"
     switches = [m for m in sys.argv[3].split(",") if m] if len(sys.argv) > 3 else []
+    approve_mode = sys.argv[4] if len(sys.argv) > 4 else None
     workdir = tempfile.mkdtemp(prefix="probe_plan_exit_")
     child = subprocess.Popen(
         ARGS + ["--permission-mode", start_mode], cwd=workdir, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -98,10 +105,15 @@ def main():
                 request = record.get("request") or {}
                 name = request.get("tool_name")
                 allow = name == "ExitPlanMode"
-                say("can_use_tool", name, "-> allow" if allow else "-> deny")
+                say("can_use_tool", name, "-> allow" if allow else "-> deny",
+                    "suggestions=%s" % json.dumps(request.get("permission_suggestions")))
                 if allow:
                     body = {"behavior": "allow",
                             "updatedInput": request.get("input") or {}}
+                    if approve_mode:
+                        body["updatedPermissions"] = [
+                            {"type": "setMode", "destination": "session",
+                             "mode": approve_mode}]
                 else:
                     body = {"behavior": "deny", "message": "probe: nie"}
                 send(child, {"type": "control_response",

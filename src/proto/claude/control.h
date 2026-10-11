@@ -281,12 +281,22 @@ class PermissionModeTracker {
   // comes from settings and is genuinely not known.
   const std::string& current() const { return current_; }
   const std::vector<std::string>& refused() const { return refused_; }
+  // The mode the CLI last said before it said plan: where approving
+  // ExitPlanMode takes the session unless told otherwise -- the CLI's own
+  // prePlanMode.  Followed on the CLI's word, not on current(), because that
+  // is what the CLI keeps; a Shift+Tab through acceptEdits to plan therefore
+  // gives acceptEdits, not the mode the reader started from (measured,
+  // tools/probe_plan_exit.py, claude-gui-lkk.43).  Empty for a session that
+  // started in plan; the CLI then goes to default.
+  const std::string& beforePlan() const { return beforePlan_; }
 
  private:
   void Report(const std::string& mode);
+  void SetReported(const std::string& mode);
 
   std::string current_;
   std::string reported_;
+  std::string beforePlan_;
   std::string pendingId_;
   // Every request not answered yet, newest or not: a refusal of an older one
   // is still a refusal of its mode.

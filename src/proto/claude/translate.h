@@ -114,6 +114,24 @@ std::vector<agent::Event> TranslateHistory(const std::vector<Json>& records,
 extern const char kDeniedInstruction[];
 extern const char kQuestionDeclinedInstruction[];
 
+// The plan sent back: "keep planning", with the reader's words on what to
+// change when there are any.  Recognised in the stream the same way, by its
+// fixed opening, and shown as "plán vrátený" with the reader's words after it.
+std::string KeepPlanningInstruction(const std::string& feedback);
+
+// The tool whose approval ends planning (agent::PermissionRequest::modesAfter).
+extern const char kExitPlanModeTool[];
+
+// The modes approving a plan can go on in, in the order the dialog offers
+// them -- the terminal's: auto, acceptEdits, default -- less any the CLI has
+// refused this session.  `before` is where the CLI goes by itself
+// (PermissionModeTracker::beforePlan); it comes back in `*preselected`, and
+// is added to the list when it is none of the three (a session started in
+// dontAsk).  Empty `before` means default, which is what the CLI does then.
+std::vector<std::string> PlanModesAfter(const std::vector<std::string>& refused,
+                                        const std::string& before,
+                                        std::string* preselected);
+
 // What Claude Code can do, in the port's words -- above all its permission
 // modes, their names in the reader's language and the order Shift+Tab steps
 // through them.  Here

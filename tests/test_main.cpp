@@ -2082,6 +2082,90 @@ void TestOwnInstructionsStayOutOfTranscript() {
   }
 }
 
+// Schvalenie planu (claude-gui-lkk.43).  Sonda tools/probe_plan_exit.py na CLI
+// 2.1.294: cesta auto -> default -> acceptEdits -> plan sa po schvaleni vrati
+// do acceptEdits, lebo CLI si pamata rezim tesne pred planom -- nie ten, z
+// ktoreho citatel vysiel.  setMode poslany so schvalenim nad tym vyhra.
+void TestPlanApproval() {
+  TEST("plan: rezim po schvaleni a plan vrateny s textom");
+
+  // Rezim pred planom ide po slove CLI, vratane prechodov cez Shift+Tab.
+  proto::PermissionModeTracker tracker;
+  tracker.Seed("auto");
+  tracker.Observe(ModeStatus("default"));
+  tracker.Observe(ModeStatus("acceptEdits"));
+  tracker.Observe(ModeStatus("plan"));
+  CHECK_EQ(tracker.beforePlan(), std::string("acceptEdits"));
+  // Ozvena toho isteho rezimu ho neprepise na plan.
+  tracker.Observe(ModeStatus("plan"));
+  CHECK_EQ(tracker.beforePlan(), std::string("acceptEdits"));
+  // Session zacata v plane nema odkial; CLI potom ide do default.
+  proto::PermissionModeTracker started;
+  started.Seed("plan");
+  CHECK_EQ(started.beforePlan(), std::string());
+
+  std::string chosen;
+  std::vector<std::string> modes = proto::PlanModesAfter({}, "acceptEdits",
+                                                         &chosen);
+  CHECK_EQ(modes.size(), size_t{3});
+  if (modes.size() == 3) {
+    CHECK_EQ(modes[0], std::string("auto"));
+    CHECK_EQ(modes[1], std::string("acceptEdits"));
+    CHECK_EQ(modes[2], std::string("default"));
+  }
+  CHECK_EQ(chosen, std::string("acceptEdits"));
+  CHECK_EQ((proto::PlanModesAfter({}, "", &chosen), chosen),
+           std::string("default"));
+  CHECK_EQ((proto::PlanModesAfter({}, "manual", &chosen), chosen),
+           std::string("default"));
+  // Odmietnuty auto sa neponuka, a ked bol pred planom, CLI ide do default.
+  modes = proto::PlanModesAfter({"auto"}, "auto", &chosen);
+  CHECK_EQ(modes.size(), size_t{2});
+  CHECK_EQ(chosen, std::string("default"));
+  // Rezim mimo troch sa prida na zaciatok, nech sa da zostat v nom.
+  modes = proto::PlanModesAfter({}, "dontAsk", &chosen);
+  CHECK_EQ(modes.size(), size_t{4});
+  if (!modes.empty()) CHECK_EQ(modes[0], std::string("dontAsk"));
+  CHECK_EQ(chosen, std::string("dontAsk"));
+
+  // Pokyn pre model sa v prepise nahradi, slova citatela zostanu.
+  const auto result = [](const std::string& id, const std::string& text) {
+    proto::Json block = {{"type", "tool_result"},
+                         {"content", text},
+                         {"is_error", true},
+                         {"tool_use_id", id}};
+    proto::Json record = {{"type", "user"}};
+    record["message"] = {{"role", "user"},
+                         {"content", proto::Json::array({block})}};
+    return record;
+  };
+  model::Transcript transcript;
+  transcript.Append(proto::TranslateRecord(proto::Json::parse(R"({
+    "type": "assistant",
+    "message": {"content": [
+      {"type": "tool_use", "id": "toolu_P", "name": "ExitPlanMode",
+       "input": {"plan": "1. subor"}},
+      {"type": "tool_use", "id": "toolu_R", "name": "ExitPlanMode",
+       "input": {"plan": "2. subor"}}
+    ]}
+  })")));
+  transcript.Append(proto::TranslateRecord(
+      result("toolu_P", proto::KeepPlanningInstruction(""))));
+  transcript.Append(proto::TranslateRecord(
+      result("toolu_R", proto::KeepPlanningInstruction("bez testov\ndva"))));
+  std::vector<const model::Block*> results;
+  for (const model::Block& block : transcript.blocks()) {
+    if (block.kind == model::BlockKind::ToolResult) results.push_back(&block);
+  }
+  CHECK_EQ(results.size(), size_t{2});
+  if (results.size() == 2) {
+    CHECK_EQ(results[0]->body, std::wstring(L"plán vrátený na prepracovanie"));
+    CHECK_EQ(results[1]->body,
+             std::wstring(L"plán vrátený na prepracovanie\nbez testov\ndva"));
+    CHECK(results[1]->body.find(L"Revise") == std::wstring::npos);
+  }
+}
+
 void TestEditAndWriteSayWhatChanged() {
   TEST("transcript: Edit a Write hovoria zmenu, nie vypis poli");
   model::Transcript transcript;
@@ -4276,6 +4360,7 @@ int main(int argc, char** argv) {
   TestProjectLinksBecomeRelativePaths();
   TestEditAndWriteSayWhatChanged();
   TestOwnInstructionsStayOutOfTranscript();
+  TestPlanApproval();
   TestPermissionTextMatchesTranscript();
   TestFailedToolResultReadsLikeAnError();
   TestEmptyBlocksAreDropped();

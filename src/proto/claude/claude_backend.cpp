@@ -208,11 +208,29 @@ PermissionDecision ClaudeBackend::OnPermission(
     out.sessionScope = SessionScope(request.suggestions);
   }
   out.offered.push_back(agent::Verdict::Deny);
+  // Approving a plan also picks the mode to go on in.  The CLI keeps a mode
+  // sent with the approval over the one planning was entered from (measured,
+  // tools/probe_plan_exit.py, claude-gui-lkk.43) -- the same setMode the
+  // terminal's own plan dialog sends.
+  const bool plan = request.toolName == kExitPlanModeTool;
+  if (plan) {
+    out.modesAfter = PlanModesAfter(session_.refusedModes(),
+                                    session_.modeBeforePlan(), &out.modeAfter);
+  }
   const agent::PermissionAnswer answer = callbacks_.onPermission(out);
   decision.allow = answer.verdict == agent::Verdict::Allow ||
                    answer.verdict == agent::Verdict::AllowForSession;
   if (answer.verdict == agent::Verdict::AllowForSession) {
     decision.updatedPermissions = kept;
+  }
+  if (plan && decision.allow && !answer.mode.empty()) {
+    decision.updatedPermissions = Json::array(
+        {Json{{"type", "setMode"}, {"destination", "session"},
+              {"mode", answer.mode}}});
+  }
+  if (plan && !decision.allow) {
+    decision.denyMessage = KeepPlanningInstruction(answer.feedback);
+    return decision;
   }
   // What the model is told is the adapter's to write, not the pane's: the
   // pane does not know which CLI it is talking to, nor that the words come

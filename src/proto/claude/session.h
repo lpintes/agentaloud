@@ -154,6 +154,8 @@ class Session {
   std::string permissionMode() const;
   // Modes the CLI refused to switch to in this session (PermissionModeTracker).
   std::vector<std::string> refusedModes() const;
+  // Where approving ExitPlanMode goes by itself (PermissionModeTracker).
+  std::string modeBeforePlan() const;
 
  private:
   void OnBytes(std::string_view bytes);

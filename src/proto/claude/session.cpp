@@ -272,6 +272,11 @@ std::vector<std::string> Session::refusedModes() const {
   return mode_.refused();
 }
 
+std::string Session::modeBeforePlan() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return mode_.beforePlan();
+}
+
 bool Session::SendJson(const Json& value) {
   const std::string line = value.dump() + "\n";
   std::lock_guard<std::mutex> lock(writeMutex_);
