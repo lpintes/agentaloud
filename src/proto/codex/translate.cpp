@@ -84,11 +84,16 @@ const std::set<std::string>& IgnoredMethods() {
 }
 
 // Items that are not calls and have nothing to show either.
+//
+// functionCallOutput is in the schema but has never come: a call whose
+// arguments Codex refuses to parse leaves no item at all, live or in
+// thread/resume, only an ERROR line on stderr (Codex 0.160.0,
+// claude-gui-lkk.44.10).  It is left out so that the first one to come is
+// reported and its shape looked at, not hidden as if it were known.
 const std::set<std::string>& QuietItems() {
   static const std::set<std::string> types = {
       "contextCompaction", "enteredReviewMode", "exitedReviewMode",
       "hookPrompt",        "subAgentActivity",  "sleep",
-      "functionCallOutput",
   };
   return types;
 }

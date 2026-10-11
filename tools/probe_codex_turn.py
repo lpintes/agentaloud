@@ -8,6 +8,7 @@
 #   probe_codex_turn.py interrupt  dlhy prikaz, turn/interrupt zvonku
 #   probe_codex_turn.py noanswer   ziadost o povolenie bez odpovede, potom interrupt
 #   probe_codex_turn.py ask        plan mode + request_user_input
+#   probe_codex_turn.py badargs    request_user_input_async so zlym polom
 #
 # Kazdy rezim je jeden alebo dva tahy na najlacnejsom modeli s effort low.
 # Id threadu sa zapise do C:/b/codex-probe/logs/<rezim>.thread, nech ho
@@ -77,6 +78,7 @@ def main():
         "interrupt": ["accept"],
         "noanswer": [None],
         "ask": [],
+        "badargs": [],
     }[mode]
     policy = Policy(decisions)
     c = Client(mode, on_request=policy)
@@ -133,6 +135,15 @@ def main():
                          "request_user_input jednou otázkou s dvoma možnosťami, "
                          "či pijem radšej čaj alebo kávu. Potom odpovedz jednou "
                          "vetou.", ask_extra)
+    elif mode == "badargs":
+        # claude-gui-lkk.44.10: volanie, ktoreho argumenty Codex odmietne
+        # este pred spustenim -- co z neho pride v streame.
+        run_turn(c, tid, "Toto je test chybového hlásenia. Zavolaj nástroj "
+                         "request_user_input_async presne s týmito argumentmi "
+                         "a nič neopravuj: {\"questions\":[{\"title\":\"Čaj "
+                         "alebo káva?\",\"options\":[\"Čaj\",\"Káva\"],"
+                         "\"question\":\"Piješ radšej čaj?\"}]}. Potom jednou "
+                         "vetou povedz, čo nástroj vrátil.", extra)
 
     time.sleep(1.0)
     print("--- requests from server ---")
