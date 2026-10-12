@@ -566,10 +566,33 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     Schválenie nesie režim, v ktorom session pokračuje (adaptér ho pošle ako
     `setMode` so schválením; odmerané, `tools/probe_plan_exit.py`: vyhrá nad
     `prePlanMode`, do ktorého by sa CLI inak vrátilo). Predvolený je ten,
-    ktorý by CLI zvolilo samo. „Plánovať ďalej" je zamietnutie so slovami
-    čitateľa, Esc bez nich. Text plánu je ten istý `RenderToolCall` — no
-    naostro sa po vrátení plánu text v dialógu a v riadku prepisu rozišiel
-    (claude-gui-lkk.67).
+    ktorý by CLI zvolilo samo.
+
+    „Plánovať ďalej" aj Esc sú zamietnutie s `interrupt: true` a **ťah tým
+    skončí** (claude-gui-lkk.67): čo zmeniť, napíše čitateľ ďalším promptom,
+    ako v termináli, a fokus ide do promptu bez vlastnej vety (za zavretým
+    dialógom by ju NVDA zrušila, invariant 6). Pole na slová v dialógu bolo
+    zrušené — Enter v ňom odosielal a Ctrl+Enter zalamoval, v prompte opačne;
+    a bez slov sa model pýtal cez `AskUserQuestion`, teda ďalší dialóg navyše.
+    Odmerané `tools/probe_plan_revise.py` (CLI 2.1.294): `result` príde
+    okamžite (`error_during_execution`, panel ho berie ako bežný koniec ťahu),
+    model už nič nepovie a výsledok nástroja je veta CLI („The user doesn't
+    want to proceed …"), nie naša. `Translator` ju pri volaní `ExitPlanMode`
+    (`planCalls_`) ukáže ako „plán vrátený na prepracovanie"; pri inom nástroji
+    nie.
+
+    **Text plánu berie prepis zo žiadosti o povolenie, nie zo záznamu
+    `assistant`.** Po vrátení model prepíše súbor plánu a zavolá
+    `ExitPlanMode` znova — `tool_use` nesie jeho **starý** vstup, kým
+    `can_use_tool` nesie text zo súboru `planFilePath` (odmerané tou istou
+    sondou). Prepis tak ukazoval iný plán než dialóg. Adaptér preto pri každej
+    žiadosti pošle `agent::ToolCallChanged` a `Transcript::ReplaceToolCall`
+    blok prepíše na mieste (id, meno hovoriaceho a zbalenie ostanú; bez zmeny
+    textu žiadna úprava). Ide frontou udalostí, nie priamo: panel ju pred
+    dialógom nevyprázdni, a tak príde vždy za `ToolCallStarted`, ktorý
+    opravuje. Plán sa ukazuje ako text (`ToolKind::Plan`), súhrn je jeho prvý
+    riadok bez `#`. Medzera: `--resume` prehrá zo záznamu na disku starý plán
+    — `can_use_tool` sa na disk nepíše.
 
 14. **Id session si appka určuje sama a pozná ho pred štartom procesu.** Zo
     streamu príde až so záznamom, ktorý ho nesie, a odpoveď na `initialize` ho

@@ -16,6 +16,7 @@
 // hands over structure, and the strings in it are as they came off the wire.
 
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -81,6 +82,8 @@ class Translator {
   std::map<std::string, std::string> subagents_;  // Agent call id -> name
   std::map<std::string, int> subagentCounts_;     // type -> how many so far
   std::map<std::string, std::string> agentIds_;   // agent_id -> name
+  // ExitPlanMode call ids, for what their denial is shown as.
+  std::set<std::string> planCalls_;
   // A task went to the background since the last answer to background_tasks
   // -- the only sign that Ctrl+B did anything (MakeBackgroundTasks).
   bool movedSinceAnswer_ = false;
@@ -114,10 +117,13 @@ std::vector<agent::Event> TranslateHistory(const std::vector<Json>& records,
 extern const char kDeniedInstruction[];
 extern const char kQuestionDeclinedInstruction[];
 
-// The plan sent back: "keep planning", with the reader's words on what to
-// change when there are any.  Recognised in the stream the same way, by its
-// fixed opening, and shown as "plán vrátený" with the reader's words after it.
-std::string KeepPlanningInstruction(const std::string& feedback);
+// The plan sent back.  Denied with interrupt, so the turn ends and the
+// reader's next prompt says what to change, as in the terminal; the CLI then
+// puts its own sentence in the tool result instead of this one (MakeDeny), and
+// the Translator shows that as "plán vrátený" for an ExitPlanMode call.  This
+// text is still recognised by its opening in a session from before
+// claude-gui-lkk.67, which sent it with the reader's words after a newline.
+extern const char kKeepPlanningInstruction[];
 
 // The tool whose approval ends planning (agent::PermissionRequest::modesAfter).
 extern const char kExitPlanModeTool[];

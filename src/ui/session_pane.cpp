@@ -864,6 +864,11 @@ LRESULT SessionPane::OnPermission(LPARAM pointer) {
   if (!pending->request->modesAfter.empty()) {
     AskPlanApproval(host_, *pending->request, backend_->capabilities().modes,
                     &pending->answer);
+    // Sent back, the turn ends and what to change is the next prompt
+    // (claude-gui-lkk.67), so that is where the reader goes.  Nothing said of
+    // our own: behind a dialog just closed NVDA cuts it off (invariant 6), and
+    // the field it lands in is the answer.
+    if (pending->answer.verdict == agent::Verdict::Deny) FocusPrompt();
     return 0;
   }
   pending->answer.verdict = AskPermission(host_, *pending->request);

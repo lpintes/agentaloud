@@ -273,7 +273,6 @@ S(kDlgTasksStop, L"Z&astaviť")
 S(kDlgPlanCaption, L"schválenie plánu")
 S(kDlgPlanText, L"P&lán:")
 S(kDlgPlanMode, L"Po schválení pokračovať v &režime:")
-S(kDlgPlanFeedback, L"Čo v pláne &zmeniť (nepovinné):")
 S(kDlgPlanApprove, L"&Schváliť")
 S(kDlgPlanRevise, L"Plánovať ď&alej")
 

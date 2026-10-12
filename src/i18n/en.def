@@ -270,7 +270,6 @@ S(kDlgTasksStop, L"&Stop")
 S(kDlgPlanCaption, L"plan approval")
 S(kDlgPlanText, L"&Plan:")
 S(kDlgPlanMode, L"After approval continue in &mode:")
-S(kDlgPlanFeedback, L"What to &change in the plan (optional):")
 S(kDlgPlanApprove, L"&Approve")
 S(kDlgPlanRevise, L"&Keep planning")
 

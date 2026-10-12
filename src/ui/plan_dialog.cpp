@@ -87,7 +87,6 @@ bool PlanDialog::OnOk() {
 bool PlanDialog::OnCommand(int id, int notification) {
   if (id != IDC_PLAN_REVISE || notification != BN_CLICKED) return false;
   answer_->verdict = agent::Verdict::Deny;
-  answer_->feedback = model::Utf8FromUtf16(GetText(IDC_PLAN_FEEDBACK));
   EndDialog(hwnd_, IDC_PLAN_REVISE);
   return true;
 }

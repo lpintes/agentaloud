@@ -137,8 +137,8 @@ struct PermissionRequest {
   // Not empty for a call that ends planning -- Claude's ExitPlanMode.  Then
   // the request is the plan put up for approval: Allow comes with a choice of
   // the mode to go on in (ids from Capabilities::modes, in the order to offer
-  // them), and Deny means "keep planning", with the reader's words on what to
-  // change.  Without the choice the CLI goes back to the mode planning was
+  // them), and Deny means "keep planning": the turn ends there, and what to
+  // change is the reader's next prompt (claude-gui-lkk.67).  Without the choice the CLI goes back to the mode planning was
   // entered from, which after Shift+Tab is seldom the one wanted
   // (claude-gui-lkk.43).
   std::vector<std::string> modesAfter;
@@ -155,9 +155,6 @@ struct PermissionAnswer {
   // With Allow, when the request had modesAfter: the mode chosen.  Empty
   // leaves it to the CLI.
   std::string mode;
-  // With Deny of a plan: what the reader wants changed, in their own words.
-  // The adapter wraps it for the model.  May be empty.
-  std::string feedback;
 };
 
 struct QuestionRequest {

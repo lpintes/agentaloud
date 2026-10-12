@@ -199,7 +199,8 @@ void Session::OnLine(std::string_view line) {
                                decision.updatedPermissions)
                    : MakeDeny(request, decision.denyMessage.empty()
                                            ? "The user declined."
-                                           : decision.denyMessage));
+                                           : decision.denyMessage,
+                              decision.interrupt));
     } else {
       // elicitation lands here, and so would request_user_dialog -- but that
       // second one cannot actually arrive.  The CLI fails closed on it: a

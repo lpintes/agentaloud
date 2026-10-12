@@ -199,6 +199,14 @@ PermissionDecision ClaudeBackend::OnPermission(
   out.description = request.description;
   out.reason = ReasonSentence(request.decisionReasonType);
   out.by = translator_.AgentName(request.agentId);
+  // The call asked about is the call that runs, and the transcript has the
+  // one from the assistant record, which can be older: ExitPlanMode is asked
+  // with the plan file's text after the model rewrote it (claude-gui-lkk.67).
+  // Through the event queue, behind the ToolCallStarted it corrects; the
+  // pane does not drain that queue before the dialog goes up.
+  if (callbacks_.onEvents) {
+    callbacks_.onEvents({agent::ToolCallChanged{out.call}});
+  }
   // "For this session" is what the CLI suggests and nothing broader: for a
   // command that is the exact command line, for a file edit acceptEdits.
   const Json kept = SessionPermissions(request.suggestions);
@@ -228,8 +236,14 @@ PermissionDecision ClaudeBackend::OnPermission(
         {Json{{"type", "setMode"}, {"destination", "session"},
               {"mode", answer.mode}}});
   }
+  // The plan sent back ends the turn, and what to change is the reader's next
+  // prompt, as in the terminal (claude-gui-lkk.67).  Without interrupt the
+  // model went on: with no words it asked what to change by AskUserQuestion,
+  // one more dialog; with words, typed into the plan dialog, Enter sent and
+  // Ctrl+Enter broke the line -- the prompt's keys the other way round.
   if (plan && !decision.allow) {
-    decision.denyMessage = KeepPlanningInstruction(answer.feedback);
+    decision.denyMessage = kKeepPlanningInstruction;
+    decision.interrupt = true;
     return decision;
   }
   // What the model is told is the adapter's to write, not the pane's: the

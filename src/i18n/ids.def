@@ -225,7 +225,6 @@ S(kDlgTasksStop)
 S(kDlgPlanCaption)
 S(kDlgPlanText)
 S(kDlgPlanMode)
-S(kDlgPlanFeedback)
 S(kDlgPlanApprove)
 S(kDlgPlanRevise)
 

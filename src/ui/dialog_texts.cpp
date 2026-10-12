@@ -88,7 +88,6 @@ const std::vector<Template>& Templates() {
        Str::kDlgPlanCaption,
        {{IDC_PLAN_TEXT_LABEL, Str::kDlgPlanText},
         {IDC_PLAN_MODE_LABEL, Str::kDlgPlanMode},
-        {IDC_PLAN_FEEDBACK_LABEL, Str::kDlgPlanFeedback},
         {IDOK, Str::kDlgPlanApprove},
         {IDC_PLAN_REVISE, Str::kDlgPlanRevise}}},
       {IDD_ABOUT,

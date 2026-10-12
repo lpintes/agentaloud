@@ -259,6 +259,12 @@ class Transcript {
   // the result is rendered as any tool's would be.
   const Block* CallFor(const std::string& toolUseId) const;
   std::wstring Render(const Block& block) const;
+  // Writes the block at `index` again, after its summary, body or state
+  // changed, and moves every block after it.
+  Edit Rerender(size_t index);
+  // Agent::ToolCallChanged.  Empty when the call is not here or reads the
+  // same as before.
+  Edit ReplaceToolCall(const agent::ToolCall& call);
   void NoteUnknown(const std::string& type);
 
   std::wstring text_;

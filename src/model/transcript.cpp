@@ -410,6 +410,11 @@ std::wstring RenderToolCall(const agent::ToolCall& call) {
     const std::wstring asked = RenderQuestions(call.questions, true);
     if (!asked.empty()) return asked;
   }
+  // The plan alone, the text the reader is asked to approve.  Its file path
+  // beside it read like a write to approve as well.
+  if (call.kind == agent::ToolKind::Plan && !call.plan.empty()) {
+    return Widen(call.plan);
+  }
   return RenderFields(call.fields);
 }
 
@@ -427,6 +432,9 @@ std::wstring InputDetail(const agent::ToolCall& call) {
   }
   if (call.kind == agent::ToolKind::CreateFile && call.newContent) {
     return Count(CountLines(Widen(*call.newContent)));
+  }
+  if (call.kind == agent::ToolKind::Plan && !call.plan.empty()) {
+    return Count(CountLines(Widen(call.plan)));
   }
   return {};
 }
@@ -774,6 +782,7 @@ void Transcript::NoteUnknown(const std::string& type) {
 
 std::vector<Edit> Transcript::Append(const std::vector<agent::Event>& events) {
   std::vector<Block> made;
+  std::vector<const agent::ToolCall*> changed;
 
   for (const agent::Event& event : events) {
     // Empty text and empty thinking do arrive -- a message can carry a block
@@ -810,6 +819,11 @@ std::vector<Edit> Transcript::Append(const std::vector<agent::Event>& events) {
       }
       made.push_back(MakeToolResult(finished->result, call));
       made.back().speaker = std::move(speaker);
+    } else if (const auto* change =
+                   std::get_if<agent::ToolCallChanged>(&event)) {
+      // After everything of this batch is placed, so that a call made in the
+      // same batch is found too.
+      changed.push_back(&change->call);
     } else if (const auto* denied = std::get_if<agent::ToolDenied>(&event)) {
       Block block;
       block.kind = BlockKind::PermissionDenied;
@@ -869,6 +883,10 @@ std::vector<Edit> Transcript::Append(const std::vector<agent::Event>& events) {
     edits.push_back(InsertBlocks(*place, std::move(one)));
   }
   flush();
+  for (const agent::ToolCall* call : changed) {
+    Edit edit = ReplaceToolCall(*call);
+    if (!edit.empty()) edits.push_back(std::move(edit));
+  }
   return edits;
 }
 
@@ -879,6 +897,12 @@ Edit Transcript::SetCollapsed(size_t index, bool collapsed) {
   if (!block.collapsible || block.collapsed == collapsed) return edit;
 
   block.collapsed = collapsed;
+  return Rerender(index);
+}
+
+Edit Transcript::Rerender(size_t index) {
+  Edit edit;
+  Block& block = blocks_[index];
   const std::wstring rendered = Render(block);
   edit.start = block.start;
   edit.removed = block.length;
@@ -897,6 +921,25 @@ Edit Transcript::SetCollapsed(size_t index, bool collapsed) {
         static_cast<ptrdiff_t>(blocks_[i].start) + shift);
   }
   return edit;
+}
+
+Edit Transcript::ReplaceToolCall(const agent::ToolCall& call) {
+  for (size_t i = 0; i < blocks_.size(); ++i) {
+    Block& block = blocks_[i];
+    if (block.kind != BlockKind::ToolUse || block.toolUseId != call.id) {
+      continue;
+    }
+    const Block fresh = MakeToolUse(call, projectRoot_);
+    if (fresh.body == block.body && fresh.summary == block.summary) return {};
+    // The id, the speaker and whether the reader has it open stay: it is the
+    // same call, said again.
+    block.body = fresh.body;
+    block.summary = fresh.summary;
+    block.toolName = fresh.toolName;
+    block.toolKind = fresh.toolKind;
+    return Rerender(i);
+  }
+  return {};
 }
 
 std::optional<size_t> Transcript::BlockAt(size_t offset) const {

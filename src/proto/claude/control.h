@@ -322,7 +322,13 @@ Json SessionPermissions(const Json& suggestions);
 // `message` is handed to the model as the reason, so it is worth writing for
 // the model: "the user declined; ask before trying this again" gets a better
 // result than "denied".
-Json MakeDeny(const PermissionRequest& request, const std::string& message);
+//
+// With `interrupt` the turn ends there: `result` follows at once
+// (error_during_execution), the model says nothing more, and the tool result
+// is the CLI's own "STOP ... wait for the user" -- `message` is not used
+// (measured, tools/probe_plan_revise.py, claude-gui-lkk.67).
+Json MakeDeny(const PermissionRequest& request, const std::string& message,
+              bool interrupt = false);
 
 // For a control_request we could not answer.  Better than silence: silence
 // leaves the CLI waiting until its own timeout.

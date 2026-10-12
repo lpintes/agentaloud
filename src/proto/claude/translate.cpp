@@ -14,26 +14,19 @@ const char kQuestionDeclinedInstruction[] =
     "The user closed the question without answering. Do not ask it again; "
     "ask in plain text what to do next.";
 const char kExitPlanModeTool[] = "ExitPlanMode";
-
-namespace {
-
-// The opening is what MakeToolResult recognises; the reader's words follow
-// it on a line of their own.
 const char kKeepPlanningInstruction[] =
     "The user wants to keep planning and did not approve the plan. Do not "
     "start the work.";
-const char kKeepPlanningAsk[] = " Ask what to change in the plan.";
-const char kKeepPlanningRevise[] =
-    " Revise the plan and present it again. What the user wants changed:\n";
+
+namespace {
+
+// How the CLI words a denial that came with interrupt, whatever message was
+// sent (tools/probe_plan_revise.py, CLI 2.1.294).  The opening only: the rest
+// is the CLI's to change.
+const char kInterruptedDenial[] =
+    "The user doesn't want to proceed with this tool use.";
 
 }  // namespace
-
-std::string KeepPlanningInstruction(const std::string& feedback) {
-  if (feedback.empty()) {
-    return std::string(kKeepPlanningInstruction) + kKeepPlanningAsk;
-  }
-  return std::string(kKeepPlanningInstruction) + kKeepPlanningRevise + feedback;
-}
 
 std::vector<std::string> PlanModesAfter(const std::vector<std::string>& refused,
                                         const std::string& before,
@@ -90,7 +83,26 @@ constexpr ToolEntry kTools[] = {
     {"WebFetch", agent::ToolKind::Fetch, "url", false},
     {"Skill", agent::ToolKind::Other, "skill", false},
     {kAskUserQuestionTool, agent::ToolKind::Question, nullptr, false},
+    {kExitPlanModeTool, agent::ToolKind::Plan, nullptr, false},
 };
+
+// The plan's first line that says anything, without its heading marks: the
+// model starts a plan with "# Plan: ...", and that is the plan's name.  The
+// whole input in the summary was a line of JSON with the plan escaped in it.
+std::string PlanTitle(const std::string& plan) {
+  size_t begin = 0;
+  while (begin < plan.size()) {
+    size_t end = plan.find('\n', begin);
+    if (end == std::string::npos) end = plan.size();
+    size_t from = plan.find_first_not_of("# \t\r", begin);
+    if (from != std::string::npos && from < end) {
+      size_t to = plan.find_last_not_of(" \t\r", end - 1);
+      return plan.substr(from, to + 1 - from);
+    }
+    begin = end + 1;
+  }
+  return {};
+}
 
 // The questions of an AskUserQuestion call, read leniently.  ParseAskUserQuestion
 // in ask.h is the strict one -- it decides whether a dialog can be put up, and
@@ -263,6 +275,10 @@ agent::ToolCall ToolCallFromInput(const std::string& name,
     }
   } else if (name == kAskUserQuestionTool) {
     call.questions = ReadQuestions(input);
+  } else if (name == kExitPlanModeTool) {
+    call.plan = StringField(input, "plan");
+    const std::string title = PlanTitle(call.plan);
+    if (!title.empty()) call.primary = title;
   }
   return call;
 }
@@ -334,6 +350,7 @@ std::vector<agent::Event> Translator::Translate(const Json& record) {
           agent::ToolCall call =
               ToolCallFromInput(name, StringField(item, "id"), arguments);
           // "Task" is what the tool was called before it was "Agent".
+          if (name == kExitPlanModeTool) planCalls_.insert(call.id);
           if (name == "Agent" || name == "Task") {
             // The name goes into the call's summary as well, which is the
             // one place that says what "Explore 2" was sent to do.
@@ -371,7 +388,15 @@ std::vector<agent::Event> Translator::Translate(const Json& record) {
       for (const Json& item : *content) {
         if (!item.is_object()) continue;
         if (StringField(item, "type") == "tool_result") {
-          events.push_back(agent::ToolCallFinished{MakeToolResult(item)});
+          agent::ToolResult result = MakeToolResult(item);
+          // The plan sent back (kKeepPlanningInstruction).  Only for a plan:
+          // the same sentence after any other denial, in a terminal session
+          // replayed from disk, is not a plan returned.
+          if (result.isError && planCalls_.count(result.callId) != 0 &&
+              result.text.rfind(kInterruptedDenial, 0) == 0) {
+            result.text = i18n::Utf8(i18n::Str::kPlanReturned);
+          }
+          events.push_back(agent::ToolCallFinished{std::move(result)});
         }
       }
       break;

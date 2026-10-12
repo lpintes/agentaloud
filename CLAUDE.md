@@ -300,7 +300,9 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
     servera, úprava = len súbory patchu (cesty z itemu cez `itemId`).
     Plán (`ExitPlanMode`) má vlastný dialóg (`ui::AskPlanApproval`), panel ho
     spozná podľa `modesAfter`: schválenie nesie režim (`setMode`), „Plánovať
-    ďalej" je zamietnutie so slovami čitateľa, Esc bez nich.
+    ďalej" aj Esc sú zamietnutie s `interrupt` — ťah skončí, fokus do promptu.
+    Text plánu je zo žiadosti, nie z `tool_use` (ten po prepracovaní nesie
+    starý): adaptér pri každej žiadosti pošle `agent::ToolCallChanged`.
 14. **Id session určuje appka pred štartom** (`--session-id` z
     `NewSessionId`), okrem prípadu, keď rozhovor pomenúvajú `extraArgs`. To
     isté id druhýkrát nejde; obnovuje `--resume` (`Resume::ById`, prepis

@@ -305,9 +305,11 @@ Json SessionPermissions(const Json& suggestions) {
   return kept;
 }
 
-Json MakeDeny(const PermissionRequest& request, const std::string& message) {
-  return Envelope(request.requestId,
-                  Json{{"behavior", "deny"}, {"message", message}});
+Json MakeDeny(const PermissionRequest& request, const std::string& message,
+              bool interrupt) {
+  Json body{{"behavior", "deny"}, {"message", message}};
+  if (interrupt) body["interrupt"] = true;
+  return Envelope(request.requestId, body);
 }
 
 Json MakeError(const std::string& requestId, const std::string& message) {

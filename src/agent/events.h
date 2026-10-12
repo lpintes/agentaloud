@@ -39,6 +39,7 @@ enum class ToolKind {
   Search,      // Glob, Grep
   Fetch,       // WebFetch
   Question,    // a multiple-choice question put to the reader
+  Plan,        // a plan put up for approval, Claude's ExitPlanMode
   Other,
 };
 
@@ -102,6 +103,7 @@ struct ToolCall {
   // telling apart from one whose content did not come.
   std::optional<std::string> newContent;
   std::vector<Question> questions;            // Question
+  std::string plan;                           // Plan, as the agent wrote it
 };
 
 struct ToolResult {
@@ -168,6 +170,15 @@ struct ToolCallStarted {
   std::string by = {};
 };
 struct ToolCallFinished { ToolResult result; };
+
+// A call already in the transcript, as it is really going to run.  Claude's
+// ExitPlanMode carries the plan the model first wrote even after the model
+// has rewritten the plan file, and the CLI asks permission with the file's
+// text (measured, tools/probe_plan_revise.py, claude-gui-lkk.67) -- so the
+// transcript said one plan and the dialog approved another (invariant 13).
+// The block keeps its place; only its text changes.  Nothing happens for a
+// call that is not in the transcript, or that has not changed.
+struct ToolCallChanged { ToolCall call; };
 
 // A call that a rule or the reader turned down, when the CLI reports it as a
 // record of its own rather than as an error result.
@@ -298,7 +309,8 @@ struct SessionEnded {
 struct Unrecognised { std::string type; };
 
 using Event = std::variant<AssistantText, Thinking, ThinkingTick,
-                           ToolCallStarted, ToolCallFinished, ToolDenied,
+                           ToolCallStarted, ToolCallFinished, ToolCallChanged,
+                           ToolDenied,
                            QuestionByPrompt, UserPrompt, Interrupted, WorkingDirectory,
                            ModelChanged, ModeChanged, ContextUsed,
                            UsageChanged, RateLimitChanged, Ready, TurnStarted,

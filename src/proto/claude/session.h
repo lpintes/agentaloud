@@ -28,6 +28,7 @@ namespace proto {
 struct PermissionDecision {
   bool allow = false;
   std::string denyMessage;   // used when !allow
+  bool interrupt = false;    // with !allow: the turn ends too (MakeDeny)
   Json updatedInput;         // null keeps the tool's own input
   Json updatedPermissions;   // null keeps no rule (SessionPermissions)
 };

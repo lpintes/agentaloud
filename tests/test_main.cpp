@@ -2087,7 +2087,7 @@ void TestOwnInstructionsStayOutOfTranscript() {
 // do acceptEdits, lebo CLI si pamata rezim tesne pred planom -- nie ten, z
 // ktoreho citatel vysiel.  setMode poslany so schvalenim nad tym vyhra.
 void TestPlanApproval() {
-  TEST("plan: rezim po schvaleni a plan vrateny s textom");
+  TEST("plan: rezim po schvaleni a plan vrateny");
 
   // Rezim pred planom ide po slove CLI, vratane prechodov cez Shift+Tab.
   proto::PermissionModeTracker tracker;
@@ -2139,30 +2139,46 @@ void TestPlanApproval() {
                          {"content", proto::Json::array({block})}};
     return record;
   };
+  // Deny s interrupt: CLI da do vysledku vlastnu vetu (tools/probe_plan_revise.py,
+  // CLI 2.1.294) a ta sa pri plane zmeni na "plan vrateny".  Pri inom nastroji
+  // zostane -- v historii terminaloveho rozhovoru znamena obycajne zamietnutie.
+  const std::string cli =
+      "The user doesn't want to proceed with this tool use. The tool use was "
+      "rejected (eg. if it was a file edit, the new_string was NOT written to "
+      "the file). STOP what you are doing and wait for the user to tell you "
+      "how to proceed.";
   model::Transcript transcript;
-  transcript.Append(proto::TranslateRecord(proto::Json::parse(R"({
+  proto::Translator translator;
+  transcript.Append(translator.Translate(proto::Json::parse(R"({
     "type": "assistant",
     "message": {"content": [
       {"type": "tool_use", "id": "toolu_P", "name": "ExitPlanMode",
        "input": {"plan": "1. subor"}},
       {"type": "tool_use", "id": "toolu_R", "name": "ExitPlanMode",
-       "input": {"plan": "2. subor"}}
+       "input": {"plan": "2. subor"}},
+      {"type": "tool_use", "id": "toolu_B", "name": "Bash",
+       "input": {"command": "ls"}}
     ]}
   })")));
-  transcript.Append(proto::TranslateRecord(
-      result("toolu_P", proto::KeepPlanningInstruction(""))));
-  transcript.Append(proto::TranslateRecord(
-      result("toolu_R", proto::KeepPlanningInstruction("bez testov\ndva"))));
+  transcript.Append(translator.Translate(result("toolu_P", cli)));
+  // Session spred claude-gui-lkk.67: nas pokyn so slovami citatela za nim.
+  transcript.Append(translator.Translate(result(
+      "toolu_R", std::string(proto::kKeepPlanningInstruction) +
+                     " Revise the plan and present it again. What the user "
+                     "wants changed:\nbez testov\ndva")));
+  transcript.Append(translator.Translate(result("toolu_B", cli)));
   std::vector<const model::Block*> results;
   for (const model::Block& block : transcript.blocks()) {
     if (block.kind == model::BlockKind::ToolResult) results.push_back(&block);
   }
-  CHECK_EQ(results.size(), size_t{2});
-  if (results.size() == 2) {
+  CHECK_EQ(results.size(), size_t{3});
+  if (results.size() == 3) {
     CHECK_EQ(results[0]->body, std::wstring(L"plán vrátený na prepracovanie"));
     CHECK_EQ(results[1]->body,
              std::wstring(L"plán vrátený na prepracovanie\nbez testov\ndva"));
     CHECK(results[1]->body.find(L"Revise") == std::wstring::npos);
+    CHECK(results[2]->body.find(L"doesn't want to proceed") !=
+          std::wstring::npos);
   }
 }
 
@@ -2719,6 +2735,61 @@ void TestQuestionsReadAsText() {
   CHECK_EQ(blocks[0].body,
            std::wstring(L"1. Čo piješ radšej?\n   Čaj — Horúci.\n   Voda"));
   CHECK(blocks[0].body.find(L"questions") == std::wstring::npos);
+}
+
+// Tvar z tools/probe_plan_revise.py (CLI 2.1.294, claude-gui-lkk.67): po
+// vrateni planu nesie tool_use v zazname assistant STARY plan a can_use_tool
+// novy, zo suboru planu.  Adapter posle ToolCallChanged so vstupom
+// z can_use_tool a prepis blok prepise na mieste.
+void TestPlanReadsAsTextAndFollowsPermission() {
+  TEST("transcript: ExitPlanMode je text planu a prevezme plan z can_use_tool");
+  model::Transcript transcript;
+  proto::Json call = proto::Json::parse(R"J({
+    "type": "assistant",
+    "message": {"content": [
+      {"type": "tool_use", "id": "toolu_P", "name": "ExitPlanMode",
+       "input": {"plan": "# Plan: create bye.txt\n\n1. Write bye.txt",
+                 "planFilePath": "C:\\plans\\p.md"}}
+    ]}
+  })J");
+  transcript.Append(proto::TranslateRecord(call));
+  transcript.AppendUserPrompt(L"dalsi blok za planom");
+  const std::vector<model::Block>& blocks = transcript.blocks();
+  CHECK_EQ(blocks.size(), size_t{2});
+  CHECK(blocks[0].summary.find(L"ExitPlanMode: Plan: create bye.txt") == 0);
+  CHECK_EQ(blocks[0].body,
+           std::wstring(L"# Plan: create bye.txt\n\n1. Write bye.txt"));
+  const size_t id = blocks[0].id;
+
+  // Ten isty plan druhy raz: nic sa nemeni, ziadna uprava pre pohlad.
+  const proto::Json same = proto::Json::parse(
+      R"J({"plan": "# Plan: create bye.txt\n\n1. Write bye.txt",
+           "planFilePath": "C:\\plans\\p.md"})J");
+  CHECK(transcript
+            .Append({agent::ToolCallChanged{
+                proto::ToolCallFromInput("ExitPlanMode", "toolu_P", same)}})
+            .empty());
+
+  const proto::Json revised = proto::Json::parse(
+      R"J({"plan": "# Plan: create farewell.txt\n\n1. Write farewell.txt",
+           "planFilePath": "C:\\plans\\p.md"})J");
+  const std::vector<model::Edit> edits = transcript.Append(
+      {agent::ToolCallChanged{
+          proto::ToolCallFromInput("ExitPlanMode", "toolu_P", revised)}});
+  CHECK_EQ(edits.size(), size_t{1});
+  CHECK_EQ(blocks.size(), size_t{2});
+  CHECK_EQ(blocks[0].id, id);
+  CHECK(blocks[0].summary.find(L"ExitPlanMode: Plan: create farewell.txt") ==
+        0);
+  CHECK(blocks[0].body.find(L"bye.txt") == std::wstring::npos);
+  std::string problem;
+  CHECK(transcript.CheckInvariants(&problem));
+
+  // Volanie, ktore v prepise nie je, prepis nezmeni.
+  CHECK(transcript
+            .Append({agent::ToolCallChanged{
+                proto::ToolCallFromInput("ExitPlanMode", "toolu_X", revised)}})
+            .empty());
 }
 
 // Ktoru session vybere '-c'.  Su to testy prvej kategorie -- overuju MOJE
@@ -4361,6 +4432,7 @@ int main(int argc, char** argv) {
   TestEditAndWriteSayWhatChanged();
   TestOwnInstructionsStayOutOfTranscript();
   TestPlanApproval();
+  TestPlanReadsAsTextAndFollowsPermission();
   TestPermissionTextMatchesTranscript();
   TestFailedToolResultReadsLikeAnError();
   TestEmptyBlocksAreDropped();
