@@ -10,7 +10,7 @@
 #   ./build.sh clean all
 #   ./build.sh V=1 app      # ukecany vystup, cele prikazy
 #
-# Argumenty idu do make tak, ako prisli, takze funguje aj `-j8` a `-B`.
+# Argumenty idu do make tak, ako prisli, takze funguje aj `-j1` a `-B`.
 set -e
 
 cd "$(dirname "$0")"
@@ -31,6 +31,13 @@ export PATH
 case " $* " in
 	*" clean "*) ;;
 	*) make compdb >/dev/null ;;
+esac
+
+# Paralelne na vsetkych jadrach, ak si volajuci nepovedal sam (`-j1` na
+# citatelny vystup chyby).  Po jednom zdrojaku trval celkovy preklad minuty.
+case " $* " in
+	*" -j"*) ;;
+	*) set -- "-j${NUMBER_OF_PROCESSORS:-$(nproc)}" "$@" ;;
 esac
 
 exec make "$@"

@@ -104,8 +104,9 @@ nezapíše (`cannot open output file ... Permission denied`) — to je jediné
 miesto, kde sa to ohlási nahlas, takže zavri ju skôr, než prekladáš.
 
 `build.sh` je tenká vrstva nad `make`: predradí ucrt64 na PATH, obnoví
-`compile_commands.json` a argumenty (`-j8`, `-B`, ciele) pošle `make`
-nezmenené. Výstup je tichý, jeden riadok na zdroják. ucrt64, nie mingw64 —
+`compile_commands.json` a argumenty (`-B`, ciele) pošle `make`
+nezmenené. Bez vlastného `-j` prekladá na všetkých jadrách
+(`NUMBER_OF_PROCESSORS`); `-j1`, keď treba čitateľný výstup chyby. Výstup je tichý, jeden riadok na zdroják. ucrt64, nie mingw64 —
 UCRT je systémové CRT a odpadá `msvcrt` s jeho UTF-8. Prekladač sa volá
 absolútnou cestou; globálnemu PATH sa never.
 
