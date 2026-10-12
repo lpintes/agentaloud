@@ -486,10 +486,12 @@ std::vector<agent::Event> Translator::Translate(const Json& record) {
         out.state = agent::LimitState::Warning;
       }
       if (limit.fiveHourUtilization >= 0) {
-        out.windows.push_back({300, limit.fiveHourUtilization, 0});
+        out.windows.push_back(
+            {300, limit.fiveHourUtilization, limit.fiveHourResetsAt});
       }
       if (limit.sevenDayUtilization >= 0) {
-        out.windows.push_back({7 * 24 * 60, limit.sevenDayUtilization, 0});
+        out.windows.push_back({7 * 24 * 60, limit.sevenDayUtilization,
+                               limit.sevenDayResetsAt});
       }
       out.used = limit.utilization;
       out.resetsAt = limit.resetsAt;

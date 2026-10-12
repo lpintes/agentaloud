@@ -63,6 +63,11 @@ struct RateLimit {
   // 13 %" is what a person actually wants to know.
   double fiveHourUtilization = -1;
   double sevenDayUtilization = -1;
+  // Each window's own reset.  The top-level resetsAt is the reset of the
+  // window named by limitType, and that turns to seven_day once the weekly
+  // limit nears its end -- after which it would be all one heard.
+  long long fiveHourResetsAt = 0;
+  long long sevenDayResetsAt = 0;
 };
 
 // False when the record is not a rate_limit_event or carries no usable info.

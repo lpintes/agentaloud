@@ -66,24 +66,28 @@ bool ParseRateLimit(const Json& record, RateLimit* out) {
 
   auto windows = info->find("unifiedWindows");
   if (windows != info->end() && windows->is_object()) {
-    const std::pair<const char*, double*> wanted[] = {
-        {"five_hour", &limit.fiveHourUtilization},
-        {"seven_day", &limit.sevenDayUtilization},
+    struct Wanted {
+      const char* name;
+      double* used;
+      long long* resets;
     };
-    for (const auto& [name, into] : wanted) {
-      auto window = windows->find(name);
+    const Wanted wanted[] = {
+        {"five_hour", &limit.fiveHourUtilization, &limit.fiveHourResetsAt},
+        {"seven_day", &limit.sevenDayUtilization, &limit.sevenDayResetsAt},
+    };
+    for (const Wanted& want : wanted) {
+      auto window = windows->find(want.name);
       if (window == windows->end() || !window->is_object()) continue;
       auto value = window->find("utilization");
       if (value != window->end() && value->is_number()) {
-        *into = value->get<double>();
+        *want.used = value->get<double>();
       }
-      // The window's own resetsAt is more precise than the top-level one when
-      // both are there, and the top level may not be there at all.
       auto resets = window->find("resetsAt");
-      if (limit.resetsAt == 0 && resets != window->end() &&
-          resets->is_number()) {
-        limit.resetsAt = resets->get<long long>();
+      if (resets != window->end() && resets->is_number()) {
+        *want.resets = resets->get<long long>();
       }
+      // The top level may not be there at all.
+      if (limit.resetsAt == 0) limit.resetsAt = *want.resets;
     }
   }
 

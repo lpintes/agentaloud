@@ -1297,13 +1297,12 @@ void SessionPane::ShowRateLimit(const agent::RateLimitChanged& limit) {
     return i18n::Format(Str::kDurationMinutes, {std::to_wstring(minutes)});
   };
   std::wstring text;
-  long long resetsAt = limit.resetsAt;
   for (const agent::LimitWindow& window : limit.windows) {
     if (window.used < 0) continue;
     if (!text.empty()) text += L", ";
     text += length(window.minutes) + L" " + percent(window.used);
-    if (resetsAt == 0) resetsAt = window.resetsAt;
   }
+  const long long resetsAt = agent::ResetToSay(limit);
   if (text.empty() && limit.used >= 0) text = percent(limit.used);
   if (resetsAt > 0) {
     const std::time_t when = static_cast<std::time_t>(resetsAt);

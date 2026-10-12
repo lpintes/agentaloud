@@ -1790,6 +1790,49 @@ void TestTranslatorModelAndTurn() {
     }
     CHECK_EQ(limit->resetsAt, 1700000000LL);
   }
+
+  // Od prahu varovania tyzdenneho limitu hovori zaznam o seven_day a horne
+  // resetsAt je tyzdenne. Stavovy riadok ma aj tak povedat obnovu 5 h okna
+  // (claude-gui-lkk.70), a to vie, len ked ma kazde okno vlastny cas.
+  events = translator.Translate(proto::Json::parse(R"({
+    "type": "rate_limit_event",
+    "rate_limit_info": {
+      "status": "allowed_warning", "rateLimitType": "seven_day",
+      "utilization": 0.81, "resetsAt": 1700400000,
+      "unifiedWindows": {
+        "five_hour": {"utilization": 0.32, "resetsAt": 1700000000},
+        "seven_day": {"utilization": 0.81, "resetsAt": 1700400000}}}})"));
+  const auto* weekly = events.empty()
+                           ? nullptr
+                           : std::get_if<agent::RateLimitChanged>(&events[0]);
+  CHECK(weekly != nullptr);
+  if (weekly != nullptr && weekly->windows.size() == 2) {
+    CHECK_EQ(weekly->windows[0].resetsAt, 1700000000LL);
+    CHECK_EQ(weekly->windows[1].resetsAt, 1700400000LL);
+    CHECK_EQ(agent::ResetToSay(*weekly), 1700000000LL);
+  }
+}
+
+void TestResetToSayPicksShortestUnlessExhausted() {
+  agent::RateLimitChanged limit;
+  limit.windows = {{300, 0.32, 1000}, {7 * 24 * 60, 0.81, 9000}};
+  limit.resetsAt = 9000;
+  CHECK_EQ(agent::ResetToSay(limit), 1000LL);
+
+  // Vycerpany tyzdenny: 5 h okno nepomoze, plati to, co CLI povedalo.
+  limit.state = agent::LimitState::Exhausted;
+  CHECK_EQ(agent::ResetToSay(limit), 9000LL);
+
+  // Codex nepovie, ktore okno odmietlo, povie to plne okno.
+  limit.resetsAt = 0;
+  limit.windows[1].used = 1;
+  CHECK_EQ(agent::ResetToSay(limit), 9000LL);
+
+  // Okna bez casu: zostava horny cas.
+  agent::RateLimitChanged bare;
+  bare.resetsAt = 5000;
+  bare.windows = {{300, 0.5, 0}};
+  CHECK_EQ(agent::ResetToSay(bare), 5000LL);
 }
 
 void TestUsageParsing() {
@@ -4410,6 +4453,7 @@ int main(int argc, char** argv) {
   TestBookmarkIntoCollapsedBlock();
   TestFindSearchesCollapsedBlocks();
   TestRateLimitParsing();
+  TestResetToSayPicksShortestUnlessExhausted();
   TestInitializeResponseParsing();
   TestPermissionModeSwitch();
   TestPortModeCycleMatchesClaude();

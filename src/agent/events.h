@@ -239,6 +239,14 @@ struct RateLimitChanged {
   long long resetsAt = 0;  // when the limit this report is about resets
 };
 
+// The one reset worth saying, 0 when none is known.  While there is room it
+// is the shortest window's: the weekly reset is the same all week, and it is
+// the next few hours a reader plans by.  Once a limit is exhausted it is
+// that limit's, since nothing else matters until then.  Not Claude's
+// top-level resetsAt on its own, which follows the weekly window from its
+// warning threshold on (claude-gui-lkk.70).
+long long ResetToSay(const RateLimitChanged& limit);
+
 // The CLI has finished starting: commands(), account() and the mode are now
 // what they are going to be.  With a SessionStart hook that is twenty seconds
 // in (invariant 17), so "not ready" is an ordinary state that has to be said.

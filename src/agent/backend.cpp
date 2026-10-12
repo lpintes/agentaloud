@@ -39,4 +39,25 @@ const Mode* FindMode(const Capabilities& capabilities, const std::string& id) {
   return nullptr;
 }
 
+long long ResetToSay(const RateLimitChanged& limit) {
+  const LimitWindow* shortest = nullptr;
+  const LimitWindow* spent = nullptr;  // the longest exhausted window
+  for (const LimitWindow& window : limit.windows) {
+    if (window.resetsAt <= 0) continue;
+    if (shortest == nullptr || window.minutes < shortest->minutes) {
+      shortest = &window;
+    }
+    if (window.used >= 1 && (spent == nullptr || window.minutes > spent->minutes)) {
+      spent = &window;
+    }
+  }
+  if (limit.state == LimitState::Exhausted) {
+    // Claude names the window that refused; Codex only says that one did.
+    if (limit.resetsAt > 0) return limit.resetsAt;
+    if (spent != nullptr) return spent->resetsAt;
+  }
+  if (shortest != nullptr) return shortest->resetsAt;
+  return limit.resetsAt;
+}
+
 }  // namespace agent
