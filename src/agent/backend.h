@@ -67,6 +67,8 @@ struct Capabilities {
   // What runs in the foreground can be sent to the background while the turn
   // goes on: Background, Ctrl+B.
   bool backgroundNow = false;
+  // The agent can be signed in to its account from here: StartSignIn.
+  bool signIn = false;
   // Model names to offer before anything has started -- suggestions, not the
   // list of what the CLI takes: a full model id is always accepted too, and
   // an alias the CLI adds tomorrow must not be refused today.  Empty when the
@@ -261,6 +263,17 @@ class Backend {
   // Fire and forget; the change is reported as ModeChanged, and a refusal as a
   // ModeChanged back to the mode the CLI is really in.
   virtual bool SetMode(const std::string& id) = 0;
+
+  // ---- Signing in.  Only with Capabilities::signIn; false without it.
+  // Where to go arrives as SignInPrompt and the outcome as SignInFinished,
+  // both through onEvents.  One sign-in at a time: StartSignIn while one is
+  // running is false.  The session runs on meanwhile.
+
+  virtual bool StartSignIn() = 0;
+  // The code the page showed, when SignInPrompt::wantsCode.
+  virtual bool SubmitSignInCode(const std::string& code) = 0;
+  // Ends with SignInFinished as well, unless none was running.
+  virtual bool CancelSignIn() = 0;
 
   // Interrupts the turn in flight and waits for its TurnEnded, THEN closes
   // the connection.  Both CLIs throw a turn away when their stdin closes

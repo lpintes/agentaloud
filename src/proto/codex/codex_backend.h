@@ -64,6 +64,12 @@ class CodexBackend : public agent::Backend {
   // turn, and a command is left running by the model, not by us.
   bool Background() override { return false; }
   bool SetMode(const std::string& id) override;
+  // The device code flow, in this same process: the page and the code come
+  // back as text and the server finishes on its own when the reader is done
+  // on the page.  Nothing to hand back, so SubmitSignInCode is false.
+  bool StartSignIn() override;
+  bool SubmitSignInCode(const std::string&) override { return false; }
+  bool CancelSignIn() override;
   void Stop(unsigned turnTimeoutMs) override;
 
   std::string conversationId() const override;
@@ -94,6 +100,9 @@ class CodexBackend : public agent::Backend {
     // account/read at the start, to say "not signed in" before the first
     // prompt rather than after it.
     ReadAccount,
+    // account/login/start; its outcome comes later, as a notification.
+    StartSignIn,
+    CancelSignIn,
   };
 
   bool Request(Purpose purpose, const char* method, Json params);
@@ -150,6 +159,12 @@ class CodexBackend : public agent::Backend {
   // The thread's model, which a collaboration mode has to name.
   std::string model_;
   agent::Account account_;
+  // From StartSignIn until account/login/completed, or a refused start.
+  bool signingIn_ = false;
+  // Empty until the answer to account/login/start names it.
+  std::string loginId_;
+  // CancelSignIn before that answer; the cancel goes out with it.
+  bool cancelSignInWanted_ = false;
 
   std::mutex writeMutex_;
 };

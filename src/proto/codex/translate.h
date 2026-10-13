@@ -195,6 +195,13 @@ bool NeedsSignIn(const Json& accountReadResult);
 // Whether a turn/completed or an error notification failed on 401.
 bool FailedOnSignIn(const Json& error);
 
+// The answer to account/login/start of type chatgptDeviceCode: a page and a
+// code to type on it, both as text, which is why that type and not chatgpt
+// (a URL only, and a server on a local port).  False when either the page or
+// the loginId that cancels it is missing.
+bool ParseSignInStart(const Json& result, agent::SignInPrompt* prompt,
+                      std::string* loginId);
+
 // ---- The stream -----------------------------------------------------------
 
 // The live stream, message by message.  A class, because a call is complete

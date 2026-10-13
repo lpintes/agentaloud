@@ -319,6 +319,26 @@ struct SessionEnded {
 // (tools/probe_noauth.notes.md) -- and it may come more than once.
 struct SignInRequired {};
 
+// The answer to Backend::StartSignIn: where the reader goes to sign in.  Both
+// CLIs sign in through a web page and neither needs a console
+// (tools/probe_noauth.notes.md), but the page asks for different things.
+// Codex's device flow shows a code here that the reader types on the page;
+// Claude's page shows a code that the reader brings back, by
+// Backend::SubmitSignInCode.
+struct SignInPrompt {
+  std::string url;
+  std::string userCode;  // to type on the page; empty when there is none
+  bool wantsCode = false;  // the page gives a code to hand back
+};
+
+// The end of a sign-in, whichever way: signed in, refused, cancelled.  Exactly
+// one for each SignInPrompt, and one without a prompt when the sign-in could
+// not even begin.  `error` is the CLI's own words, shown and not interpreted.
+struct SignInFinished {
+  bool signedIn = false;
+  std::string error;
+};
+
 // A record the adapter did not recognise.  Not an error; the soak counts them
 // so a new record type is noticed by us and not by a user.
 struct Unrecognised { std::string type; };
@@ -330,7 +350,8 @@ using Event = std::variant<AssistantText, Thinking, ThinkingTick,
                            ModelChanged, ModeChanged, ContextUsed,
                            UsageChanged, RateLimitChanged, Ready, TurnStarted,
                            TurnEnded, BackgroundTasksChanged, BackgroundMoved,
-                           SessionEnded, SignInRequired, Unrecognised>;
+                           SessionEnded, SignInRequired, SignInPrompt,
+                           SignInFinished, Unrecognised>;
 
 }  // namespace agent
 

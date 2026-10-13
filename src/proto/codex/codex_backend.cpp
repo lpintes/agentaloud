@@ -294,6 +294,39 @@ bool CodexBackend::SetMode(const std::string& id) {
   return SendSettings(id);
 }
 
+bool CodexBackend::StartSignIn() {
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (signingIn_) return false;
+    signingIn_ = true;
+    loginId_.clear();
+    cancelSignInWanted_ = false;
+  }
+  if (Request(Purpose::StartSignIn, "account/login/start",
+              {{"type", "chatgptDeviceCode"}})) {
+    return true;
+  }
+  std::lock_guard<std::mutex> lock(mutex_);
+  signingIn_ = false;
+  return false;
+}
+
+bool CodexBackend::CancelSignIn() {
+  std::string loginId;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!signingIn_) return false;
+    if (loginId_.empty()) {
+      cancelSignInWanted_ = true;
+      return true;
+    }
+    loginId = loginId_;
+  }
+  // account/login/completed with success false follows (measured).
+  return Request(Purpose::CancelSignIn, "account/login/cancel",
+                 {{"loginId", loginId}});
+}
+
 void CodexBackend::Stop(unsigned turnTimeoutMs) {
   // Asked to stop rather than waited out, as for Claude: the wait has a limit
   // and stdin closes after it either way.
@@ -405,6 +438,12 @@ void CodexBackend::OnLine(std::string_view line) {
   } else if (method == "account/updated") {
     std::lock_guard<std::mutex> lock(mutex_);
     account_.plan = StringField(params, "planType");
+  } else if (method == "account/login/completed") {
+    // The translator says how it ended; here only that it has.
+    std::lock_guard<std::mutex> lock(mutex_);
+    signingIn_ = false;
+    loginId_.clear();
+    cancelSignInWanted_ = false;
   } else if (method == "turn/started") {
     std::string turn = StringField(Field(params, "turn"), "id");
     bool interrupt = false;
@@ -565,6 +604,35 @@ void CodexBackend::OnResponse(const Json& message) {
     case Purpose::ReadAccount:
       if (!failed && NeedsSignIn(result)) Emit({agent::SignInRequired{}});
       break;
+    case Purpose::StartSignIn: {
+      agent::SignInPrompt prompt;
+      std::string loginId;
+      if (failed || !ParseSignInStart(result, &prompt, &loginId)) {
+        {
+          std::lock_guard<std::mutex> lock(mutex_);
+          signingIn_ = false;
+          cancelSignInWanted_ = false;
+        }
+        // No completed notification follows a refused start.
+        Emit({agent::SignInFinished{
+            false, StringField(Field(message, "error"), "message")}});
+        break;
+      }
+      bool cancel = false;
+      {
+        std::lock_guard<std::mutex> lock(mutex_);
+        loginId_ = loginId;
+        cancel = cancelSignInWanted_;
+        cancelSignInWanted_ = false;
+      }
+      Emit({prompt});
+      if (cancel) {
+        Request(Purpose::CancelSignIn, "account/login/cancel",
+                {{"loginId", loginId}});
+      }
+      break;
+    }
+    case Purpose::CancelSignIn:
     case Purpose::Interrupt:
     case Purpose::StopTask:
       break;

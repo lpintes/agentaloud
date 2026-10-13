@@ -68,9 +68,6 @@ const std::set<std::string>& IgnoredMethods() {
       "mcpServer/startupStatus/updated",
       "remoteControl/status/changed",
       "account/updated",
-      // The end of a sign-in we started.  The backend will wait for it once
-      // it can start one (claude-gui-lkk.71.4); the stream has nothing to show.
-      "account/login/completed",
       // Seen only as "Falling back from WebSockets to HTTPS transport", the
       // transport changing under a turn that goes on (signed out, measured).
       "warning",
@@ -356,6 +353,7 @@ agent::Capabilities CodexCapabilities() {
   capabilities.resume = true;
   capabilities.allowForSession = true;
   capabilities.stopTask = true;
+  capabilities.signIn = true;
   // None: Codex says which models there are only through model/list, which
   // needs app-server running.  A name written here from memory would go
   // stale with the next release, silently.
@@ -650,6 +648,15 @@ bool FailedOnSignIn(const Json& error) {
     if (status.is_number_integer() && status.get<int>() == 401) return true;
   }
   return false;
+}
+
+bool ParseSignInStart(const Json& result, agent::SignInPrompt* prompt,
+                      std::string* loginId) {
+  *loginId = StringField(result, "loginId");
+  prompt->url = StringField(result, "verificationUrl");
+  prompt->userCode = StringField(result, "userCode");
+  prompt->wantsCode = false;
+  return !loginId->empty() && !prompt->url.empty();
 }
 
 bool ElicitationPermission(const Json& params, agent::PermissionRequest* out) {
@@ -995,6 +1002,12 @@ std::vector<agent::Event> Translator::Translate(const Json& message) {
       out.state = agent::LimitState::Exhausted;
     }
     events.push_back(out);
+  } else if (method == "account/login/completed") {
+    // A cancelled one too: success false, with the CLI's reason.
+    const Json& success = Field(params, "success");
+    events.push_back(agent::SignInFinished{
+        success.is_boolean() && success.get<bool>(),
+        StringField(params, "error")});
   } else if (IgnoredMethods().count(method) == 0) {
     events.push_back(agent::Unrecognised{method});
   }

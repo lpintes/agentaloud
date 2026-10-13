@@ -39,6 +39,10 @@ class ClaudeBackend : public agent::Backend {
   bool StopAllTasks() override;
   bool Background() override;
   bool SetMode(const std::string& id) override;
+  // Not yet: `claude auth login` is a process of its own (claude-gui-lkk.71.4).
+  bool StartSignIn() override { return false; }
+  bool SubmitSignInCode(const std::string&) override { return false; }
+  bool CancelSignIn() override { return false; }
   void Stop(unsigned turnTimeoutMs) override;
 
   std::string conversationId() const override;

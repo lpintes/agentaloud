@@ -4479,6 +4479,33 @@ void TestCodexFixtureNoAuth(const std::string& dir) {
   }
   CHECK_EQ(accounts, size_t{1});
 
+  // Sonda zacala a zrusila dve prihlasenia, chatgpt a chatgptDeviceCode.
+  // Kazde konci account/login/completed so success false a dovodom.
+  const auto finished = EventsOf<agent::SignInFinished>(replay.events);
+  CHECK_EQ(finished.size(), size_t{2});
+  for (const agent::SignInFinished& one : finished) {
+    CHECK(!one.signedIn);
+    CHECK(!one.error.empty());
+  }
+  // Odpoved na account/login/start preklada backend.  Berie sa len tvar
+  // s adresou a kodom ako textom; authUrl (typ chatgpt) nie.
+  size_t starts = 0, usable = 0;
+  for (const proto::Json& message : replay.messages) {
+    auto found = message.find("result");
+    if (found == message.end() || !found->contains("loginId")) continue;
+    ++starts;
+    agent::SignInPrompt prompt;
+    std::string loginId;
+    if (!proto::codex::ParseSignInStart(*found, &prompt, &loginId)) continue;
+    ++usable;
+    CHECK_EQ(prompt.url, std::string("https://auth.openai.com/codex/device"));
+    CHECK_EQ(prompt.userCode, std::string("UB40-DMHQD"));
+    CHECK(!prompt.wantsCode);
+    CHECK(!loginId.empty());
+  }
+  CHECK_EQ(starts, size_t{2});
+  CHECK_EQ(usable, size_t{1});
+
   // Prihlaseny ucet ma requiresOpenaiAuth tiez true; rozhoduje account.
   CHECK(!proto::codex::NeedsSignIn(proto::Json::parse(
       R"({"account": {"type": "chatgpt", "email": "x@example.invalid"},
