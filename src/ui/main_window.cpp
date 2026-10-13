@@ -23,6 +23,7 @@ enum : UINT {
   kIdKeys,
   kIdCheckUpdates,
   kIdAbout,
+  kIdSignIn,
 };
 constexpr UINT kFirstChild = 50000;
 
@@ -34,6 +35,7 @@ HMENU BuildMenu(HMENU* windowMenu) {
   using i18n::Str;
   HMENU file = CreatePopupMenu();
   AppendMenuW(file, MF_STRING, kIdNewSession, i18n::Text(Str::kMenuNewSession));
+  AppendMenuW(file, MF_STRING, kIdSignIn, i18n::Text(Str::kMenuSignIn));
   AppendMenuW(file, MF_SEPARATOR, 0, nullptr);
   AppendMenuW(file, MF_STRING, kIdExit, i18n::Text(Str::kMenuExit));
 
@@ -73,6 +75,7 @@ HACCEL BuildAccelerators() {
   ACCEL table[] = {
       {FVIRTKEY, VK_F1, kIdKeys},
       {FCONTROL | FVIRTKEY, 'N', kIdNewSession},
+      {FCONTROL | FVIRTKEY, 'L', kIdSignIn},
       {FCONTROL | FVIRTKEY, VK_TAB, kIdNextSession},
       {FCONTROL | FSHIFT | FVIRTKEY, VK_TAB, kIdPreviousSession},
       {FCONTROL | FVIRTKEY, VK_F6, kIdNextSession},
@@ -226,6 +229,15 @@ void MainWindow::ShowKeys() {
   active->pane()->ShowKeys();
 }
 
+void MainWindow::SignIn() {
+  SessionWindow* active = Active();
+  if (active == nullptr) {
+    Announce(i18n::Text(i18n::Str::kSayNoSession));
+    return;
+  }
+  active->pane()->SignIn();
+}
+
 void MainWindow::Reap() {
   std::erase_if(sessions_,
                 [](const auto& session) { return session->handle() == nullptr; });
@@ -306,6 +318,9 @@ LRESULT MainWindow::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
           return 0;
         case kIdKeys:
           ShowKeys();
+          return 0;
+        case kIdSignIn:
+          SignIn();
           return 0;
         case kIdCheckUpdates:
           if (checkForUpdates_) checkForUpdates_(hwnd_);

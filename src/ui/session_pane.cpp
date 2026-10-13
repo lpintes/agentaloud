@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <ctime>
 
+#include "app_name.h"
 #include "i18n/i18n.h"
 #include "model/background.h"
 #include "model/history.h"
@@ -18,6 +19,7 @@
 #include "ui/permission_dialog.h"
 #include "ui/plan_dialog.h"
 #include "ui/resource.h"
+#include "ui/sign_in_dialog.h"
 #include "ui/tasks_dialog.h"
 #include "win/clipboard.h"
 
@@ -699,6 +701,27 @@ void SessionPane::OnDrain() {
         if (!busy_ && !ended_) {
           SetStatus(i18n::Text(Str::kStatusSignInRequired));
         }
+        // Offered once, and only by an agent that can be signed in from here;
+        // the others are left with the sentence and the bar.
+        if (backend_->capabilities().signIn && !signInOffered_ && !ended_ &&
+            signInDialog_ == nullptr) {
+          if (busy_) {
+            offerSignInAfterTurn_ = true;
+          } else {
+            signInOffered_ = true;
+            PostMessageW(host_, kMsgOfferSignIn, 0, 0);
+          }
+        }
+      } else if (const auto* prompt = std::get_if<agent::SignInPrompt>(&event)) {
+        if (signInDialog_) SaySignInChange(signInDialog_->ShowPrompt(*prompt), false);
+      } else if (const auto* done = std::get_if<agent::SignInFinished>(&event)) {
+        if (done->signedIn) {
+          signInRequired_ = false;
+          if (!busy_ && !ended_) SetStatus(L"");
+        }
+        if (signInDialog_) {
+          SaySignInChange(signInDialog_->ShowFinished(*done), true);
+        }
       } else if (std::holds_alternative<agent::SessionEnded>(event)) {
         // Nothing of the process outlives it (invariant 10).
         tasks_.clear();
@@ -771,6 +794,16 @@ void SessionPane::OnTurnEnded() {
     return;
   }
   questionsByPrompt_.clear();
+  // The same for a turn that found the agent signed out: the question is
+  // heard, and "hotovo" before it would not be.  One the reader stopped loses
+  // the offer, and the next report makes it again.
+  const bool offer = offerSignInAfterTurn_ && !interrupted_ && !ended_;
+  offerSignInAfterTurn_ = false;
+  if (offer) {
+    signInOffered_ = true;
+    PostMessageW(host_, kMsgOfferSignIn, 0, 0);
+    return;
+  }
   // A turn the reader stopped by hand ends differently from one that
   // finished, and the difference has to be audible: "prerušujem" answers the
   // key, this answers the turn, and without it a turn that stopped sounds like
@@ -1619,6 +1652,63 @@ void SessionPane::CopySessionId() {
   // Short on purpose.  The id itself is 36 characters of hex and reading it
   // out is no use to anybody: the only thing done with it is pasting it.
   Announce(i18n::Text(Str::kIdCopied));
+}
+
+void SessionPane::OnOfferSignIn() {
+  if (ended_ || signInDialog_ != nullptr) return;
+  SignalWaiting();
+  const std::wstring agent =
+      model::Utf16FromUtf8(backend_->capabilities().agentName);
+  const std::wstring question = i18n::Format(Str::kSignInOffer, {agent});
+  // A message box and not a template: two answers, both the system's own
+  // words, and Esc means No.
+  const int answer =
+      MessageBoxW(host_, question.c_str(), L"" APP_NAME,
+                  MB_YESNO | MB_ICONQUESTION);
+  if (answer == IDYES) SignIn();
+}
+
+void SessionPane::SignIn() {
+  if (!backend_->capabilities().signIn) {
+    Announce(i18n::Text(Str::kSignInUnsupported));
+    return;
+  }
+  // Codex signs in through the session's own process, which is gone.
+  if (ended_) {
+    Announce(i18n::Text(Str::kStatusAgentEnded));
+    return;
+  }
+  if (!backend_->StartSignIn()) {
+    Announce(i18n::Text(Str::kRequestFailed));
+    return;
+  }
+  // Nothing announced: the dialog says itself, and the address follows it
+  // into the status box (SaySignInChange).
+  SignInDialog dialog(
+      model::Utf16FromUtf8(backend_->capabilities().agentName),
+      {[this](const std::wstring& text) { Announce(text); },
+       [this](const std::string& code) {
+         return backend_->SubmitSignInCode(code);
+       }});
+  signInDialog_ = &dialog;
+  dialog.ShowModal(host_, IDD_SIGN_IN);
+  signInDialog_ = nullptr;
+  // Closed before the outcome: the reader gave up, and the agent must stop
+  // waiting for a browser nobody is in.  Its SignInFinished then comes to a
+  // pane with no dialog, and changes nothing but the bar.
+  if (!dialog.finished()) backend_->CancelSignIn();
+}
+
+void SessionPane::SaySignInChange(const std::wstring& text, bool outcome) {
+  const bool dialogInFront = signInDialog_ != nullptr &&
+                             GetForegroundWindow() == signInDialog_->handle();
+  if (dialogInFront) {
+    // Queued: it came on its own (invariant 7), and the dialog's own
+    // announcement may still be running.
+    if (!text.empty() && speech_.available()) speech_.Say(text, false);
+    return;
+  }
+  if (outcome) SignalWaiting();
 }
 
 void SessionPane::RefreshFacts() {

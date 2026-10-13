@@ -192,6 +192,14 @@ LRESULT SessionWindow::HandleMessage(UINT message, WPARAM wParam,
       if (pane_) pane_->OnQuestionByPrompt();
       return 0;
 
+    case kMsgOfferSignIn:
+      // To the front first, like a permission request: the question is about
+      // this session's agent, and what is behind the box says which one.
+      SendMessageW(GetParent(hwnd_), WM_MDIACTIVATE,
+                   reinterpret_cast<WPARAM>(hwnd_), 0);
+      if (pane_) pane_->OnOfferSignIn();
+      return 0;
+
     case WM_CLOSE:
       // Closing kills what runs in the background with the process (invariant
       // 10), and that may be minutes of work the reader forgot about.  OK and

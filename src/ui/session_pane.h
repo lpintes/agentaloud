@@ -34,6 +34,7 @@
 
 namespace ui {
 
+class SignInDialog;
 class TasksDialog;
 
 // Events have arrived; drain the queue.  Posted, not sent: the reader thread
@@ -54,6 +55,9 @@ constexpr UINT kMsgHistory = WM_APP + 4;
 // it: the dialog runs a modal loop, and a drain inside a drain would apply
 // one batch in the middle of another.
 constexpr UINT kMsgQuestionByPrompt = WM_APP + 5;
+// The agent said it is not signed in, for the first time in this session:
+// ask whether to sign it in.  Posted from the drain for the reason above.
+constexpr UINT kMsgOfferSignIn = WM_APP + 6;
 
 class SessionPane {
  public:
@@ -88,6 +92,7 @@ class SessionPane {
   LRESULT OnQuestion(LPARAM pending);
   void OnHistoryPosted();
   void OnQuestionByPrompt();
+  void OnOfferSignIn();
 
   void FocusPrompt() const;
   // Where the focus was when the window last lost it -- the prompt the first
@@ -171,6 +176,10 @@ class SessionPane {
   // button in the dialog, because it is the one thing in there that is never
   // read -- it is pasted.
   void CopySessionId();
+  // Ctrl+L and the menu: signs the agent in to its account, in a dialog that
+  // shows where to go and says how it ended (ui/sign_in_dialog.h).  The key
+  // is the frame's, like F1, so that the menu item and the key are one.
+  void SignIn();
 
   // Ctrl+Shift+<digit> marks, Ctrl+<digit> comes back.  Digit 0 is not
   // markable: it is where the reader was standing when new blocks arrived, and
@@ -282,6 +291,10 @@ class SessionPane {
   // FindText, and then the line with the match or that there was none.
   // Shared by F3 and the dialog, which stays open so that this can be heard.
   bool SearchAndSay(const std::wstring& text, bool backwards);
+  // What the sign-in dialog says changed, said when the dialog is in front.
+  // An outcome that arrives while the reader is in the browser is a sound
+  // instead (SignalWaiting): the dialog is waiting for them to come back.
+  void SaySignInChange(const std::wstring& text, bool outcome);
 
   HWND host_ = nullptr;
   HWND transcriptLabel_ = nullptr;
@@ -324,6 +337,16 @@ class SessionPane {
   // says "ask away", and no answer would come.  A new turn forgets it; if
   // the agent is still signed out, that turn says so again.
   bool signInRequired_ = false;
+  // Signing in has been offered once in this session, asked or not yet.
+  // Codex says it is signed out twice -- before the first turn and when the
+  // turn fails -- and a question per report would be a question per prompt.
+  bool signInOffered_ = false;
+  // The offer waits for the turn it came in to end: a box over a running
+  // turn would be answered while the agent is still saying the same thing.
+  bool offerSignInAfterTurn_ = false;
+  // Open while the sign-in dialog is, so that the drain can hand it the
+  // prompt and the outcome.
+  SignInDialog* signInDialog_ = nullptr;
   // The questions of the turn now running that wait for the next prompt.
   // Offered when the turn ends, unless the reader stopped it.
   std::vector<agent::QuestionByPrompt> questionsByPrompt_;

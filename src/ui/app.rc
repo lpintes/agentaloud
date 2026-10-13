@@ -323,3 +323,35 @@ BEGIN
     PUSHBUTTON      "&Stránka projektu", IDC_ABOUT_PAGE, 96, 84, 76, 14
     DEFPUSHBUTTON   "&Zavrieť", IDCANCEL, 176, 84, 56, 14
 END
+
+// Prihlásenie agenta.  What to do next, the address and the code, each in a
+// read-only box so that it can be read by character and copied.  The field
+// for the code the page gives back, and its button, are shown only to an
+// agent that wants one (agent::SignInPrompt::wantsCode); Kopírovať kód only
+// when there is a code to type on the page.
+//
+// No default button: Enter arrives as IDOK, and what it does depends on the
+// field it was pressed in -- see SignInDialog::OnOk.
+IDD_SIGN_IN DIALOGEX 0, 0, 300, 176
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION APP_NAME " — prihlásenie agenta"
+FONT 9, "Segoe UI", 400, 0, 1
+BEGIN
+    LTEXT           "&Stav:", IDC_SIGNIN_STATUS_LABEL, 8, 8, 284, 8
+    EDITTEXT        IDC_SIGNIN_STATUS, 8, 18, 284, 36,
+                    ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL
+
+    LTEXT           "&Adresa:", IDC_SIGNIN_URL_LABEL, 8, 62, 284, 8
+    EDITTEXT        IDC_SIGNIN_URL, 8, 72, 284, 12, ES_AUTOHSCROLL | ES_READONLY
+
+    LTEXT           "&Kód na stránku:", IDC_SIGNIN_CODE_LABEL, 8, 92, 284, 8
+    EDITTEXT        IDC_SIGNIN_CODE, 8, 102, 284, 12, ES_AUTOHSCROLL | ES_READONLY
+
+    LTEXT           "Kód zo strá&nky:", IDC_SIGNIN_ANSWER_LABEL, 8, 122, 284, 8
+    EDITTEXT        IDC_SIGNIN_ANSWER, 8, 132, 284, 12, ES_AUTOHSCROLL
+
+    PUSHBUTTON      "&Otvoriť v prehliadači", IDC_SIGNIN_OPEN, 8, 154, 84, 14
+    PUSHBUTTON      "Kopí&rovať kód", IDC_SIGNIN_COPY, 96, 154, 64, 14
+    PUSHBUTTON      "O&dovzdať kód", IDC_SIGNIN_SUBMIT, 164, 154, 64, 14
+    PUSHBUTTON      "&Zrušiť", IDCANCEL, 236, 154, 56, 14
+END

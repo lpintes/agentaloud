@@ -19,6 +19,7 @@
 #define IDD_ABOUT           107
 #define IDD_TASKS           108
 #define IDD_PLAN_APPROVAL   109
+#define IDD_SIGN_IN         110
 
 #define IDC_DETAILS_ID          1000
 #define IDC_DETAILS_MODEL       1001
@@ -120,5 +121,19 @@
 
 #define IDC_PLAN_TEXT_LABEL     1180
 #define IDC_PLAN_MODE_LABEL     1181
+
+// Prihlásenie agenta.  See ui/sign_in_dialog.h.
+#define IDC_SIGNIN_STATUS       1190
+#define IDC_SIGNIN_URL          1191
+#define IDC_SIGNIN_CODE         1192
+#define IDC_SIGNIN_ANSWER       1193
+#define IDC_SIGNIN_OPEN         1194
+#define IDC_SIGNIN_COPY         1195
+#define IDC_SIGNIN_SUBMIT       1196
+
+#define IDC_SIGNIN_STATUS_LABEL 1200
+#define IDC_SIGNIN_URL_LABEL    1201
+#define IDC_SIGNIN_CODE_LABEL   1202
+#define IDC_SIGNIN_ANSWER_LABEL 1203
 
 #endif

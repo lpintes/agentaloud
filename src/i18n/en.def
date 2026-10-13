@@ -36,6 +36,28 @@ S(kSessionEnded, L"The agent exited with code {0}.")
 S(kSessionEndedNoCode, L"The agent exited.")
 S(kSessionEndedSilent, L"It wrote nothing to its error output.")
 S(kSignInRequired, L"{0} is not signed in to its account, so it will not answer.")
+S(kSignInOffer, L"{0} is not signed in to its account. Sign it in now?")
+S(kSignInUnsupported, L"this agent cannot be signed in from here")
+S(kSignInWaiting, L"Waiting for {0} to send the sign-in address.")
+S(kSignInDeviceCode,
+  L"Open the address in a browser, sign in, and enter the code {0} on the "
+  L"page. The result will be announced here.")
+S(kSignInOpenOnly,
+  L"Open the address in a browser and sign in. The result will be announced "
+  L"here.")
+S(kSignInPasteCode,
+  L"Open the address in a browser and sign in. The page then shows a code; "
+  L"paste it into the Code from the page field and press Enter.")
+S(kSignInChecking, L"checking the code")
+S(kSignInNoCode, L"paste the code from the page first")
+S(kSignInNoAddress, L"the address has not arrived yet")
+S(kSignInBadAddress, L"the address is not https, not opening it")
+S(kSignInOpenFailed, L"the browser could not be opened")
+S(kSignInCopyFailed, L"the clipboard could not be opened, the code was not copied")
+S(kSignInCodeCopied, L"code copied")
+S(kSignInDone, L"{0} is signed in. Press Esc to close the dialog.")
+S(kSignInFailed, L"Signing in failed: {0}")
+S(kSignInFailedPlain, L"Signing in failed.")
 S(kSpeakerUser, L"you: ")
 // proto/
 S(kImage, L"[image]")
@@ -193,6 +215,11 @@ S(kKeysMoving,
 S(kKeysCommands,
   L"F4 — list of slash commands. The chosen one goes into the prompt, unsent.\n")
 S(kKeysNoCommands, L"F4 — list of slash commands; this agent has none.\n")
+S(kKeysSignIn,
+  L"Ctrl+L — signs the agent in to its account through a browser; a dialog "
+  L"shows the address and the code.\n")
+S(kKeysNoSignIn,
+  L"Ctrl+L — signing the agent in; this one cannot be signed in from here.\n")
 S(kKeysCopyId, L"Ctrl+Shift+C — copies the session id to the clipboard.")
 S(kKeysSessions,
   L"\n\n"
@@ -206,6 +233,7 @@ S(kKeysSessions,
 
 S(kMenuFile, L"&File")
 S(kMenuNewSession, L"&New session...\tCtrl+N")
+S(kMenuSignIn, L"&Sign in the agent...\tCtrl+L")
 S(kMenuExit, L"E&xit\tAlt+F4")
 S(kMenuWindow, L"&Window")
 S(kMenuNextSession, L"&Next session\tCtrl+Tab")
@@ -256,6 +284,15 @@ S(kDlgAboutCaption, L"about")
 S(kDlgAboutText, L"&About:")
 S(kDlgAboutPage, L"&Project page")
 S(kAboutText, L"{0}\nVersion {1}\nCopyright (c) 2026 Lubos Pintes\nMIT License\n{2}")
+S(kDlgSignInCaption, L"signing the agent in")
+S(kDlgSignInStatus, L"&Status:")
+S(kDlgSignInUrl, L"&Address:")
+S(kDlgSignInCode, L"&Code for the page:")
+S(kDlgSignInAnswer, L"Code from the pa&ge:")
+S(kDlgSignInOpen, L"&Open in browser")
+S(kDlgSignInCopy, L"Co&py code")
+S(kDlgSignInSubmit, L"S&ubmit code")
+S(kDlgSignInCancel, L"Cance&l")
 S(kDlgNewCaption, L"new session")
 S(kDlgNewBackend, L"&Backend:")
 S(kDlgNewModel, L"&Model (empty = default):")

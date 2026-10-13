@@ -64,6 +64,8 @@ class MainWindow : public win::Window {
   // F1.  The list is the active session's, because what Shift+Tab and F4 do
   // depends on its agent; without a session there is nothing true to list.
   void ShowKeys();
+  // Ctrl+L.  Signs in the active session's agent.
+  void SignIn();
   // The session the reader is in, or null when none is open.
   SessionWindow* Active() const;
   // Numbers the sessions that share a folder, so that their titles differ.

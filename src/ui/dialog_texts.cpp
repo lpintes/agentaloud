@@ -95,6 +95,16 @@ const std::vector<Template>& Templates() {
        {{IDC_ABOUT_TEXT_LABEL, Str::kDlgAboutText},
         {IDC_ABOUT_PAGE, Str::kDlgAboutPage},
         {IDCANCEL, Str::kDlgClose}}},
+      {IDD_SIGN_IN,
+       Str::kDlgSignInCaption,
+       {{IDC_SIGNIN_STATUS_LABEL, Str::kDlgSignInStatus},
+        {IDC_SIGNIN_URL_LABEL, Str::kDlgSignInUrl},
+        {IDC_SIGNIN_CODE_LABEL, Str::kDlgSignInCode},
+        {IDC_SIGNIN_ANSWER_LABEL, Str::kDlgSignInAnswer},
+        {IDC_SIGNIN_OPEN, Str::kDlgSignInOpen},
+        {IDC_SIGNIN_COPY, Str::kDlgSignInCopy},
+        {IDC_SIGNIN_SUBMIT, Str::kDlgSignInSubmit},
+        {IDCANCEL, Str::kDlgSignInCancel}}},
   };
   return templates;
 }

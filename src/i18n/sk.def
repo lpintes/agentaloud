@@ -37,6 +37,27 @@ S(kSessionEnded, L"Agent skončil s kódom {0}.")
 S(kSessionEndedNoCode, L"Agent skončil.")
 S(kSessionEndedSilent, L"Na chybový výstup nenapísal nič.")
 S(kSignInRequired, L"{0} nie je prihlásený k účtu, takže neodpovie.")
+S(kSignInOffer, L"{0} nie je prihlásený k účtu. Prihlásiť ho teraz?")
+S(kSignInUnsupported, L"tento agent sa z aplikácie prihlásiť nevie")
+S(kSignInWaiting, L"Čakám, kým {0} pošle adresu na prihlásenie.")
+S(kSignInDeviceCode,
+  L"Otvorte adresu v prehliadači, prihláste sa a na stránke zadajte kód {0}. "
+  L"Výsledok sa ohlási tu.")
+S(kSignInOpenOnly,
+  L"Otvorte adresu v prehliadači a prihláste sa. Výsledok sa ohlási tu.")
+S(kSignInPasteCode,
+  L"Otvorte adresu v prehliadači a prihláste sa. Stránka potom ukáže kód; "
+  L"vložte ho do poľa Kód zo stránky a stlačte Enter.")
+S(kSignInChecking, L"overujem kód")
+S(kSignInNoCode, L"najprv vložte kód zo stránky")
+S(kSignInNoAddress, L"adresa ešte neprišla")
+S(kSignInBadAddress, L"adresa nie je https, neotváram ju")
+S(kSignInOpenFailed, L"prehliadač sa nepodarilo otvoriť")
+S(kSignInCopyFailed, L"schránku sa nepodarilo otvoriť, kód skopírovaný nebol")
+S(kSignInCodeCopied, L"kód skopírovaný")
+S(kSignInDone, L"{0} je prihlásený. Dialóg zavriete klávesom Esc.")
+S(kSignInFailed, L"Prihlásenie sa nepodarilo: {0}")
+S(kSignInFailedPlain, L"Prihlásenie sa nepodarilo.")
 // "ja", not "ty": the transcript is the reader's own record of a
 // conversation they took part in, and the app says "Máte" elsewhere, so a
 // "ty" would also be the one place it is on first-name terms.
@@ -195,6 +216,11 @@ S(kKeysMoving,
 S(kKeysCommands,
   L"F4 — zoznam slash príkazov. Vybraný vloží do promptu, neodošle.\n")
 S(kKeysNoCommands, L"F4 — zoznam slash príkazov; tento agent žiadny nemá.\n")
+S(kKeysSignIn,
+  L"Ctrl+L — prihlási agenta k účtu cez prehliadač; dialóg ukáže adresu "
+  L"a kód.\n")
+S(kKeysNoSignIn,
+  L"Ctrl+L — prihlásenie agenta; tento sa z aplikácie prihlásiť nevie.\n")
 S(kKeysCopyId, L"Ctrl+Shift+C — skopíruje id session do schránky.")
 S(kKeysSessions,
   L"\n\n"
@@ -208,6 +234,7 @@ S(kKeysSessions,
 
 S(kMenuFile, L"&Súbor")
 S(kMenuNewSession, L"&Nová session...\tCtrl+N")
+S(kMenuSignIn, L"&Prihlásiť agenta...\tCtrl+L")
 S(kMenuExit, L"S&končiť\tAlt+F4")
 S(kMenuWindow, L"&Okno")
 S(kMenuNextSession, L"Ď&alšia session\tCtrl+Tab")
@@ -259,6 +286,15 @@ S(kDlgAboutCaption, L"o programe")
 S(kDlgAboutText, L"&O programe:")
 S(kDlgAboutPage, L"&Stránka projektu")
 S(kAboutText, L"{0}\nVerzia {1}\nCopyright (c) 2026 Lubos Pintes\nLicencia MIT\n{2}")
+S(kDlgSignInCaption, L"prihlásenie agenta")
+S(kDlgSignInStatus, L"&Stav:")
+S(kDlgSignInUrl, L"&Adresa:")
+S(kDlgSignInCode, L"&Kód na stránku:")
+S(kDlgSignInAnswer, L"Kód zo strá&nky:")
+S(kDlgSignInOpen, L"&Otvoriť v prehliadači")
+S(kDlgSignInCopy, L"Kopí&rovať kód")
+S(kDlgSignInSubmit, L"O&dovzdať kód")
+S(kDlgSignInCancel, L"&Zrušiť")
 S(kDlgNewCaption, L"nová session")
 S(kDlgNewBackend, L"&Backend:")
 S(kDlgNewModel, L"&Model (prázdny = predvolený):")
