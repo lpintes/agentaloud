@@ -195,12 +195,20 @@ bool NeedsSignIn(const Json& accountReadResult);
 // Whether a turn/completed or an error notification failed on 401.
 bool FailedOnSignIn(const Json& error);
 
-// The answer to account/login/start of type chatgptDeviceCode: a page and a
-// code to type on it, both as text, which is why that type and not chatgpt
-// (a URL only, and a server on a local port).  False when either the page or
-// the loginId that cancels it is missing.
+// The answer to account/login/start.  Type chatgpt gives authUrl only, and the
+// browser comes back to the app-server's own port; chatgptDeviceCode gives a
+// page and a code to type on it.  The backend asks for chatgpt because device
+// code sign-in is off by default in ChatGPT security settings.  False when
+// either the page or the loginId that cancels it is missing.
 bool ParseSignInStart(const Json& result, agent::SignInPrompt* prompt,
                       std::string* loginId);
+
+// The answer to model/list: the default model when `current` is not among the
+// models offered, else empty.  A thread opened before sign-in carries the
+// model meant for an API key, and a ChatGPT account refuses every turn on it
+// with 400 (tools/probe_codex_model_after_signin.py).
+std::string ReplacementModel(const Json& modelListResult,
+                             const std::string& current);
 
 // ---- The stream -----------------------------------------------------------
 

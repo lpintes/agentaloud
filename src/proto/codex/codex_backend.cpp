@@ -169,7 +169,7 @@ bool CodexBackend::SendSettings(const std::string& mode) {
 void CodexBackend::StartTurnLocked(const std::string& text) {
   const long long id = nextId_++;
   pending_[id] = Purpose::StartTurn;
-  const Json message = {
+  Json message = {
       {"id", id},
       {"method", "turn/start"},
       {"params",
@@ -177,6 +177,10 @@ void CodexBackend::StartTurnLocked(const std::string& text) {
         {"input", Json::array({{{"type", "text"},
                                 {"text", text},
                                 {"text_elements", Json::array()}}})}}}};
+  if (!turnModel_.empty()) {
+    message["params"]["model"] = turnModel_;
+    turnModel_.clear();
+  }
   // Written under mutex_ so that two prompts keep their order; the write
   // lock is always taken after this one, never before, so it cannot deadlock.
   Send(message);
@@ -303,7 +307,7 @@ bool CodexBackend::StartSignIn() {
     cancelSignInWanted_ = false;
   }
   if (Request(Purpose::StartSignIn, "account/login/start",
-              {{"type", "chatgptDeviceCode"}})) {
+              {{"type", "chatgpt"}})) {
     return true;
   }
   std::lock_guard<std::mutex> lock(mutex_);
@@ -440,10 +444,16 @@ void CodexBackend::OnLine(std::string_view line) {
     account_.plan = StringField(params, "planType");
   } else if (method == "account/login/completed") {
     // The translator says how it ended; here only that it has.
-    std::lock_guard<std::mutex> lock(mutex_);
-    signingIn_ = false;
-    loginId_.clear();
-    cancelSignInWanted_ = false;
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      signingIn_ = false;
+      loginId_.clear();
+      cancelSignInWanted_ = false;
+    }
+    const Json& success = Field(params, "success");
+    if (success.is_boolean() && success.get<bool>()) {
+      Request(Purpose::ListModels, "model/list", Json::object());
+    }
   } else if (method == "turn/started") {
     std::string turn = StringField(Field(params, "turn"), "id");
     bool interrupt = false;
@@ -630,6 +640,21 @@ void CodexBackend::OnResponse(const Json& message) {
         Request(Purpose::CancelSignIn, "account/login/cancel",
                 {{"loginId", loginId}});
       }
+      break;
+    }
+    case Purpose::ListModels: {
+      if (failed) break;
+      std::string model;
+      {
+        std::lock_guard<std::mutex> lock(mutex_);
+        model = ReplacementModel(result, model_);
+        if (!model.empty()) model_ = turnModel_ = model;
+      }
+      if (model.empty()) break;
+      // Codex says nothing of a model changed by turn/start, so this is the
+      // only word of it the status bar gets (invariant 21).
+      translator_.SeedModel(model);
+      Emit({agent::ModelChanged{model}});
       break;
     }
     case Purpose::CancelSignIn:

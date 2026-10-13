@@ -103,6 +103,9 @@ class CodexBackend : public agent::Backend {
     // account/login/start; its outcome comes later, as a notification.
     StartSignIn,
     CancelSignIn,
+    // model/list after a sign-in: whether the thread's model is still one
+    // the account may use.
+    ListModels,
   };
 
   bool Request(Purpose purpose, const char* method, Json params);
@@ -158,6 +161,9 @@ class CodexBackend : public agent::Backend {
   std::string modeAfterOpen_;
   // The thread's model, which a collaboration mode has to name.
   std::string model_;
+  // A model for the next turn/start, which keeps it for the turns after it
+  // too; empty when the thread's own will do.
+  std::string turnModel_;
   agent::Account account_;
   // From StartSignIn until account/login/completed, or a refused start.
   bool signingIn_ = false;

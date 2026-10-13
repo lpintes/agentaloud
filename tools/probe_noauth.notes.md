@@ -62,10 +62,19 @@ zapísala ho rodičovská session Claude Code, nie sonda. Claude si
   okamžite; app-server počúva na `127.0.0.1:1455` a prehliadač neotvára.
 - `account/login/start {type:"chatgptDeviceCode"}` →
   `{type, loginId, verificationUrl: "https://auth.openai.com/codex/device",
-  userCode: "XXXX-XXXXX"}` za ~0,3 s. Najlepšia cesta pre nevidiaceho:
-  adresa aj kód sú text, ktorý sa dá prečítať a skopírovať.
+  userCode: "XXXX-XXXXX"}` za ~0,3 s. Adresa aj kód sú text, **ale naostro
+  (13. 10. 2026) stránka odmietla pokračovať**: prihlásenie kódom zariadenia
+  treba najprv povoliť v nastaveniach zabezpečenia ChatGPT a predvolene je
+  vypnuté. Appka preto používa typ `chatgpt` — ten istý tok ako `codex login`.
 - `account/login/cancel {loginId}` → `{status: "canceled"}` a hneď
   `account/login/completed {loginId, success: false, error: "..."}`.
-- Úspešné dokončenie sa nemeralo (vyžaduje skutočné prihlásenie);
-  podľa schémy príde `account/login/completed success: true` a
-  `account/updated`.
+- Úspešné dokončenie typu `chatgpt` overené naostro v appke 13. 10. 2026:
+  prehliadač sa vráti na port 1455, príde `account/login/completed
+  success: true`, ďalší ťah ide bez reštartu procesu.
+- **Vlákno spred prihlásenia má model pre API kľúč** (`gpt-6.1-sol`) a konto
+  ChatGPT každý ťah na ňom odmietne: `turn/completed status: failed`,
+  `codexErrorInfo: "other"`, správa „The 'gpt-6.1-sol' model is not supported
+  when using Codex with a ChatGPT account.“ (400). `model/list` po prihlásení
+  dá modely konta s `isDefault` (`gpt-6-luna`); `turn/start` s poľom `model`
+  vlákno zachráni a model platí aj pre ďalšie ťahy. Zmenu modelu Codex
+  žiadnou notifikáciou neohlási. Sonda `tools/probe_codex_model_after_signin.py`.

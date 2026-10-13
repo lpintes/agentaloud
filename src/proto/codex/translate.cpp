@@ -653,10 +653,28 @@ bool FailedOnSignIn(const Json& error) {
 bool ParseSignInStart(const Json& result, agent::SignInPrompt* prompt,
                       std::string* loginId) {
   *loginId = StringField(result, "loginId");
-  prompt->url = StringField(result, "verificationUrl");
-  prompt->userCode = StringField(result, "userCode");
+  prompt->url = StringField(result, "authUrl");
+  prompt->userCode.clear();
+  if (prompt->url.empty()) {
+    prompt->url = StringField(result, "verificationUrl");
+    prompt->userCode = StringField(result, "userCode");
+  }
   prompt->wantsCode = false;
   return !loginId->empty() && !prompt->url.empty();
+}
+
+std::string ReplacementModel(const Json& modelListResult,
+                             const std::string& current) {
+  const Json& data = Field(modelListResult, "data");
+  if (!data.is_array()) return {};
+  std::string fallback;
+  for (const Json& entry : data) {
+    const std::string model = StringField(entry, "model");
+    if (model == current) return {};
+    const Json& isDefault = Field(entry, "isDefault");
+    if (isDefault.is_boolean() && isDefault.get<bool>()) fallback = model;
+  }
+  return fallback;
 }
 
 bool ElicitationPermission(const Json& params, agent::PermissionRequest* out) {

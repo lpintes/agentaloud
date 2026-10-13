@@ -322,9 +322,10 @@ struct SignInRequired {};
 // The answer to Backend::StartSignIn: where the reader goes to sign in.  Both
 // CLIs sign in through a web page and neither needs a console
 // (tools/probe_noauth.notes.md), but the page asks for different things.
-// Codex's device flow shows a code here that the reader types on the page;
-// Claude's page shows a code that the reader brings back, by
-// Backend::SubmitSignInCode.
+// Codex's page comes back to the CLI by itself; its device flow, off by
+// default in ChatGPT security settings, would show a code here that the
+// reader types on the page.  Claude's page shows a code that the reader
+// brings back, by Backend::SubmitSignInCode.
 struct SignInPrompt {
   std::string url;
   std::string userCode;  // to type on the page; empty when there is none

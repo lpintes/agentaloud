@@ -4502,24 +4502,44 @@ void TestCodexFixtureNoAuth(const std::string& dir) {
     CHECK(!one.signedIn);
     CHECK(!one.error.empty());
   }
-  // Odpoved na account/login/start preklada backend.  Berie sa len tvar
-  // s adresou a kodom ako textom; authUrl (typ chatgpt) nie.
-  size_t starts = 0, usable = 0;
+  // Odpoved na account/login/start preklada backend.  Typ chatgpt da len
+  // authUrl s navratom na 127.0.0.1:1455, chatgptDeviceCode adresu a kod.
+  size_t starts = 0, withCode = 0;
   for (const proto::Json& message : replay.messages) {
     auto found = message.find("result");
     if (found == message.end() || !found->contains("loginId")) continue;
     ++starts;
     agent::SignInPrompt prompt;
     std::string loginId;
-    if (!proto::codex::ParseSignInStart(*found, &prompt, &loginId)) continue;
-    ++usable;
-    CHECK_EQ(prompt.url, std::string("https://auth.openai.com/codex/device"));
-    CHECK_EQ(prompt.userCode, std::string("UB40-DMHQD"));
+    CHECK(proto::codex::ParseSignInStart(*found, &prompt, &loginId));
     CHECK(!prompt.wantsCode);
     CHECK(!loginId.empty());
+    if (prompt.userCode.empty()) {
+      CHECK(prompt.url.rfind("https://auth.openai.com/oauth/authorize?", 0) ==
+            0);
+      continue;
+    }
+    ++withCode;
+    CHECK_EQ(prompt.url, std::string("https://auth.openai.com/codex/device"));
+    CHECK_EQ(prompt.userCode, std::string("UB40-DMHQD"));
   }
   CHECK_EQ(starts, size_t{2});
-  CHECK_EQ(usable, size_t{1});
+  CHECK_EQ(withCode, size_t{1});
+
+  // Vlakno spred prihlasenia ma model pre API kluc; konto ChatGPT ho
+  // v model/list nema a dostane predvoleny.  Ponukany model zostava.
+  const proto::Json models = proto::Json::parse(
+      R"({"data": [{"id": "gpt-6-luna", "model": "gpt-6-luna",
+                    "isDefault": true},
+                   {"id": "gpt-5.5", "model": "gpt-5.5", "isDefault": false}],
+          "nextCursor": null})");
+  CHECK_EQ(proto::codex::ReplacementModel(models, "gpt-6.1-sol"),
+           std::string("gpt-6-luna"));
+  CHECK_EQ(proto::codex::ReplacementModel(models, "gpt-5.5"), std::string());
+  CHECK_EQ(proto::codex::ReplacementModel(models, "gpt-6-luna"),
+           std::string());
+  CHECK_EQ(proto::codex::ReplacementModel(proto::Json::object(), "x"),
+           std::string());
 
   // Prihlaseny ucet ma requiresOpenaiAuth tiez true; rozhoduje account.
   CHECK(!proto::codex::NeedsSignIn(proto::Json::parse(

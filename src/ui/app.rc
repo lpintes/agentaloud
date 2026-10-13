@@ -350,8 +350,8 @@ BEGIN
     LTEXT           "Kód zo strá&nky:", IDC_SIGNIN_ANSWER_LABEL, 8, 122, 284, 8
     EDITTEXT        IDC_SIGNIN_ANSWER, 8, 132, 284, 12, ES_AUTOHSCROLL
 
-    PUSHBUTTON      "&Otvoriť v prehliadači", IDC_SIGNIN_OPEN, 8, 154, 84, 14
-    PUSHBUTTON      "Kopí&rovať kód", IDC_SIGNIN_COPY, 96, 154, 64, 14
+    PUSHBUTTON      "Kopí&rovať kód", IDC_SIGNIN_COPY, 8, 154, 64, 14
+    PUSHBUTTON      "&Otvoriť v prehliadači", IDC_SIGNIN_OPEN, 76, 154, 84, 14
     PUSHBUTTON      "O&dovzdať kód", IDC_SIGNIN_SUBMIT, 164, 154, 64, 14
     PUSHBUTTON      "&Zrušiť", IDCANCEL, 236, 154, 56, 14
 END
