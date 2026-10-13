@@ -153,6 +153,57 @@ def probe_claude(cfg, repo):
     log.write("#", "== config dir after: " + json.dumps(sorted(os.listdir(cfg))))
 
 
+def probe_claude_login(cfg):
+    # claude-gui-lkk.71.4: does 'claude auth login' work without a TTY --
+    # does it print the URL, and does it read the code from stdin?  A wrong
+    # code is sent on purpose so nothing is ever stored.
+    env = clean_env(CLAUDE_CONFIG_DIR=cfg)
+    log = Log("claude-login")
+    args = [CLAUDE, "auth", "login"]
+    log.write("#", "args " + json.dumps(args))
+    child = subprocess.Popen(args, stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             env=env)
+
+    def read(stream, tag):
+        # Byte by byte: a prompt for the code may come without a newline.
+        buf = b""
+        while True:
+            ch = stream.read(1)
+            if not ch:
+                break
+            buf += ch
+            if ch == b"\n" or len(buf) > 400:
+                log.write(tag, buf.decode("utf-8", "replace").rstrip("\r\n"))
+                buf = b""
+        if buf:
+            log.write(tag, "(no newline) " + buf.decode("utf-8", "replace"))
+        log.write("#", f"{tag} EOF")
+
+    threading.Thread(target=read, args=(child.stdout, "<"),
+                     daemon=True).start()
+    threading.Thread(target=read, args=(child.stderr, "!"),
+                     daemon=True).start()
+    time.sleep(20)
+    log.write("#", f"alive after 20s: {child.poll() is None}")
+    if child.poll() is None:
+        line = b"not-a-real-code#not-a-real-state\n"
+        log.write(">", line.decode().rstrip())
+        try:
+            child.stdin.write(line)
+            child.stdin.flush()
+        except OSError as e:
+            log.write("#", f"stdin write failed: {e}")
+        time.sleep(15)
+    if child.poll() is None:
+        log.write("#", "still alive -> kill")
+        child.kill()
+    else:
+        log.write("#", f"exit {child.returncode}")
+    time.sleep(1)
+    log.write("#", "== config dir after: " + json.dumps(sorted(os.listdir(cfg))))
+
+
 def probe_codex(home, repo):
     env = clean_env(CODEX_HOME=home)
     log = Log("codex-cli")
@@ -196,6 +247,10 @@ def main():
         cfg = os.path.join(base, "claude")
         os.makedirs(cfg)
         probe_claude(cfg, repo)
+    if "login" in which:
+        cfg = os.path.join(base, "claude-login")
+        os.makedirs(cfg)
+        probe_claude_login(cfg)
     if "codex" in which:
         home = os.path.join(base, "codex")
         os.makedirs(home)

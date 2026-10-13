@@ -30,8 +30,21 @@ zapísala ho rodičovská session Claude Code, nie sonda. Claude si
 - Po zatvorení stdin proces skončí s kódom 1. Bez zatvorenia sa nemeralo
   (appka stdin drží, takže proces čaká na ďalší prompt).
 - `claude auth login` má `--claudeai`, `--console`, `--sso`, `--email`.
-  Neskúšalo sa: otvoril by prehliadač na ploche používateľa. Či vypíše URL
-  a čaká na kód zo stdin bez TTY, je otázka pre claude-gui-lkk.71.4.
+- `claude auth login` bez TTY (`python tools/probe_noauth.py login`,
+  13. 10. 2026, claude-gui-lkk.71.4) **funguje cez rúry**:
+  - hneď na stdout „Opening browser to sign in…" a „If the browser didn't
+    open, visit: https://claude.com/cai/oauth/authorize?code=true&…"
+    (riadok je dlhý, sonda ho láme po 400 bajtoch). Prehliadač otvorí CLI
+    samo.
+  - `redirect_uri` je `https://platform.claude.com/oauth/code/callback`, teda
+    ručný tok: stránka ukáže kód a ten sa vloží na stdin. Riadok so zlým
+    kódom vyvolal výmenu, „Login failed: Request failed with status code
+    400" na stderr a exit 1. Kód sa teda zo stdin číta.
+  - výzva „Paste code here if prompted > " príde na stdout **bez konca
+    riadku** a až po prečítaní kódu, takže čakať na ňu nemá zmysel.
+  - po neúspechu je v `CLAUDE_CONFIG_DIR` `.claude.json` a `backups`,
+    ostré súbory ostali netknuté.
+  - úspech sa nemeral (vyžaduje skutočné prihlásenie).
 
 ## Codex
 - `codex login status` → stderr „Not logged in", exit 1.
