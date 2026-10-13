@@ -583,6 +583,7 @@ bool IsMechanism(BlockKind kind) {
     case BlockKind::PermissionDenied:
     case BlockKind::Interrupted:
     case BlockKind::SessionEnded:
+    case BlockKind::SignInRequired:
       return false;
   }
   return false;
@@ -595,6 +596,8 @@ const wchar_t* KindLabel(BlockKind kind) {
     case BlockKind::PermissionDenied: return i18n::Text(Str::kKindDenied);
     case BlockKind::Interrupted: return i18n::Text(Str::kKindInterrupted);
     case BlockKind::SessionEnded: return i18n::Text(Str::kKindSessionEnded);
+    case BlockKind::SignInRequired:
+      return i18n::Text(Str::kKindSignInRequired);
     case BlockKind::Thinking: return i18n::Text(Str::kKindThinking);
     case BlockKind::ToolUse: return i18n::Text(Str::kKindTool);
     case BlockKind::ToolResult: return i18n::Text(Str::kKindOutput);
@@ -840,6 +843,22 @@ std::vector<Edit> Transcript::Append(const std::vector<agent::Event>& events) {
       made.push_back(MakeInterrupted());
     } else if (const auto* ended = std::get_if<agent::SessionEnded>(&event)) {
       made.push_back(MakeSessionEnded(*ended));
+    } else if (std::holds_alternative<agent::SignInRequired>(event)) {
+      // Codex says it twice in a row -- before the first turn and again when
+      // that turn fails -- and the second line would tell the reader nothing.
+      // After a prompt it is said again: it is why that prompt got no answer.
+      const Block* last = !made.empty()      ? &made.back()
+                          : !blocks_.empty() ? &blocks_.back()
+                                             : nullptr;
+      if (last != nullptr && last->kind == BlockKind::SignInRequired) continue;
+      Block block;
+      block.kind = BlockKind::SignInRequired;
+      block.body = i18n::Format(Str::kSignInRequired, {agentName_});
+      block.summary = block.body;
+      block.collapsible = false;
+      // E finds it: it is where the work stopped.
+      block.isError = true;
+      made.push_back(std::move(block));
     } else if (const auto* directory =
                    std::get_if<agent::WorkingDirectory>(&event)) {
       // Makes no block, but it is the project, and tool paths are shortened

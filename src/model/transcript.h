@@ -36,6 +36,7 @@ enum class BlockKind {
   PermissionDenied,  // a tool a rule would not let through
   Interrupted,       // the turn the reader stopped; added locally, like a prompt
   SessionEnded,      // the CLI exited unasked, with what it wrote to stderr
+  SignInRequired,    // the CLI is not signed in; our sentence, not the CLI's
   Thinking,
   ToolUse,
   ToolResult,

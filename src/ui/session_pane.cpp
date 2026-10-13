@@ -691,6 +691,14 @@ void SessionPane::OnDrain() {
         } else {
           SetStatus(status_);
         }
+      } else if (std::holds_alternative<agent::SignInRequired>(event)) {
+        // The sentence itself is the block, said by AnnounceProgress.  In a
+        // turn the bar keeps "pracujem" until it ends; outside one -- Codex
+        // knows before the first prompt -- it is the bar's answer now.
+        signInRequired_ = true;
+        if (!busy_ && !ended_) {
+          SetStatus(i18n::Text(Str::kStatusSignInRequired));
+        }
       } else if (std::holds_alternative<agent::SessionEnded>(event)) {
         // Nothing of the process outlives it (invariant 10).
         tasks_.clear();
@@ -716,6 +724,7 @@ void SessionPane::OnTurnStartedByAgent() {
   interrupted_ = false;
   thinkingSaid_ = false;
   spokeThisTurn_ = false;
+  signInRequired_ = false;
   SetStatus(i18n::Text(Str::kWorking));
   // Not said yet: the turn may turn out to be empty (agentTurnEmpty_).  The
   // bar says it at once, because that answers "is it working" either way.
@@ -745,7 +754,7 @@ void SessionPane::OnTurnEnded() {
   // must never clear it: TurnStarted comes for every turn, and clearing the
   // field there once wiped out the "pracujem" that Send had just written, so
   // the bar stayed blank for the whole turn.
-  SetStatus(L"");
+  SetStatus(signInRequired_ ? i18n::Text(Str::kStatusSignInRequired) : L"");
   // An empty turn the agent began by itself ends as it began, unheard: its
   // notification was answered in the turn before, which has had its "hotovo".
   // One the reader stopped is not empty to them -- Esc was said, so is this.
@@ -971,7 +980,8 @@ void SessionPane::AnnounceProgress(size_t firstNewId) {
     if (block.id < firstNewId) continue;
     const std::wstring* said = nullptr;
     switch (block.kind) {
-      case model::BlockKind::AssistantText: said = &block.body; break;
+      case model::BlockKind::AssistantText:
+      case model::BlockKind::SignInRequired: said = &block.body; break;
       case model::BlockKind::ToolUse:
       case model::BlockKind::ToolResult: said = &block.summary; break;
       default: break;
@@ -1456,6 +1466,7 @@ void SessionPane::SendText(const std::wstring& text) {
   interrupted_ = false;
   thinkingSaid_ = false;
   spokeThisTurn_ = false;
+  signInRequired_ = false;
   busy_ = true;
   SetStatus(i18n::Text(Str::kWorking));
   // Said as well as written.  The bar is silent until NVDA+End is pressed, and

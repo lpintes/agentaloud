@@ -319,6 +319,11 @@ class SessionPane {
   // The CLI's process is gone and nothing sent will be heard.  For good:
   // a session is not restarted in place.
   bool ended_ = false;
+  // The agent said it is not signed in, and nothing has been tried since.
+  // What the bar says once a turn is over, instead of nothing: an empty bar
+  // says "ask away", and no answer would come.  A new turn forgets it; if
+  // the agent is still signed out, that turn says so again.
+  bool signInRequired_ = false;
   // The questions of the turn now running that wait for the next prompt.
   // Offered when the turn ends, unless the reader stopped it.
   std::vector<agent::QuestionByPrompt> questionsByPrompt_;

@@ -318,6 +318,17 @@ std::vector<agent::Event> Translator::Translate(const Json& record) {
 
   switch (event.kind) {
     case EventKind::Assistant: {
+      // A message the CLI made up when the API refused it: model
+      // "<synthetic>", the CLI's text for a terminal ("Please run /login",
+      // a command the reader has nowhere to type), and this field as the one
+      // part meant for a program.  The event replaces the text -- the pane
+      // says it in its own words -- and nothing else of the message is true:
+      // no model answered it.  The result after it says "success"
+      // (tools/probe_noauth.notes.md).
+      if (StringField(event.raw, "error") == "authentication_failed") {
+        events.push_back(agent::SignInRequired{});
+        break;
+      }
       const Json* content = Content(event.raw);
       if (content == nullptr) break;
       // Every record of a subagent comes on the same stream as the
@@ -360,15 +371,6 @@ std::vector<agent::Event> Translator::Translate(const Json& record) {
           }
           events.push_back(agent::ToolCallStarted{std::move(call), by});
         }
-      }
-      // A message the CLI made up when the API refused it: model
-      // "<synthetic>", the CLI's text for a terminal ("Please run /login"),
-      // and this field as the one part meant for a program.  The result after
-      // it says "success" (tools/probe_noauth.notes.md).  The text stays in
-      // the transcript until the pane says something better
-      // (claude-gui-lkk.71.3).
-      if (StringField(event.raw, "error") == "authentication_failed") {
-        events.push_back(agent::SignInRequired{});
       }
       // Behind the content, so that what the turn said is said before the
       // status bar changes under it.
@@ -551,7 +553,8 @@ std::vector<agent::Event> TranslateHistory(const std::vector<Json>& records,
     // Everything the live path makes of the same record.  A record that was a
     // prompt has no tool_result in it, so this adds nothing twice.
     for (agent::Event& event : translator.Translate(record)) {
-      // Whether the CLI was signed in then says nothing about now.
+      // Whether the CLI was signed in then says nothing about now.  The
+      // prompt is left without an answer, which is what it got.
       if (std::holds_alternative<agent::SignInRequired>(event)) continue;
       events.push_back(std::move(event));
     }

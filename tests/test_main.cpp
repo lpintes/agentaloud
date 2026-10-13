@@ -528,6 +528,30 @@ void TestSessionEndedKeepsStderr() {
   CHECK_EQ(lingering.blocks()[0].summary, std::wstring(L"Agent skončil."));
 }
 
+void TestSignInRequiredBlock() {
+  TEST("transcript: neprihlaseny agent je jedna veta, nie dve za sebou");
+  model::Transcript transcript;
+  std::string problem;
+  CHECK(transcript.SetAgentName(L"codex"));
+  // Codex: raz z account/read pred tahom, druhy raz na konci tahu.  Medzi
+  // nimi prompt -- vtedy sa to povie znova, lebo to je odpoved nan.
+  transcript.Append({agent::SignInRequired{}});
+  transcript.Append({agent::SignInRequired{}});
+  CHECK_EQ(transcript.blocks().size(), size_t{1});
+  transcript.AppendUserPrompt(L"ahoj");
+  transcript.Append({agent::SignInRequired{}, agent::SignInRequired{}});
+  CHECK(transcript.CheckInvariants(&problem));
+  CHECK_EQ(transcript.blocks().size(), size_t{3});
+  const model::Block& block = transcript.blocks()[2];
+  CHECK(block.kind == model::BlockKind::SignInRequired);
+  CHECK(block.isError);
+  CHECK(!block.collapsible);
+  CHECK(!model::IsMechanism(block.kind));
+  CHECK_EQ(block.body, std::wstring(L"codex nie je prihlásený k účtu, takže "
+                                    L"neodpovie."));
+  CHECK_EQ(transcript.FirstLine(2), block.body);
+}
+
 void TestToolResultsSitBehindTheirCall() {
   TEST("transcript: vysledok stoji za svojim volanim, nie na konci");
   model::Transcript transcript;
@@ -3177,6 +3201,8 @@ void TestFixtureClaudeNoAuth(const std::string& dir) {
     }
   }
   CHECK_EQ(EventsOf<agent::SignInRequired>(events).size(), size_t{1});
+  // "Please run /login" je pokyn pre terminal; namiesto neho hovori panel.
+  CHECK(EventsOf<agent::AssistantText>(events).empty());
   CHECK(EventsOf<agent::SessionEnded>(events).empty());
   CHECK_EQ(EventsOf<agent::TurnEnded>(events).size(), size_t{1});
   // "<synthetic>" nie je model; stavovy riadok zostava na system/init.
@@ -4430,6 +4456,8 @@ void TestCodexFixtureNoAuth(const std::string& dir) {
   // Tah: desat chyb s 401 a willRetry, potom turn/completed failed.  Hlasi sa
   // len to posledne.
   CHECK_EQ(EventsOf<agent::SignInRequired>(replay.events).size(), size_t{1});
+  CHECK_EQ(CountKinds(replay.transcript)[model::BlockKind::SignInRequired],
+           size_t{1});
   const auto ended = EventsOf<agent::TurnEnded>(replay.events);
   CHECK_EQ(ended.size(), size_t{1});
   if (!ended.empty()) {
@@ -4527,6 +4555,7 @@ int main(int argc, char** argv) {
   TestErrorNavigationAndFirstLine();
   TestInterruptLeavesAMark();
   TestSessionEndedKeepsStderr();
+  TestSignInRequiredBlock();
   TestToolResultsSitBehindTheirCall();
   TestBookmarksSurviveCollapsing();
   TestBookmarkIntoCollapsedBlock();
