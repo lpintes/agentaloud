@@ -483,6 +483,10 @@ void CodexBackend::OnResponse(const Json& message) {
   switch (purpose) {
     case Purpose::Initialize: {
       Send({{"method", "initialized"}});
+      // Beside the thread, not before it: signed out, thread/start still
+      // succeeds (tools/probe_noauth.notes.md), and the session is there to
+      // sign in from.
+      Request(Purpose::ReadAccount, "account/read", {{"refreshToken", false}});
       using Resume = agent::StartOptions::Resume;
       if (options_.resume == Resume::ById && !options_.resumeId.empty()) {
         Json params = ThreadParams(options_.mode);
@@ -557,6 +561,9 @@ void CodexBackend::OnResponse(const Json& message) {
     case Purpose::ReadSubagent:
       // Refused, the subagent keeps the name off its agentPath.
       if (!failed) Emit(translator_.Nickname(Field(result, "thread")));
+      break;
+    case Purpose::ReadAccount:
+      if (!failed && NeedsSignIn(result)) Emit({agent::SignInRequired{}});
       break;
     case Purpose::Interrupt:
     case Purpose::StopTask:

@@ -41,6 +41,12 @@ LOGS = {
     "resume-multi": "codex-resume",  # thread/resume s plnou historiou
 }
 
+# Neprihlaseny Codex (tools/probe_noauth.py, claude-gui-lkk.71.2).  Iny
+# priecinok, lebo ina sonda; pod --noauth-logs.
+NOAUTH_LOGS = {
+    "codex-rpc": "codex-noauth",  # account/read bez uctu, tah zlyha na 401
+}
+
 # Polia, ktorych obsah je tento stroj, nie protokol.
 MACHINE_FIELDS = {"serverName", "installationId"}
 
@@ -53,6 +59,9 @@ def path_rewrites():
         (re.compile(re.escape(home), re.IGNORECASE), r"C:\\Users\\user"),
         (re.compile(re.escape(home.replace("\\", "/")), re.IGNORECASE),
          "C:/Users/user"),
+        # Docasny adresar tools/probe_noauth.py ma nahodne meno pri kazdom
+        # behu; bez tohto by sa fixtura lisila aj tam, kde sa nic nezmenilo.
+        (re.compile(r"noauth-(?!probe)[A-Za-z0-9_]+"), "noauth-0000"),
     ]
 
 
@@ -99,15 +108,23 @@ def write_fixture(log_path, out_dir, name):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--logs", default="C:/b/codex-probe/logs")
+    parser.add_argument("--noauth-logs", default="C:/b/noauth-probe/logs")
     parser.add_argument("--out", default=os.path.join("tests", "fixtures"))
+    parser.add_argument("--only", action="append", metavar="MENO",
+                        help="len tato fixtura (napr. codex-noauth); "
+                             "opakovatelne")
     args = parser.parse_args()
     os.makedirs(args.out, exist_ok=True)
-    for log, name in LOGS.items():
-        path = os.path.join(args.logs, log + ".log")
-        if not os.path.exists(path):
-            print("chyba %s -- pusti najprv sondy tools/probe_codex_*.py" % path)
-            return 1
-        write_fixture(path, args.out, name)
+    sources = [(args.logs, LOGS), (args.noauth_logs, NOAUTH_LOGS)]
+    for directory, logs in sources:
+        for log, name in logs.items():
+            if args.only and name not in args.only:
+                continue
+            path = os.path.join(directory, log + ".log")
+            if not os.path.exists(path):
+                print("chyba %s -- pusti najprv sondy tools/probe_*.py" % path)
+                return 1
+            write_fixture(path, args.out, name)
     return 0
 
 

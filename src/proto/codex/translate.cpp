@@ -68,6 +68,12 @@ const std::set<std::string>& IgnoredMethods() {
       "mcpServer/startupStatus/updated",
       "remoteControl/status/changed",
       "account/updated",
+      // The end of a sign-in we started.  The backend will wait for it once
+      // it can start one (claude-gui-lkk.71.4); the stream has nothing to show.
+      "account/login/completed",
+      // Seen only as "Falling back from WebSockets to HTTPS transport", the
+      // transport changing under a turn that goes on (signed out, measured).
+      "warning",
       "skills/changed",
       "deprecationNotice",
       // The reviewer of the auto mode.  started has nothing yet, and the
@@ -623,6 +629,29 @@ std::vector<std::string> FileChangeScope(const Json& item) {
   return lines;
 }
 
+bool NeedsSignIn(const Json& accountReadResult) {
+  // requiresOpenaiAuth alone is not it: it says the provider wants an
+  // account, and is true when one is signed in as well.
+  return accountReadResult.is_object() &&
+         Field(accountReadResult, "account").is_null() &&
+         Field(accountReadResult, "requiresOpenaiAuth").is_boolean() &&
+         Field(accountReadResult, "requiresOpenaiAuth").get<bool>();
+}
+
+bool FailedOnSignIn(const Json& error) {
+  // The schema has it both ways: "unauthorized" as a plain code, or one of
+  // the connection variants with the HTTP status inside.  Measured signed out
+  // was only the second (httpConnectionFailed, 401).
+  const Json& info = Field(error, "codexErrorInfo");
+  if (info.is_string()) return info.get<std::string>() == "unauthorized";
+  if (!info.is_object()) return false;
+  for (const auto& variant : info.items()) {
+    const Json& status = Field(variant.value(), "httpStatusCode");
+    if (status.is_number_integer() && status.get<int>() == 401) return true;
+  }
+  return false;
+}
+
 bool ElicitationPermission(const Json& params, agent::PermissionRequest* out) {
   // "openai/form" and "openaiForm" carry a schema of their own shape; one with
   // no properties is still a yes or a no, and anything else is not.
@@ -902,6 +931,11 @@ std::vector<agent::Event> Translator::Translate(const Json& message) {
       ended.outcome = agent::TurnOutcome::Interrupted;
     } else if (status == "failed") {
       ended.outcome = agent::TurnOutcome::Failed;
+      // Only the error that ends the turn: those before it are retries, five
+      // and five more, each on 401 (tools/probe_noauth.notes.md).
+      if (FailedOnSignIn(Field(Field(params, "turn"), "error"))) {
+        events.push_back(agent::SignInRequired{});
+      }
     }
     events.push_back(ended);
     // What the turn left running is in the background now -- an interrupted

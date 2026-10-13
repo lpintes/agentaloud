@@ -91,6 +91,9 @@ class CodexBackend : public agent::Backend {
     StopTask,
     // thread/read of a subagent just started, for its nickname.
     ReadSubagent,
+    // account/read at the start, to say "not signed in" before the first
+    // prompt rather than after it.
+    ReadAccount,
   };
 
   bool Request(Purpose purpose, const char* method, Json params);

@@ -127,6 +127,15 @@ bool Replay(const std::vector<proto::Json>& records, model::Transcript* into,
   return true;
 }
 
+template <typename T>
+std::vector<T> EventsOf(const std::vector<agent::Event>& events) {
+  std::vector<T> out;
+  for (const agent::Event& event : events) {
+    if (const T* found = std::get_if<T>(&event)) out.push_back(*found);
+  }
+  return out;
+}
+
 // ------------------------------------------------------------ 1. aritmetika
 
 void TestUtfRoundTrip() {
@@ -3147,6 +3156,41 @@ void TestFixtureDenied(const std::string& dir) {
   }
 }
 
+void TestFixtureClaudeNoAuth(const std::string& dir) {
+  TEST("fixtura claude-noauth: neprihlasene CLI je jedna udalost portu");
+  // Zo zaznamu tools/probe_noauth.py (claude-gui-lkk.71.2): prazdny
+  // CLAUDE_CONFIG_DIR, jeden prompt.  Proces bezi dalej, takze ziadne
+  // SessionEnded -- neprihlasenie je stav, nie koniec.
+  bool ok = false;
+  const auto records = ReadJsonl(dir + "/claude-noauth.jsonl", &ok);
+  if (!ok) {
+    Fail(__FILE__, __LINE__,
+         "chyba " + dir + "/claude-noauth.jsonl -- spusti "
+         "tools/make_fixtures.py --from-log");
+    return;
+  }
+  proto::Translator translator;
+  std::vector<agent::Event> events;
+  for (const proto::Json& record : records) {
+    for (agent::Event& event : translator.Translate(record)) {
+      events.push_back(std::move(event));
+    }
+  }
+  CHECK_EQ(EventsOf<agent::SignInRequired>(events).size(), size_t{1});
+  CHECK(EventsOf<agent::SessionEnded>(events).empty());
+  CHECK_EQ(EventsOf<agent::TurnEnded>(events).size(), size_t{1});
+  // "<synthetic>" nie je model; stavovy riadok zostava na system/init.
+  for (const agent::ModelChanged& changed :
+       EventsOf<agent::ModelChanged>(events)) {
+    CHECK(changed.model.front() != '<');
+  }
+
+  // Ten isty zaznam z disku po --resume: vtedy neprihlaseny neznamena teraz.
+  CHECK(EventsOf<agent::SignInRequired>(proto::TranslateHistory(records,
+                                                                nullptr))
+            .empty());
+}
+
 void TestFixtureThinking(const std::string& dir) {
   TEST("fixtura thinking: blok premyslania s obsahom, zamrznuty");
   // ZAMRZNUTA FIXTURA, a jedina taka.  make_fixtures.py ju nikdy nezapisuje
@@ -3531,15 +3575,6 @@ bool ReplayCodex(const std::string& path, CodexReplay* replay,
     Fail(__FILE__, __LINE__, path + ": nezname spravy:" + types);
   }
   return true;
-}
-
-template <typename T>
-std::vector<T> EventsOf(const std::vector<agent::Event>& events) {
-  std::vector<T> out;
-  for (const agent::Event& event : events) {
-    if (const T* found = std::get_if<T>(&event)) out.push_back(*found);
-  }
-  return out;
 }
 
 // Kazde volanie v prepise ma svoj vysledok -- okrem tych, ktore su v `open`.
@@ -4388,6 +4423,50 @@ void TestCodexFixtureReasoning(const std::string& dir) {
   CHECK(CountKinds(replay.transcript).count(model::BlockKind::Thinking) > 0);
 }
 
+void TestCodexFixtureNoAuth(const std::string& dir) {
+  TEST("codex fixtura noauth: neprihlasenie pred tahom aj na jeho konci");
+  CodexReplay replay;
+  if (!ReplayCodex(dir + "/codex-noauth.jsonl", &replay)) return;
+  // Tah: desat chyb s 401 a willRetry, potom turn/completed failed.  Hlasi sa
+  // len to posledne.
+  CHECK_EQ(EventsOf<agent::SignInRequired>(replay.events).size(), size_t{1});
+  const auto ended = EventsOf<agent::TurnEnded>(replay.events);
+  CHECK_EQ(ended.size(), size_t{1});
+  if (!ended.empty()) {
+    CHECK(ended[0].outcome == agent::TurnOutcome::Failed);
+  }
+  CHECK(EventsOf<agent::SessionEnded>(replay.events).empty());
+
+  // account/read: odpoved je vo fixture, preklada ju backend, nie Translator.
+  size_t accounts = 0;
+  for (const proto::Json& message : replay.messages) {
+    const proto::Json* result = nullptr;
+    if (auto found = message.find("result");
+        found != message.end() && found->contains("requiresOpenaiAuth")) {
+      result = &*found;
+    }
+    if (result == nullptr) continue;
+    ++accounts;
+    CHECK(proto::codex::NeedsSignIn(*result));
+  }
+  CHECK_EQ(accounts, size_t{1});
+
+  // Prihlaseny ucet ma requiresOpenaiAuth tiez true; rozhoduje account.
+  CHECK(!proto::codex::NeedsSignIn(proto::Json::parse(
+      R"({"account": {"type": "chatgpt", "email": "x@example.invalid"},
+          "requiresOpenaiAuth": true})")));
+  CHECK(!proto::codex::NeedsSignIn(proto::Json::parse(
+      R"({"account": null, "requiresOpenaiAuth": false})")));
+  // Druhy tvar zo schemy, ktory sonda nevidela.
+  CHECK(proto::codex::FailedOnSignIn(
+      proto::Json::parse(R"({"codexErrorInfo": "unauthorized"})")));
+  CHECK(!proto::codex::FailedOnSignIn(
+      proto::Json::parse(R"({"codexErrorInfo": "usageLimitExceeded"})")));
+  CHECK(!proto::codex::FailedOnSignIn(proto::Json::parse(
+      R"({"codexErrorInfo": {"httpConnectionFailed":
+          {"httpStatusCode": 500}}})")));
+}
+
 void TestCodexFixtureResume(const std::string& dir) {
   TEST("codex fixtura resume: historia prichadza v tvare streamu");
   bool ok = false;
@@ -4496,6 +4575,7 @@ int main(int argc, char** argv) {
   TestProjectKeyAndTime();
   TestFixtureBasic(fixtures);
   TestFixtureDenied(fixtures);
+  TestFixtureClaudeNoAuth(fixtures);
   TestFixtureThinking(fixtures);
   TestFixtureDisk(fixtures);
   TestCodexModes();
@@ -4514,6 +4594,7 @@ int main(int argc, char** argv) {
   TestCodexFixtureAsk(fixtures);
   TestCodexFixtureInterrupt(fixtures);
   TestCodexFixtureReasoning(fixtures);
+  TestCodexFixtureNoAuth(fixtures);
   TestCodexFixtureResume(fixtures);
 
   if (const char* corpus = std::getenv("AGENTALOUD_CORPUS")) {

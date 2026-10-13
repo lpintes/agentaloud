@@ -312,6 +312,13 @@ struct SessionEnded {
   std::string errorOutput;
 };
 
+// The CLI is not signed in to its account, and no turn will get anywhere
+// until it is.  The process runs on: it is a state, not an end, which is why
+// this is not SessionEnded.  When it comes differs per CLI -- Codex says so
+// before the first turn, Claude only once a prompt is sent
+// (tools/probe_noauth.notes.md) -- and it may come more than once.
+struct SignInRequired {};
+
 // A record the adapter did not recognise.  Not an error; the soak counts them
 // so a new record type is noticed by us and not by a user.
 struct Unrecognised { std::string type; };
@@ -323,7 +330,7 @@ using Event = std::variant<AssistantText, Thinking, ThinkingTick,
                            ModelChanged, ModeChanged, ContextUsed,
                            UsageChanged, RateLimitChanged, Ready, TurnStarted,
                            TurnEnded, BackgroundTasksChanged, BackgroundMoved,
-                           SessionEnded, Unrecognised>;
+                           SessionEnded, SignInRequired, Unrecognised>;
 
 }  // namespace agent
 

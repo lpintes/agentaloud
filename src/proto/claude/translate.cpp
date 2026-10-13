@@ -361,6 +361,15 @@ std::vector<agent::Event> Translator::Translate(const Json& record) {
           events.push_back(agent::ToolCallStarted{std::move(call), by});
         }
       }
+      // A message the CLI made up when the API refused it: model
+      // "<synthetic>", the CLI's text for a terminal ("Please run /login"),
+      // and this field as the one part meant for a program.  The result after
+      // it says "success" (tools/probe_noauth.notes.md).  The text stays in
+      // the transcript until the pane says something better
+      // (claude-gui-lkk.71.3).
+      if (StringField(event.raw, "error") == "authentication_failed") {
+        events.push_back(agent::SignInRequired{});
+      }
       // Behind the content, so that what the turn said is said before the
       // status bar changes under it.
       if (std::string answering; ParseAnsweringModel(event.raw, &answering)) {
@@ -542,6 +551,8 @@ std::vector<agent::Event> TranslateHistory(const std::vector<Json>& records,
     // Everything the live path makes of the same record.  A record that was a
     // prompt has no tool_result in it, so this adds nothing twice.
     for (agent::Event& event : translator.Translate(record)) {
+      // Whether the CLI was signed in then says nothing about now.
+      if (std::holds_alternative<agent::SignInRequired>(event)) continue;
       events.push_back(std::move(event));
     }
   }

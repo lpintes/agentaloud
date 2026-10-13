@@ -185,6 +185,16 @@ Json MakeElicitationAnswer(agent::Verdict verdict);
 // dialog (agent::PermissionRequest::sessionScope).  Empty when it is not known.
 std::vector<std::string> FileChangeScope(const Json& item);
 
+// ---- Sign-in -------------------------------------------------------------
+
+// Whether the result of account/read says no one is signed in.  Codex knows
+// before any turn; a turn would only find out after some fifteen seconds of
+// retries (tools/probe_noauth.notes.md).
+bool NeedsSignIn(const Json& accountReadResult);
+
+// Whether a turn/completed or an error notification failed on 401.
+bool FailedOnSignIn(const Json& error);
+
 // ---- The stream -----------------------------------------------------------
 
 // The live stream, message by message.  A class, because a call is complete

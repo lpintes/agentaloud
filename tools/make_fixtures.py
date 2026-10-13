@@ -159,6 +159,8 @@ def path_rewrites():
         # by sa fixtura lisila aj tam, kde sa nic nezmenilo.
         (re.compile(r"claudelens-fixture-[A-Za-z0-9_]+"),
          "claudelens-fixture-0000"),
+        # To iste pre docasny adresar tools/probe_noauth.py (from_log).
+        (re.compile(r"noauth-(?!probe)[A-Za-z0-9_]+"), "noauth-0000"),
     ]
 
 # Timestamp sa NEnahradzuje retazcom "<scrubbed>", hoci volatilny je.  Diskovy
@@ -444,15 +446,53 @@ def rescrub(path):
     write_fixture(lines, out_dir, name)
 
 
+# Riadok logu sondy (tools/probe_*.py): cas, smer a JSON.  '<' je to, co
+# poslalo CLI.
+LOG_LINE = re.compile(r"^\s*[0-9.]+ < (.*)$")
+
+
+def from_log(path, out_dir, name):
+    """Fixtura zo zaznamu sondy namiesto noveho behu CLI.
+
+    Pre stav, ktory sa beh za behom vyrobit neda bez zasahu do stroja --
+    neprihlasene CLI (claude-gui-lkk.71.2, log z tools/probe_noauth.py).  Do
+    fixtury ide len stream; control_response je odpoved na nasu poziadavku
+    a odpoved na initialize nesie zoznam prikazov a skillov tohto stroja.
+    Riadky, ktore nie su JSON (viacriadkovy vystup `claude auth status`), sa
+    preskakuju."""
+    lines = []
+    with open(path, encoding="utf-8") as source:
+        for line in source:
+            match = LOG_LINE.match(line.rstrip("\r\n"))
+            if not match:
+                continue
+            try:
+                record = json.loads(match.group(1))
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(record, dict) or \
+               record.get("type") == "control_response":
+                continue
+            lines.append(match.group(1))
+    write_fixture(lines, out_dir, name)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default=os.path.join("tests", "fixtures"))
+    parser.add_argument("--from-log", nargs=2, metavar=("LOG", "MENO"),
+                        help="fixtura MENO zo zaznamu sondy, bez CLI; napr. "
+                             "C:/b/noauth-probe/logs/claude.log claude-noauth")
     parser.add_argument("--profile", action="append", choices=list(PROFILES),
                         help="opakovatelne; bez neho sa vyrobia vsetky")
     parser.add_argument("--rescrub", action="append", metavar="SUBOR",
                         help="prezenie existujucu fixturu scrubberom znova "
                              "a nespusti CLI; opakovatelne")
     args = parser.parse_args()
+
+    if args.from_log:
+        from_log(args.from_log[0], args.out, args.from_log[1])
+        return 0
 
     if args.rescrub:
         # Vylucne s --profile: prve nesiaha na CLI a druhe na nom stoji.
