@@ -24,7 +24,8 @@ LOGDIR = "C:/b/codex-probe/logs"
 
 
 class Client:
-    def __init__(self, name, extra_args=(), on_request=None, cwd=REPO):
+    def __init__(self, name, extra_args=(), on_request=None, cwd=REPO,
+                 env=None):
         os.makedirs(LOGDIR, exist_ok=True)
         self.log = open(f"{LOGDIR}/{name}.log", "w", encoding="utf-8")
         self.started = time.time()
@@ -37,7 +38,7 @@ class Client:
         self.write_log("#", "args " + json.dumps(args))
         self.child = subprocess.Popen(
             args, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, cwd=cwd)
+            stderr=subprocess.PIPE, cwd=cwd, env=env)
         threading.Thread(target=self._read, daemon=True).start()
         threading.Thread(target=self._read_err, daemon=True).start()
 
