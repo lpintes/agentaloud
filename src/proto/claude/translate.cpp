@@ -610,12 +610,25 @@ agent::Capabilities ClaudeCapabilities() {
   capabilities.allowForSession = false;
   capabilities.stopTask = true;
   capabilities.backgroundNow = true;
+  capabilities.signIn = true;
   // The aliases --help names, plus opusplan.  Aliases rather than ids
   // because they follow the newest model on their own; the list that is
   // true for the account comes only with the initialize answer, which is
   // too late for choosing what to start.
   capabilities.models = {"sonnet", "opus", "haiku", "opusplan"};
   return capabilities;
+}
+
+bool ParseSignInUrl(std::string_view line, std::string* url) {
+  const std::size_t start = line.find("https://");
+  if (start == std::string_view::npos) return false;
+  std::size_t end = start;
+  while (end < line.size() &&
+         static_cast<unsigned char>(line[end]) > ' ') {
+    ++end;
+  }
+  url->assign(line.substr(start, end - start));
+  return true;
 }
 
 namespace {

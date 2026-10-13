@@ -3217,6 +3217,21 @@ void TestFixtureClaudeNoAuth(const std::string& dir) {
             .empty());
 }
 
+void TestClaudeSignInUrl() {
+  TEST("claude auth login: adresa z riadku stdout");
+  // Riadky z tools/probe_noauth.py login (claude-gui-lkk.71.4), adresa
+  // skratena.  Koniec riadku z rury moze byt \r\n.
+  std::string url;
+  CHECK(!proto::ParseSignInUrl("Opening browser to sign in\xE2\x80\xA6", &url));
+  CHECK(proto::ParseSignInUrl(
+      "If the browser didn't open, visit: "
+      "https://claude.com/cai/oauth/authorize?code=true&state=x\r",
+      &url));
+  CHECK_EQ(url,
+           std::string("https://claude.com/cai/oauth/authorize?code=true&state=x"));
+  CHECK(!proto::ParseSignInUrl("Paste code here if prompted > ", &url));
+}
+
 void TestFixtureThinking(const std::string& dir) {
   TEST("fixtura thinking: blok premyslania s obsahom, zamrznuty");
   // ZAMRZNUTA FIXTURA, a jedina taka.  make_fixtures.py ju nikdy nezapisuje
@@ -4632,6 +4647,7 @@ int main(int argc, char** argv) {
   TestFixtureBasic(fixtures);
   TestFixtureDenied(fixtures);
   TestFixtureClaudeNoAuth(fixtures);
+  TestClaudeSignInUrl();
   TestFixtureThinking(fixtures);
   TestFixtureDisk(fixtures);
   TestCodexModes();

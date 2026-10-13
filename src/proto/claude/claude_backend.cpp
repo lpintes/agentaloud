@@ -48,6 +48,7 @@ ClaudeBackend::ClaudeBackend() : capabilities_(ClaudeCapabilities()) {}
 bool ClaudeBackend::Start(const agent::StartOptions& options,
                           Callbacks callbacks) {
   callbacks_ = std::move(callbacks);
+  projectDir_ = options.projectDir;
 
   Session::Options session;
   session.workingDir = options.projectDir;
@@ -270,6 +271,111 @@ bool ClaudeBackend::Background() { return session_.BackgroundTasks(); }
 
 bool ClaudeBackend::SetMode(const std::string& id) {
   return session_.SetPermissionMode(id);
+}
+
+bool ClaudeBackend::StartSignIn() {
+  std::unique_ptr<win::Process> previous;
+  std::unique_ptr<win::Process> process = std::make_unique<win::Process>();
+  unsigned generation = 0;
+  {
+    std::lock_guard<std::mutex> lock(signInMutex_);
+    if (signingIn_) return false;
+    signingIn_ = true;
+    signInPrompted_ = false;
+    signInLine_.clear();
+    generation = ++signInGeneration_;
+    previous = std::move(signIn_);
+  }
+  // The last one has ended, but its threads are joined here, unlocked.
+  previous.reset();
+
+  // With pipes and no console the CLI asks nothing: it prints the address at
+  // once and reads the code the page shows off stdin.  It also opens the
+  // browser itself, and nothing on its command line stops that (measured,
+  // tools/probe_noauth.py login).
+  const bool started = process->Start(
+      L"claude auth login", projectDir_,
+      [this, generation](std::string_view bytes) {
+        OnSignInOutput(generation, bytes);
+      },
+      [this, generation](const win::Process::Exit& exit) {
+        OnSignInExit(generation, exit);
+      });
+  {
+    std::lock_guard<std::mutex> lock(signInMutex_);
+    if (started) {
+      signIn_ = std::move(process);
+      return true;
+    }
+    signingIn_ = false;
+  }
+  return false;
+}
+
+void ClaudeBackend::OnSignInOutput(unsigned generation,
+                                   std::string_view bytes) {
+  std::vector<agent::SignInPrompt> prompts;
+  {
+    std::lock_guard<std::mutex> lock(signInMutex_);
+    if (generation != signInGeneration_ || !signingIn_) return;
+    signInLine_.append(bytes);
+    std::size_t end;
+    while ((end = signInLine_.find('\n')) != std::string::npos) {
+      agent::SignInPrompt prompt;
+      if (!signInPrompted_ &&
+          ParseSignInUrl(std::string_view(signInLine_).substr(0, end),
+                         &prompt.url)) {
+        signInPrompted_ = true;
+        prompt.wantsCode = true;
+        prompts.push_back(std::move(prompt));
+      }
+      signInLine_.erase(0, end + 1);
+    }
+  }
+  if (!callbacks_.onEvents) return;
+  for (agent::SignInPrompt& prompt : prompts) {
+    callbacks_.onEvents({std::move(prompt)});
+  }
+}
+
+void ClaudeBackend::OnSignInExit(unsigned generation,
+                                 const win::Process::Exit& exit) {
+  {
+    std::lock_guard<std::mutex> lock(signInMutex_);
+    if (generation != signInGeneration_ || !signingIn_) return;
+    signingIn_ = false;
+  }
+  // A failure is "Login failed: <reason>" on stderr and exit code 1; the
+  // CLI's words go to the reader as they are, without the line break.
+  agent::SignInFinished done;
+  done.signedIn = exit.codeKnown && exit.code == 0;
+  if (!done.signedIn) {
+    done.error = exit.errorOutput;
+    while (!done.error.empty() &&
+           static_cast<unsigned char>(done.error.back()) <= ' ') {
+      done.error.pop_back();
+    }
+  }
+  if (callbacks_.onEvents) callbacks_.onEvents({std::move(done)});
+}
+
+bool ClaudeBackend::SubmitSignInCode(const std::string& code) {
+  std::lock_guard<std::mutex> lock(signInMutex_);
+  if (!signingIn_ || !signIn_) return false;
+  return signIn_->Write(code + "\n");
+}
+
+bool ClaudeBackend::CancelSignIn() {
+  {
+    std::lock_guard<std::mutex> lock(signInMutex_);
+    if (!signingIn_) return false;
+    signingIn_ = false;
+    // Its exit, which follows, finds signingIn_ false and says nothing; the
+    // Finished below is the one this sign-in ends with.
+    if (signIn_) signIn_->Terminate();
+  }
+  if (callbacks_.onEvents) callbacks_.onEvents({agent::SignInFinished{}});
+  return true;
 }
 
 void ClaudeBackend::Stop(unsigned turnTimeoutMs) { session_.Stop(turnTimeoutMs); }

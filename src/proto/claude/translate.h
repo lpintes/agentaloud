@@ -18,6 +18,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "agent/backend.h"
@@ -144,6 +145,13 @@ std::vector<std::string> PlanModesAfter(const std::vector<std::string>& refused,
 // and not in ClaudeBackend so that a test can hold the cycle against the one
 // it replaced without starting a process.
 agent::Capabilities ClaudeCapabilities();
+
+// The address in one line of what `claude auth login` writes to stdout, or
+// false for a line without one.  The CLI says "If the browser didn't open,
+// visit: <url>" (measured, tools/probe_noauth.py login, claude-gui-lkk.71.4);
+// the first https:// up to whitespace is taken rather than the words before
+// it, which are for a person and may change.
+bool ParseSignInUrl(std::string_view line, std::string* url);
 
 // The CLI's permission_suggestions as lines for the reader: what "allow for
 // this session" lets through (agent::PermissionRequest::sessionScope).  One
