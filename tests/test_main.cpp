@@ -57,6 +57,7 @@
 #include "arguments.h"
 #include "session_names.h"
 #include "settings.h"
+#include "tone.h"
 #include "update.h"
 #include "version.h"
 
@@ -1267,6 +1268,16 @@ void TestSettingsWrite() {
   app::Settings yes = app::Settings::Parse("check-updates=ano\n");
   yes.Check(backends);
   CHECK(yes.error().find(L"ano") != std::wstring::npos);
+  // Zvuky (claude-gui-lkk.75): ten isty vypinac.
+  CHECK(app::Settings::Parse("").Sounds());
+  CHECK(!app::Settings::Parse("sounds=0\n").Sounds());
+  app::Settings sounds = app::Settings::Parse("sounds=1\n");
+  sounds.Check(backends);
+  CHECK(sounds.error().empty());
+  app::Settings soundsOff = app::Settings::Parse("sounds=off\n");
+  soundsOff.Check(backends);
+  CHECK(soundsOff.error().find(L"sounds") != std::wstring::npos);
+  CHECK(soundsOff.error().find(L"off") != std::wstring::npos);
 
   // Jazyk: sk, en alebo prazdny riadok-sablona; nic ine.
   app::Settings language = app::Settings::Parse("language=en\n");
@@ -1279,6 +1290,50 @@ void TestSettingsWrite() {
   app::Settings german = app::Settings::Parse("language=de\n");
   german.Check(backends);
   CHECK(german.error().find(L"de") != std::wstring::npos);
+}
+
+// Zvukovy signal ako WAV v pamati (claude-gui-lkk.75).  PlaySoundW zly
+// subor odmietne ticho -- signal, ktory nezaznie, sa nikde neohlasi.
+void TestToneWave() {
+  gCurrentTest = "TestToneWave";
+  auto u32 = [](const std::vector<std::uint8_t>& w, size_t at) {
+    return static_cast<std::uint32_t>(w[at]) | (w[at + 1] << 8) |
+           (w[at + 2] << 16) | (static_cast<std::uint32_t>(w[at + 3]) << 24);
+  };
+  auto sample = [](const std::vector<std::uint8_t>& w, size_t index) {
+    const size_t at = 44 + index * 2;
+    return static_cast<std::int16_t>(w[at] | (w[at + 1] << 8));
+  };
+
+  // 100 ms tonu + 50 ms pauzy + 40 ms tonu.
+  const std::vector<std::uint8_t> wave =
+      tone::MakeWave({{440, 100}, {0, 50}, {880, 40}}, 0.5);
+  const size_t frames = static_cast<size_t>(tone::kSampleRate) * 190 / 1000;
+  CHECK_EQ(wave.size(), 44 + frames * 2);
+  CHECK_EQ(std::string(wave.begin(), wave.begin() + 4), std::string("RIFF"));
+  CHECK_EQ(u32(wave, 4), static_cast<std::uint32_t>(wave.size() - 8));
+  CHECK_EQ(std::string(wave.begin() + 8, wave.begin() + 16),
+           std::string("WAVEfmt "));
+  CHECK_EQ(u32(wave, 24), static_cast<std::uint32_t>(tone::kSampleRate));
+  CHECK_EQ(std::string(wave.begin() + 36, wave.begin() + 40),
+           std::string("data"));
+  CHECK_EQ(u32(wave, 40), static_cast<std::uint32_t>(frames * 2));
+
+  // Nabeh a dobeh: kazdy ton zacina a konci v nule, inak cvakne.
+  const size_t first = static_cast<size_t>(tone::kSampleRate) * 100 / 1000;
+  CHECK_EQ(sample(wave, 0), 0);
+  CHECK(std::abs(sample(wave, first - 1)) < 200);
+  CHECK(std::abs(sample(wave, frames - 1)) < 200);
+
+  // Pauza je ticho a amplituda drzi strop.
+  const size_t rest = first + tone::kSampleRate * 50 / 1000;
+  int loudest = 0;
+  for (size_t i = first; i < rest; ++i) CHECK_EQ(sample(wave, i), 0);
+  for (size_t i = 0; i < frames; ++i) {
+    loudest = std::max(loudest, std::abs(static_cast<int>(sample(wave, i))));
+  }
+  CHECK(loudest <= 16384);
+  CHECK(loudest > 16000);
 }
 
 // Pravidla aktualizacii bez siete (claude-gui-lkk.53).
@@ -4631,6 +4686,7 @@ int main(int argc, char** argv) {
   TestSessionOrdinals();
   TestSettings();
   TestSettingsWrite();
+  TestToneWave();
   TestUpdateRules();
   TestPermissionModeReports();
   TestPermissionModeTracker();

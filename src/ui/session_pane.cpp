@@ -20,6 +20,7 @@
 #include "ui/plan_dialog.h"
 #include "ui/resource.h"
 #include "ui/sign_in_dialog.h"
+#include "ui/signals.h"
 #include "ui/tasks_dialog.h"
 #include "win/clipboard.h"
 
@@ -33,11 +34,6 @@ constexpr int kIdTranscriptLabel = 1001;
 constexpr int kIdTranscript = 1002;
 constexpr int kIdPromptLabel = 1003;
 constexpr int kIdPrompt = 1004;
-
-// The end of a turn when the window is not in front.  Deliberately not the
-// asterisk: that one already answers a narrower question ("the turn ended and
-// nothing was said"), and a sound that answers two questions answers neither.
-constexpr UINT kBackgroundEndSound = MB_ICONEXCLAMATION;
 
 constexpr int kMargin = 8;
 constexpr int kLabelHeight = 18;
@@ -688,7 +684,7 @@ void SessionPane::OnDrain() {
           if (InForeground() && speech_.available()) {
             speech_.Say(i18n::Text(Str::kTasksStopped), false);
           } else {
-            MessageBeep(InForeground() ? MB_ICONASTERISK : kBackgroundEndSound);
+            signals::TurnEnded(Behind());
           }
         } else {
           SetStatus(status_);
@@ -822,7 +818,7 @@ void SessionPane::OnTurnEnded() {
     if (InForeground() && speech_.available()) {
       speech_.Say(i18n::Text(Str::kSayInterrupted), false);
     } else {
-      MessageBeep(InForeground() ? MB_ICONASTERISK : kBackgroundEndSound);
+      signals::TurnEnded(Behind());
     }
   } else {
     SignalTurnEnd();
@@ -846,13 +842,14 @@ void SessionPane::OnSessionEnded() {
   // not progress: it is the one fact that changes what every key does next,
   // and nothing later would say it.  The CLI's own words stay in the block,
   // where they can be read line by line; spoken, a stack trace is noise.
-  // Behind the window it is the sound of a turn ending there, which it is.
+  // Behind the window it is a tone of its own, not the end of a turn: what
+  // the reader comes back to is a session that will not answer.
   const std::vector<model::Block>& blocks = model_.blocks();
   if (InForeground() && speech_.available() && !blocks.empty() &&
       blocks.back().kind == model::BlockKind::SessionEnded) {
     speech_.Say(blocks.back().summary, false);
   } else {
-    MessageBeep(InForeground() ? MB_ICONASTERISK : kBackgroundEndSound);
+    signals::AgentEnded(Behind());
   }
 }
 
@@ -881,17 +878,10 @@ void SessionPane::SignalWaiting() const {
   // invariant 11: on a background window it is cancelled by the reader's next
   // keystroke and never arrives.
   //
-  // Not MessageBeep, and that is the point.  Both of its usable sounds already
-  // mean something ("the turn ended and nothing was said", "the turn ended
-  // behind the window"), and a sound that answers two questions answers
-  // neither.  MB_ICONQUESTION would have been the obvious third, but the
-  // Windows default scheme leaves that event unassigned, so it would have
-  // failed the only way that matters here: silently.
-  //
-  // Without SND_NODEFAULT an alias that is not assigned falls back to the
-  // system default sound rather than to nothing, which is the behaviour wanted
-  // on a machine whose scheme has been cut down.
-  PlaySoundW(L"Notification.Default", nullptr, SND_ALIAS | SND_ASYNC);
+  // Our own tone, repeated until the window comes back: Notification.Default
+  // was tried first and, reported from use, was neither heard nor told apart
+  // from the rest of the system's sounds (claude-gui-lkk.75).
+  signals::Waiting(top);
 }
 
 LRESULT SessionPane::OnPermission(LPARAM pointer) {
@@ -906,6 +896,7 @@ LRESULT SessionPane::OnPermission(LPARAM pointer) {
   if (!pending->request->modesAfter.empty()) {
     AskPlanApproval(host_, *pending->request, backend_->capabilities().modes,
                     &pending->answer);
+    signals::StopRepeating();
     // Sent back, the turn ends and what to change is the next prompt
     // (claude-gui-lkk.67), so that is where the reader goes.  Nothing said of
     // our own: behind a dialog just closed NVDA cuts it off (invariant 6), and
@@ -914,6 +905,7 @@ LRESULT SessionPane::OnPermission(LPARAM pointer) {
     return 0;
   }
   pending->answer.verdict = AskPermission(host_, *pending->request);
+  signals::StopRepeating();
   // No message: what the model is told on a denial is the adapter's to say
   // (proto::kDeniedInstruction for Claude).
   return 0;
@@ -931,6 +923,7 @@ LRESULT SessionPane::OnQuestion(LPARAM pointer) {
   pending->answer.declined =
       !AskQuestions(host_, pending->request->questions, pending->request->by,
                     &pending->answer.chosen);
+  signals::StopRepeating();
   return 0;
 }
 
@@ -962,6 +955,11 @@ bool SessionPane::InForeground() const {
   if (host_ == nullptr || !active_) return false;
   const HWND top = GetAncestor(host_, GA_ROOT);
   return top != nullptr && GetForegroundWindow() == top;
+}
+
+HWND SessionPane::Behind() const {
+  if (InForeground() || host_ == nullptr) return nullptr;
+  return GetAncestor(host_, GA_ROOT);
 }
 
 bool SessionPane::WantsProgressSpeech() const {
@@ -1051,29 +1049,28 @@ void SessionPane::SignalTurnEnd() {
   // "hotovo" dies in the middle.  A sound is not in that queue and is not
   // cancelled by anything.
   //
-  // A different one from the asterisk below, which already means something
-  // narrower ("the turn ended and nothing was said").  Two events answering
-  // with the same sound would make the sound mean neither.
   if (!InForeground()) {
-    MessageBeep(kBackgroundEndSound);
+    signals::TurnEnded(Behind());
     return;
   }
   // A word and not a beep, when anything was said.  MessageBeep plays at once
   // while the speech it belongs after is still in NVDA's queue, so the "done"
   // would land in the middle of the answer -- and a queued beep is not on
   // offer, NVDA speaks text.  It queues, like everything that arrived on its
-  // own -- invariant 7.
+  // own -- invariant 7.  And then the tone after all, once NVDA has said it:
+  // the word is easy to lose at the tail of a long answer, the tone is the
+  // same one heard behind the window (asked for from use, lkk.75).
   if (spokeThisTurn_ && speech_.available()) {
-    speech_.Say(i18n::Text(Str::kSayDone), false);
+    speech_.SayThen(i18n::Text(Str::kSayDone), [] { signals::TurnEnded(); });
     return;
   }
   // Nothing was said all turn -- it did no tool and produced no text -- or
   // there is no screen reader listening.  A sound is then the only way to know
   // the turn is over without going to look, and nothing is queued for it to
-  // cut across.  MessageBeep rather than a tone of our own: it goes through
-  // the system sounds, so it can be silenced where everything else is.
-  // Asterisk, not the Default Beep -- see Announce.
-  MessageBeep(MB_ICONASTERISK);
+  // cut across.  The same tone as behind the window: it is the same event.
+  // The asterisk it used to be is left to Announce, which means by it "the
+  // key worked, there is just no voice".
+  signals::TurnEnded();
 }
 
 bool SessionPane::Navigate(wchar_t key) {
@@ -1448,6 +1445,7 @@ void SessionPane::OnQuestionByPrompt() {
   std::vector<std::vector<std::string>> chosen;
   // Always the conversation's: only its own next prompt can answer one.
   const bool answered = AskQuestions(host_, questions, std::string(), &chosen);
+  signals::StopRepeating();
 
   // The outcome behind each call, the same as the blocking question gets
   // from its adapter -- what was chosen, or "bez odpovede".  Without it a
@@ -1665,6 +1663,7 @@ void SessionPane::OnOfferSignIn() {
   const int answer =
       MessageBoxW(host_, question.c_str(), L"" APP_NAME,
                   MB_YESNO | MB_ICONQUESTION);
+  signals::StopRepeating();
   if (answer == IDYES) SignIn();
 }
 

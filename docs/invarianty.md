@@ -180,12 +180,13 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    Koniec ťahu preto musí povedať, že je koniec — „hotovo"
    (`ui::SessionPane::SignalTurnEnd`). Kým odpoveď chodila až na konci, koniec
    sa poznal po nej; keď chodí priebežne, ťah končiaci vetou znie ako ťah,
-   ktorý sa chystá povedať ďalšiu. Slovo, nie pípnutie: `MessageBeep` zaznie
-   hneď, kým reč, za ktorú patrí, ešte stojí vo fronte NVDA, a pípnutie sa do
-   tej fronty zaradiť nedá — NVDA hovorí text.
+   ktorý sa chystá povedať ďalšiu. Slovo, a tón až po ňom: zvuk zahraný hneď
+   by zaznel, kým reč, za ktorú patrí, ešte stojí vo fronte NVDA. Tón sa preto
+   zahrá, až keď NVDA „hotovo" dopovie (`Speech::SayThen`, invariant 11).
 
-   Pípnutie nie je náhrada reči. `MessageBeep` už jeden význam má — „ťah
-   skončil a nič nezaznelo" (`SignalTurnEnd`) — takže keď naň spadne aj
+   Pípnutie nie je náhrada reči. `MessageBeep(MB_ICONASTERISK)` kedysi
+   znamenal aj „ťah skončil a nič nezaznelo" (dnes vlastný tón,
+   claude-gui-lkk.75) — takže keď naň spadol aj
    `Announce`, odpovie každá klávesa tým istým zvukom ako koniec ťahu a znie
    to, akoby ju appka nepoznala. Presne to urobila kópia `.exe` bez
    `nvdaControllerClient.dll` vedľa seba: klávesy vrátane Ctrl+Enter fungovali
@@ -377,9 +378,29 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     lebo je to tá istá otázka. Znie to ako pokazená reč, hoci sa pokazila
     odpoveď na „číta ešte?".
 
-    Zvuk pre koniec ťahu na pozadí musí byť **iný než `MB_ICONASTERISK`** — ten
-    už znamená užšiu vec („ťah skončil a nič nezaznelo", invariant 6). Jeden
-    zvuk na dve udalosti neznamená ani jednu.
+    **Zvuky sú vlastné tóny, nie systémové** (`ui::signals`, syntéza
+    `tone::MakeWave`, claude-gui-lkk.75). Systémové zvuky závisia od zvukovej
+    schémy, často sú vypnuté alebo rovnaké, a z používania prišlo, že
+    `Notification.Default` nebolo počuť ani rozoznať. Tri udalosti, tri tvary:
+    koniec ťahu (dva klesajúce), agent čaká (dve ťuknutia a stúpnutie), proces
+    agenta skončil (tri klesajúce). WAV v pamäti cez `PlaySoundW`
+    `SND_MEMORY | SND_ASYNC` — `Beep()` je synchrónny a zasekol by UI vlákno.
+    `MB_ICONASTERISK` zostal len `Announce` bez hlasu („klávesa zabrala, niet
+    hlasu"). `sounds=0` v nastaveniach tóny vypne.
+
+    - **Na pozadí sa tón opakuje každých 30 s, kým okno (alebo okno, ktoré
+      vlastní) nepríde do popredia**; opakuje sa len posledná udalosť.
+      Popredie sa kontroluje každých 250 ms, nie len pri tóne: čitateľ, ktorý
+      sa vrátil a do intervalu zase odišiel, inak nebol nikdy videný a volalo
+      sa naňho ďalej (z používania). Po zodpovedanom dialógu
+      `signals::StopRepeating` — otázka už nestojí.
+    - **V popredí zaznie raz.** Koniec ťahu, ktorý niečo povedal: „hotovo"
+      a tón **po ňom** — `Speech::SayThen` volá `speakSsml` **synchrónne** na
+      vlastnom vlákne, lebo len tak NVDA povie, kedy dohovorila (prečítané
+      v `source/NVDAHelper/__init__.py`: asynchrónne volanie sa vráti hneď
+      a značky nehlási). `ERROR_CANCELLED` (čitateľ reč prerušil) = tón hneď;
+      iná chyba (1717, NVDA pred 2024.1) = `speakText` a tón hneď.
+    - **Dialóg v popredí tón nemá** — fokus doň skočí a NVDA ho prečíta.
 
     **Modálne okno na pozadí je tretia udalosť a potrebuje tretí zvuk.**
     Otázka od modelu aj žiadosť o povolenie ťah **zastavia**, takže mlčať sa tu
@@ -388,16 +409,12 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     zastavený ťah, o ktorom nikto nevie; čitateľ sa vrátil sám po minúte.
     Ohlasuje to `ui::SessionPane::SignalWaiting`: `FlashWindowEx`
     s `FLASHW_TIMERNOFG` (bliká, kým okno nepríde do popredia — a prísť môže
-    len preto, aby sa odpovedalo) a zvuk. Reč nie, z toho istého dôvodu ako pri
-    „hotovo".
+    len preto, aby sa odpovedalo) a tón `signals::Waiting`. Reč nie, z toho
+    istého dôvodu ako pri „hotovo".
 
-    Zvuk **nie je** `MessageBeep`, a to je pointa: jeho dva použiteľné zvuky už
-    významy majú (`MB_ICONASTERISK`, `MB_ICONEXCLAMATION` vyššie) a
-    `MB_ICONQUESTION`, ktorý sa sám ponúka ako tretí, nemá vo východiskovej
-    schéme Windows priradený **žiadny súbor** — zlyhal by presne tým jediným
-    spôsobom, na ktorom tu záleží, teda ticho. Preto `PlaySoundW` s aliasom
-    `Notification.Default`, a **bez** `SND_NODEFAULT`: nepriradený alias potom
-    spadne na systémový východiskový zvuk namiesto na ticho.
+    História: pred lkk.75 to bol `PlaySoundW` s aliasom `Notification.Default`,
+    lebo `MB_ICONQUESTION` nemá vo východiskovej schéme Windows priradený
+    žiadny súbor a zlyhal by ticho. Ani alias sa v používaní neosvedčil.
 
     A keď sa čitateľ vráti, fokus musí pristáť **v tom okne**. Modál svojho
     vlastníka **zakáže**, a na dieťa zakázaného okna sa `SetFocus` nedá —
@@ -1272,7 +1289,7 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     vetou — inak by blok vyzeral useknutý. `isError`, aby ho našlo E. Panel
     v popredí povie prvý riadok **bez ohľadu na kurzor** (invariant 11 tu
     neplatí, je to fakt, ktorý mení, čo urobí každá ďalšia klávesa), na
-    pozadí zvuk konca ťahu. Stavový riadok povie „agent nebeží" — prázdne
+    pozadí vlastný tón `signals::AgentEnded` (invariant 11). Stavový riadok povie „agent nebeží" — prázdne
     pole by znamenalo „hotovo, pýtaj sa" — a Ctrl+Enter odmietne s odkazom
     na Ctrl+N. Session sa na mieste nereštartuje.
 

@@ -112,6 +112,8 @@ std::string Settings::Serialize() const {
 
 bool Settings::CheckUpdates() const { return Get(kCheckUpdatesKey) != "0"; }
 
+bool Settings::Sounds() const { return Get(kSoundsKey) != "0"; }
+
 void Settings::Check(const std::map<std::string, agent::Capabilities>& backends) {
   std::vector<std::string> names;
   for (const auto& [name, capabilities] : backends) names.push_back(name);
@@ -127,10 +129,10 @@ void Settings::Check(const std::map<std::string, agent::Capabilities>& backends)
       }
       continue;
     }
-    if (key == kCheckUpdatesKey) {
+    if (key == kCheckUpdatesKey || key == kSoundsKey) {
       if (!empty && entry.value != "0" && entry.value != "1") {
-        Complain(entry.line, i18n::Format(i18n::Str::kSettingsCheckUpdates,
-                                          {Wide(entry.value)}));
+        Complain(entry.line, i18n::Format(i18n::Str::kSettingsOnOff,
+                                          {Wide(key), Wide(entry.value)}));
       }
       continue;
     }

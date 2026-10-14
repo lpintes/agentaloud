@@ -50,15 +50,25 @@ class Speech {
   void Say(const std::wstring& text, bool interrupt);
   void Silence();
 
+  // Say(text, false), and call `then` once NVDA has finished saying it --
+  // and with it everything queued before it -- or the reader cut it short.
+  // For a tone that has to come after the speech and not in the middle of it
+  // (claude-gui-lkk.75).  `then` runs on a thread of its own.  Without the
+  // SSML half of the API (NVDA before 2024.1) it runs at once.
+  void SayThen(const std::wstring& text, void (*then)());
+
  private:
   bool Running() const;
 
   using SpeakText = long(__stdcall*)(const wchar_t*);
   using CancelSpeech = long(__stdcall*)();
   using TestIfRunning = long(__stdcall*)();
+  // symbol level, priority, asynchronous -- see vendor/nvda/nvdaController.h.
+  using SpeakSsml = long(__stdcall*)(const wchar_t*, int, int, unsigned char);
 
   HMODULE library_ = nullptr;
   SpeakText speak_ = nullptr;
+  SpeakSsml speakSsml_ = nullptr;
   CancelSpeech cancel_ = nullptr;
   TestIfRunning test_ = nullptr;
 };

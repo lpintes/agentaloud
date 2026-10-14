@@ -27,6 +27,7 @@
 #include "ui/main_window.h"
 #include "ui/new_session_dialog.h"
 #include "ui/resource.h"
+#include "ui/signals.h"
 #include "win/console.h"
 #include "win/dialog.h"
 #include "win/paths.h"
@@ -369,7 +370,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   // typed.  A file with a bad line is not applied at all -- half a file is a
   // setting nobody wrote.
   app::Settings settings = ReadSettings(settingsBytes);
-  if (settings.error().empty()) app::ApplySettings(&arguments, settings);
+  if (settings.error().empty()) {
+    app::ApplySettings(&arguments, settings);
+    ui::signals::SetEnabled(settings.Sounds());
+  }
   app::CheckBackend(&arguments, kBackends);
   // Made now, before the folder picker: its capabilities are what the mode is
   // checked against, and a refused mode must not be answered with "which

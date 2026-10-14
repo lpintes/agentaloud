@@ -85,9 +85,14 @@ class Settings {
   // the updates.
   bool CheckUpdates() const;
 
+  // Whether the turn's end and a waiting question are signalled by our own
+  // tones (claude-gui-lkk.75).  On unless the file says 0, for the reason
+  // CheckUpdates is.
+  bool Sounds() const;
+
   // Checks every key against what the backends are and what each of them can
   // do: `backend` must name one of them, `<backend>.permission-mode` must be
-  // one of that backend's modes, check-updates is 0 or 1, and nothing else
+  // one of that backend's modes, check-updates and sounds are 0 or 1, and nothing else
   // may be there.  Every
   // backend's lines are checked, not just the chosen one's -- a typo in the
   // codex lines would otherwise wait to be found the day codex is used.
@@ -121,6 +126,8 @@ inline constexpr char kLanguageKey[] = "language";
 inline constexpr char kCheckUpdatesKey[] = "check-updates";
 inline constexpr char kLastUpdateCheckKey[] = "last-update-check";
 inline constexpr char kSkippedVersionKey[] = "skipped-version";
+// "0" turns our own tones off (claude-gui-lkk.75).
+inline constexpr char kSoundsKey[] = "sounds";
 
 // Fills in what the command line left empty: the command line wins, the file
 // comes next, and the built-in default -- which CheckBackend supplies -- last.

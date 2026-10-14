@@ -280,8 +280,12 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
     okno na pozadí alebo neaktívna session → mlčí (koniec ťahu zvukom);
     kurzor si čitateľ presunul → mlčí; fokus v prompte alebo kurzor sleduje
     koniec (`Following()`, `anchor_`, ktorý `Apply` prevezme, kým kurzor stojí
-    na konci) → hovorí. Modál na pozadí: `SignalWaiting` (`FlashWindowEx` +
-    `PlaySoundW` `Notification.Default` bez `SND_NODEFAULT`). Fokus pod
+    na konci) → hovorí. Zvuky sú vlastné tóny (`ui::signals`, `tone.cpp`):
+    koniec ťahu, agent čaká (`SignalWaiting` + `FlashWindowEx`), agent
+    skončil. Na pozadí sa opakujú každých 30 s, kým okno nepríde dopredu
+    (kontrola každých 250 ms; po dialógu `StopRepeating`), v popredí raz;
+    dialóg v popredí tón nemá. „Hotovo" a tón po ňom cez `Speech::SayThen`
+    (synchrónne `speakSsml` na vlastnom vlákne). `sounds=0` vypne. Fokus pod
     modálom cez `GW_ENABLEDPOPUP`. `Announce` sa netlmí nikdy.
 12. **`AskUserQuestion` nie je povolenie, hoci ako `can_use_tool` pricestuje.**
     Vetví sa podľa mena nástroja v `ClaudeBackend::OnPermission` →

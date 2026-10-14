@@ -256,6 +256,9 @@ class SessionPane {
   bool Following() const;
   // Whether this pane's window is the one the user is working in.
   bool InForeground() const;
+  // The frame to call the reader back to while this pane is out of sight, or
+  // nullptr when they are here -- what signals:: repeats a tone until.
+  HWND Behind() const;
   // Whether a running turn may speak at all.  See the comment on the
   // definition: three states, and only one of them is spoken to.
   bool WantsProgressSpeech() const;

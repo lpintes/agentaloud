@@ -115,11 +115,11 @@ PROTO_SRCS := $(PROTO_PURE_SRCS) src/proto/claude/session.cpp \
               src/proto/claude/claude_backend.cpp \
               src/proto/codex/codex_backend.cpp
 
-# Prikazovy riadok, subor nastaveni, pravidla aktualizacii a cislovanie
-# sessions v jednom priecinku: ciste, bez
+# Prikazovy riadok, subor nastaveni, pravidla aktualizacii, cislovanie
+# sessions v jednom priecinku a bajty zvukovych signalov: ciste, bez
 # windows.h a bez siete, aby ich testy videli.
 APP_PURE_SRCS := src/arguments.cpp src/settings.cpp src/version.cpp src/update.cpp \
-                 src/session_names.cpp
+                 src/session_names.cpp src/tone.cpp
 
 # Transkript a jeho mapa rozsahov.  Nevie o windows.h, a prave preto sa da
 # testovat bez okna -- co je vacsina toho, preco maju tie testy cenu.
@@ -133,7 +133,7 @@ UI_SRCS := src/ui/session_pane.cpp src/ui/session_window.cpp src/ui/main_window.
            src/ui/new_session_dialog.cpp src/ui/dialog_texts.cpp \
            src/ui/find_dialog.cpp src/ui/about_dialog.cpp \
            src/ui/tasks_dialog.cpp src/ui/plan_dialog.cpp \
-           src/ui/sign_in_dialog.cpp
+           src/ui/sign_in_dialog.cpp src/ui/signals.cpp
 
 APP_SRCS := $(I18N_SRCS) $(WIN_SRCS) $(AGENT_SRCS) $(PROTO_SRCS) $(MODEL_SRCS) $(UI_SRCS) \
             $(APP_PURE_SRCS) src/version_current.cpp src/updater.cpp src/main.cpp

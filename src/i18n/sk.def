@@ -459,12 +459,15 @@ S(kHelp,
   L"      claude.model=opus\n"
   L"      codex.permission-mode=plan\n"
   L"      check-updates=0\n"
+  L"      sounds=0\n"
   L"      language=en\n"
   L"  Platí to, čo nepovie príkazový riadok.  language je jeden z: {7};\n"
   L"  bez neho hovorí {0} jazykom Windows, a keď ho nevie,\n"
   L"  po anglicky.  check-updates=0 vypne kontrolu novej verzie, ktorú\n"
   L"  {0} inak robí pri štarte raz denne; kedy kontroloval naposledy,\n"
   L"  si zapíše do toho istého súboru a ostatné riadky pritom nechá tak.\n"
+  L"  sounds=0 vypne tóny pre koniec ťahu a pre agenta, ktorý čaká\n"
+  L"  na odpoveď.\n"
   L"  Neznámy kľúč alebo režim {0} odmietne a povie riadok, rovnako\n"
   L"  ako neznámu voľbu.  Priečinok config vedľa {8}, keď existuje,\n"
   L"  sa použije namiesto toho v %APPDATA%.\n"
@@ -477,7 +480,7 @@ S(kSeeHelp, L"Zoznam volieb vypíše {0} --help.")
 S(kSettingsLine, L"riadok {0}: {1}")
 S(kSettingsNotKeyValue, L"očakáva sa kľúč=hodnota, je tam „{0}“")
 S(kSettingsDuplicate, L"kľúč {0} je už na riadku {1}")
-S(kSettingsCheckUpdates, L"check-updates je 0 alebo 1, nie {0}")
+S(kSettingsOnOff, L"{0} je 0 alebo 1, nie {1}")
 S(kUnknownLanguage, L"neznámy jazyk {0}; známe sú: {1}")
 S(kUnknownKey, L"neznámy kľúč {0}")
 S(kSettingsFileError, L"nastavenia {0}, {1}")
