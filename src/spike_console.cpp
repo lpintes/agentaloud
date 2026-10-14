@@ -12,6 +12,8 @@
 // that will not finish on its own and stops the turn from underneath it, with
 // every record printed whole.  What the end of an interrupted turn looks like
 // is not something one can read out of the CLI binary with any confidence.
+//
+// `list` only reads: the conversations the folder has, from both adapters.
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -19,7 +21,9 @@
 #include <cstdio>
 #include <string>
 
+#include "proto/claude/claude_backend.h"
 #include "proto/claude/session.h"
+#include "proto/codex/codex_backend.h"
 
 namespace {
 
@@ -59,16 +63,42 @@ void PrintAssistantText(const proto::Json& record) {
   }
 }
 
+// The `list` errand (claude-gui-lkk.7.11.2): agent::Backend::ListConversations
+// of both adapters, on backends never started, as the dialog will ask it.
+// Read-only; prints count, time taken and the first few.
+int ListBoth(const std::wstring& folder) {
+  proto::ClaudeBackend claude;
+  proto::codex::CodexBackend codex;
+  agent::Backend* const backends[] = {&claude, &codex};
+  const char* const names[] = {"claude", "codex"};
+  int failed = 0;
+  for (int i = 0; i < 2; ++i) {
+    std::vector<agent::Conversation> list;
+    const ULONGLONG begun = GetTickCount64();
+    const bool ok = backends[i]->ListConversations(folder, &list);
+    std::printf("%s: %s, %zu rozhovorov, %llu ms\n", names[i],
+                ok ? "ok" : "ZLYHALO", list.size(), GetTickCount64() - begun);
+    if (!ok) ++failed;
+    for (size_t j = 0; j < list.size() && j < 5; ++j) {
+      std::printf("  %ls  %lld  %s\n", list[j].id.c_str(), list[j].lastActive,
+                  Shorten(list[j].firstPrompt, 70).c_str());
+    }
+  }
+  return failed;
+}
+
 }  // namespace
 
 int wmain(int argc, wchar_t** argv) {
   UseUtf8Console();
   if (argc < 2) {
     std::printf(
-        "pouzitie: spike_console <pracovny-adresar> [allow|deny|interrupt]\n");
+        "pouzitie: spike_console <pracovny-adresar> "
+        "[allow|deny|interrupt|list]\n");
     return 2;
   }
   const std::wstring mode = argc < 3 ? L"allow" : argv[2];
+  if (mode == L"list") return ListBoth(argv[1]);
   const bool interrupt = mode == L"interrupt";
   // The interrupt errand has to let the tool start before it can stop it.
   const bool allow = interrupt || mode != L"deny";

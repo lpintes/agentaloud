@@ -44,6 +44,10 @@ class LineAssembler {
 // and that must not take the reader down with it.
 bool ParseLine(std::string_view line, Json* out, std::string* error);
 
+// One line, whitespace collapsed.  What goes into a sentence read out in one
+// breath -- a prompt of twenty lines there would bury everything after it.
+std::string OneLine(std::string_view text);
+
 }  // namespace proto
 
 #endif

@@ -1,5 +1,6 @@
 #include "proto/claude/sessions.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
@@ -85,23 +86,6 @@ std::string UserText(const Json& record) {
 // Where the text starts, past the whitespace, or npos when there is none.
 size_t FirstWord(const std::string& text) {
   return text.find_first_not_of(" \t\r\n");
-}
-
-// One line, whitespace collapsed.  What goes into a sentence read out in one
-// breath -- a prompt of twenty lines there would bury everything after it.
-std::string OneLine(const std::string& text) {
-  std::string flat;
-  bool space = false;
-  for (const char c : text) {
-    if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
-      space = !flat.empty();
-      continue;
-    }
-    if (space) flat += ' ';
-    space = false;
-    flat += c;
-  }
-  return flat;
 }
 
 // The CLI's own nudge when a turn produced nothing visible.  Machinery, and
@@ -240,37 +224,64 @@ bool ReadSessionSummary(const std::wstring& path, SessionSummary* out) {
   return true;
 }
 
-bool LatestSession(const std::wstring& projectPath, SessionSummary* out) {
+bool ProjectSessions(const std::wstring& projectPath,
+                     std::vector<SessionSummary>* out) {
+  out->clear();
   const std::wstring directory = ProjectSessionDir(projectPath);
   if (directory.empty()) return false;
   std::error_code code;
   std::filesystem::directory_iterator entries(
       std::filesystem::path(directory), code);
-  if (code) return false;  // no directory means no session, which is an answer
+  if (code) return true;  // no directory means no session, which is an answer
 
-  SessionSummary best;
-  bool found = false;
   for (const std::filesystem::directory_entry& entry : entries) {
     if (entry.path().extension() != L".jsonl") continue;
     SessionSummary summary;
-    if (!ReadSessionSummary(entry.path().wstring(), &summary)) continue;
-    // Text order is time order for ISO 8601 with a Z on the end, so the stamp
-    // never has to be parsed to sort by it.  A session with no stamp at all
-    // loses to every session that has one, which is what an empty string does.
-    if (!found || summary.lastStamp > best.lastStamp) {
-      best = std::move(summary);
-      found = true;
+    if (ReadSessionSummary(entry.path().wstring(), &summary)) {
+      out->push_back(std::move(summary));
     }
   }
-  if (found) *out = std::move(best);
-  return found;
+  // Text order is time order for ISO 8601 with a Z on the end, so the stamp
+  // never has to be parsed to sort by it.  A session with no stamp at all
+  // goes after every session that has one, which is what an empty string
+  // does.  Ties go by id, so that a list read twice is the same list.
+  std::sort(out->begin(), out->end(),
+            [](const SessionSummary& a, const SessionSummary& b) {
+              if (a.lastStamp != b.lastStamp) return a.lastStamp > b.lastStamp;
+              return a.id < b.id;
+            });
+  return true;
 }
 
-std::wstring LocalTimeText(const std::string& isoStamp) {
+bool LatestSession(const std::wstring& projectPath, SessionSummary* out) {
+  std::vector<SessionSummary> sessions;
+  if (!ProjectSessions(projectPath, &sessions) || sessions.empty()) {
+    return false;
+  }
+  *out = std::move(sessions.front());
+  return true;
+}
+
+bool ProjectConversations(const std::wstring& projectPath,
+                          std::vector<agent::Conversation>* out) {
+  out->clear();
+  std::vector<SessionSummary> sessions;
+  if (!ProjectSessions(projectPath, &sessions)) return false;
+  for (SessionSummary& session : sessions) {
+    agent::Conversation conversation;
+    conversation.id = std::move(session.id);
+    conversation.firstPrompt = std::move(session.firstPrompt);
+    conversation.lastActive = UnixSeconds(session.lastStamp);
+    out->push_back(std::move(conversation));
+  }
+  return true;
+}
+
+long long UnixSeconds(const std::string& isoStamp) {
   int year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0;
   if (std::sscanf(isoStamp.c_str(), "%d-%d-%dT%d:%d:%d", &year, &month, &day,
                   &hour, &minute, &second) != 6) {
-    return Widen(isoStamp);
+    return 0;
   }
   std::tm utc = {};
   utc.tm_year = year - 1900;
@@ -281,7 +292,13 @@ std::wstring LocalTimeText(const std::string& isoStamp) {
   utc.tm_sec = second;
   utc.tm_isdst = 0;
   const std::time_t moment = _mkgmtime(&utc);
-  if (moment == static_cast<std::time_t>(-1)) return Widen(isoStamp);
+  if (moment == static_cast<std::time_t>(-1)) return 0;
+  return static_cast<long long>(moment);
+}
+
+std::wstring LocalTimeText(const std::string& isoStamp) {
+  const std::time_t moment = static_cast<std::time_t>(UnixSeconds(isoStamp));
+  if (moment == 0) return Widen(isoStamp);
   // localtime and not localtime_r: this is asked once, at startup, from the
   // thread that has not started the reader yet.  The result is copied out
   // before anything else can be asked.

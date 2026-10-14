@@ -195,6 +195,19 @@ struct StartOptions {
   std::vector<std::wstring> extraArgs;
 };
 
+// A conversation a folder already has: one line of a list the reader picks
+// from to carry it on (claude-gui-lkk.7.11).  Headless conversations have no
+// title -- Claude writes one only in its terminal, Codex leaves its name empty
+// nearly always -- so what names one is the first thing the reader said in
+// it, and when it was last spoken in.
+struct Conversation {
+  std::wstring id;          // what StartOptions::resumeId takes
+  std::string firstPrompt;  // UTF-8, one line; empty when nobody typed one
+  // Seconds since 1970 UTC, so that the two CLIs' ways of writing a time
+  // compare and sort alike.  0 when unknown.
+  long long lastActive = 0;
+};
+
 // Why Start returned false.  Only a process that could not be started at all
 // ends up here: one that starts and then refuses its arguments makes Start
 // succeed, and says why itself, off stderr, in SessionEnded (invariant 25).
@@ -227,6 +240,23 @@ class Backend {
   // Known before Start and constant afterwards: F1 and the status bar are
   // built from it, and a capability that came and went would make them lie.
   virtual const Capabilities& capabilities() const = 0;
+
+  // The conversations `projectDir` already has, the most recently active
+  // first: what Resume::ById can carry on.  Only with Capabilities::resume.
+  //
+  // Asked of a backend that has NOT been started, and need not ever be: the
+  // list is wanted before the reader picks, and the session that carries one
+  // on is a backend of its own, made after.  So whoever makes backends --
+  // main.cpp, and nobody in agent/ -- makes one to ask, too.
+  //
+  // BLOCKS, for as long as the adapter needs: Claude reads its files, Codex
+  // starts a process of its own for it, which is about half a second
+  // (tools/probe_codex_list.notes.md).  Not on a window's thread.
+  //
+  // True with an empty list is a folder with no conversations; false is a
+  // list that could not be had.
+  virtual bool ListConversations(const std::wstring& projectDir,
+                                 std::vector<Conversation>* out) = 0;
 
   virtual bool Start(const StartOptions& options, Callbacks callbacks) = 0;
   // After a Start that returned false; meaningless otherwise.

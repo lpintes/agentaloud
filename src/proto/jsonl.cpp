@@ -43,4 +43,19 @@ bool ParseLine(std::string_view line, Json* out, std::string* error) {
   return true;
 }
 
+std::string OneLine(std::string_view text) {
+  std::string flat;
+  bool space = false;
+  for (const char c : text) {
+    if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
+      space = !flat.empty();
+      continue;
+    }
+    if (space) flat += ' ';
+    space = false;
+    flat += c;
+  }
+  return flat;
+}
+
 }  // namespace proto

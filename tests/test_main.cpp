@@ -53,6 +53,7 @@
 #include "proto/jsonl.h"
 #include "proto/claude/sessions.h"
 #include "proto/claude/translate.h"
+#include "proto/codex/threads.h"
 #include "proto/codex/translate.h"
 #include "arguments.h"
 #include "session_names.h"
@@ -2980,6 +2981,89 @@ void TestSessionPickIgnoresMtime() {
   _wputenv_s(L"CLAUDE_CONFIG_DIR", L"");
 }
 
+void TestProjectConversations() {
+  TEST("sessions: zoznam rozhovorov projektu, najnovsi hore");
+  namespace fs = std::filesystem;
+  const fs::path root = fs::temp_directory_path() / "agentaloud-list-test";
+  std::error_code code;
+  fs::remove_all(root, code);
+  const std::wstring project = L"C:\\demo\\zoznam";
+  const fs::path directory = root / "projects" / proto::ProjectKey(project);
+  fs::create_directories(directory, code);
+  CHECK(!code);
+  _wputenv_s(L"CLAUDE_CONFIG_DIR", root.wstring().c_str());
+
+  // Projekt, v ktorom este nikto nebol, ma prazdny zoznam, nie chybu.
+  std::vector<agent::Conversation> list;
+  CHECK(proto::ProjectConversations(L"C:\\demo\\nikdy", &list));
+  CHECK(list.empty());
+
+  WriteFile(directory / "a.jsonl",
+            "{\"type\":\"user\",\"timestamp\":\"2026-09-01T10:00:00.000Z\","
+            "\"message\":{\"content\":\"prvy\\nrozhovor\"}}\n");
+  WriteFile(directory / "b.jsonl",
+            "{\"type\":\"user\",\"timestamp\":\"2026-09-03T10:00:00.000Z\","
+            "\"message\":{\"content\":\"treti\"}}\n");
+  WriteFile(directory / "c.jsonl",
+            "{\"type\":\"user\",\"timestamp\":\"2026-09-02T10:00:00.000Z\","
+            "\"message\":{\"content\":\"druhy\"}}\n");
+  // Nie rozhovor: ani jeden zaznam user/assistant.  Do zoznamu nepatri.
+  WriteFile(directory / "d.jsonl", "{\"type\":\"summary\"}\n");
+
+  CHECK(proto::ProjectConversations(project, &list));
+  CHECK_EQ(list.size(), size_t(3));
+  if (list.size() == 3) {
+    CHECK_EQ(list[0].id, std::wstring(L"b"));
+    CHECK_EQ(list[1].id, std::wstring(L"c"));
+    CHECK_EQ(list[2].id, std::wstring(L"a"));
+    CHECK_EQ(list[2].firstPrompt, std::string("prvy rozhovor"));
+    // 2026-09-03T10:00:00Z
+    CHECK_EQ(list[0].lastActive, 1788429600LL);
+  }
+  CHECK_EQ(proto::UnixSeconds("neskoro"), 0LL);
+
+  fs::remove_all(root, code);
+  _wputenv_s(L"CLAUDE_CONFIG_DIR", L"");
+}
+
+void TestCodexThreadPage() {
+  TEST("codex: stranka thread/list ako zoznam rozhovorov");
+  // Tvar podla tools/probe_codex_list.notes.md, hodnoty vymyslene.
+  const proto::Json page = proto::Json::parse(R"({
+    "data": [
+      {"id": "019a0000-0000-7000-8000-000000000001",
+       "preview": "oprav\n  test\tprosim", "name": null,
+       "createdAt": 1788000000, "updatedAt": 1788429600,
+       "cwd": "C:\\demo", "status": {"type": "notLoaded"}},
+      {"id": "", "preview": "bez id", "updatedAt": 1},
+      {"id": "019a0000-0000-7000-8000-000000000002", "preview": "druhy"}
+    ],
+    "nextCursor": "dalsia", "backwardsCursor": null})");
+  std::vector<agent::Conversation> list;
+  CHECK_EQ(proto::codex::AppendThreadPage(page, &list),
+           std::string("dalsia"));
+  CHECK_EQ(list.size(), size_t(2));
+  if (list.size() == 2) {
+    CHECK_EQ(list[0].id,
+             std::wstring(L"019a0000-0000-7000-8000-000000000001"));
+    CHECK_EQ(list[0].firstPrompt, std::string("oprav test prosim"));
+    CHECK_EQ(list[0].lastActive, 1788429600LL);
+    CHECK_EQ(list[1].lastActive, 0LL);
+  }
+  // Posledna stranka: nextCursor null.  Pripaja, nemaze.
+  const proto::Json last = proto::Json::parse(
+      R"({"data": [{"id": "x", "preview": "p"}], "nextCursor": null})");
+  CHECK_EQ(proto::codex::AppendThreadPage(last, &list), std::string());
+  CHECK_EQ(list.size(), size_t(3));
+
+  const proto::Json params = proto::codex::ThreadListParams("C:\\demo", "", 50);
+  CHECK_EQ(params.value("sortKey", ""), std::string("updated_at"));
+  CHECK(!params.contains("cursor"));
+  CHECK_EQ(proto::codex::ThreadListParams("C:\\demo", "k", 50)
+               .value("cursor", ""),
+           std::string("k"));
+}
+
 void TestSessionSummaryFindsTheHumanPrompt() {
   TEST("sessions: prvy prompt je to, co napisal clovek");
   namespace fs = std::filesystem;
@@ -4716,6 +4800,8 @@ int main(int argc, char** argv) {
   TestAskUserQuestionRoundTrip();
   TestQuestionsReadAsText();
   TestSessionPickIgnoresMtime();
+  TestProjectConversations();
+  TestCodexThreadPage();
   TestSessionSummaryFindsTheHumanPrompt();
   TestHistoryRestore();
   TestSessionFilePath();

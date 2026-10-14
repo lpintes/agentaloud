@@ -4,6 +4,7 @@
 #include <chrono>
 
 #include "app_name.h"
+#include "proto/codex/threads.h"
 
 namespace proto::codex {
 namespace {
@@ -50,6 +51,103 @@ const char* Decision(agent::Verdict verdict) {
 }  // namespace
 
 CodexBackend::CodexBackend() : capabilities_(CodexCapabilities()) {}
+
+bool CodexBackend::ListConversations(const std::wstring& projectDir,
+                                     std::vector<agent::Conversation>* out) {
+  out->clear();
+  // A process of its own and not this backend's: the list is wanted before
+  // there is a session, and a backend that answered it would have to be
+  // started for nothing.  Initialize, thread/list a page at a time, close
+  // stdin -- half a second, nearly all of it Codex starting up.
+  constexpr int kPage = 100;
+  // A list longer than this is not read by anybody; the oldest wait.
+  constexpr size_t kMost = 300;
+  constexpr long long kInitialize = 1;
+  const std::string cwd = Utf8(projectDir);
+
+  std::mutex mutex;
+  std::condition_variable changed;
+  bool done = false;
+  bool ok = false;
+  std::vector<agent::Conversation> found;
+  long long nextId = kInitialize + 1;
+  // Declared before the process, so that the process -- whose reader thread
+  // calls into all of the above -- is gone before any of it is.
+  std::unique_ptr<LineAssembler> assembler;
+  win::Process process;
+
+  const auto finish = [&](bool success) {
+    std::lock_guard<std::mutex> lock(mutex);
+    if (done) return;
+    done = true;
+    ok = success;
+    changed.notify_all();
+  };
+  const auto send = [&](const Json& message) {
+    return process.Write(message.dump() + "\n");
+  };
+  const auto requestPage = [&](const std::string& cursor) {
+    return send({{"id", nextId++},
+                 {"method", "thread/list"},
+                 {"params", ThreadListParams(cwd, cursor, kPage)}});
+  };
+
+  // The reader thread.  Only answers matter: without a thread nothing is
+  // notified that a list needs, and nothing is asked of us.
+  assembler = std::make_unique<LineAssembler>([&](std::string_view line) {
+    Json message;
+    if (!ParseLine(line, &message, nullptr) || !message.is_object()) return;
+    if (message.contains("method")) return;
+    const Json& id = Field(message, "id");
+    if (!id.is_number_integer()) return;
+    if (message.contains("error")) {
+      finish(false);
+      return;
+    }
+    if (id.get<long long>() == kInitialize) {
+      send({{"method", "initialized"}});
+      if (!requestPage({})) finish(false);
+      return;
+    }
+    const std::string cursor =
+        AppendThreadPage(Field(message, "result"), &found);
+    if (cursor.empty() || found.size() >= kMost) {
+      finish(true);
+    } else if (!requestPage(cursor)) {
+      finish(false);
+    }
+  });
+  if (!process.Start(
+          L"codex app-server", {},
+          [&](std::string_view bytes) { assembler->Feed(bytes); },
+          // Dead before the last page: whatever it said is not the list.
+          [&](const win::Process::Exit&) { finish(false); })) {
+    return false;
+  }
+  send({{"id", kInitialize},
+        {"method", "initialize"},
+        {"params",
+         {{"clientInfo",
+           {{"name", "agentaloud"}, {"title", APP_NAME}, {"version", "0"}}}}}});
+
+  bool success = false;
+  {
+    std::unique_lock<std::mutex> lock(mutex);
+    // Generous against the half second measured: the first start after a
+    // reboot reads codex.exe off a cold disk.
+    changed.wait_for(lock, std::chrono::seconds(15), [&] { return done; });
+    // After a timeout `found` is not touched: a late page may still be
+    // appending to it, until the process is gone.
+    success = done && ok;
+  }
+  process.CloseInput();
+  if (!process.Wait(2000)) process.Terminate();
+  if (success) {
+    if (found.size() > kMost) found.resize(kMost);
+    *out = std::move(found);
+  }
+  return success;
+}
 
 CodexBackend::~CodexBackend() { Stop(5000); }
 
@@ -549,9 +647,7 @@ void CodexBackend::OnResponse(const Json& message) {
         // same store and resume the same way, so carrying one on is
         // carrying it on, not pretending.
         Request(Purpose::ListThreads, "thread/list",
-                {{"cwd", Utf8(options_.projectDir)},
-                 {"limit", 1},
-                 {"sortKey", "updated_at"}});
+                ThreadListParams(Utf8(options_.projectDir), {}, 1));
       } else {
         Request(Purpose::StartThread, "thread/start",
                 ThreadParams(options_.mode));

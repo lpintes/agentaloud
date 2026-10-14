@@ -105,6 +105,10 @@ míňa kredit, `allow` naozaj vykoná commit):
 Režim `interrupt` vypisuje každý záznam celý: pri ňom je tvar záznamov práve
 ten výsledok, po ktorom siaha.
 
+`./bin/spike_console.exe <priecinok> list` nemíňa kredit a nič nemení: vypíše
+`ListConversations` oboch adaptérov (počet, čas, prvých päť) tak, ako sa ho
+pýta dialóg Nová session. Priečinok môže byť ľubovoľný, aj neexistujúci.
+
 **Do bežiaceho okna sa dá pozrieť bez očí** — `tools/lens.ps1`. Dot-source ju
 a `Get-LensWindows <pid>`, `Get-LensChildren`, `Get-LensFocus`, `Send-LensKey`
 odpovedia, čo je v ktorom poli a čo má fokus. Text sa ťahá `WM_GETTEXT`om,

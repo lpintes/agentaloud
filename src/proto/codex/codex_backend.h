@@ -44,6 +44,9 @@ class CodexBackend : public agent::Backend {
   const agent::Capabilities& capabilities() const override {
     return capabilities_;
   }
+  // thread/list in a short `codex app-server` of its own (proto/codex/threads.h).
+  bool ListConversations(const std::wstring& projectDir,
+                         std::vector<agent::Conversation>* out) override;
   bool Start(const agent::StartOptions& options, Callbacks callbacks) override;
   agent::StartFailure startFailure() const override {
     return {L"codex", process_.startError()};

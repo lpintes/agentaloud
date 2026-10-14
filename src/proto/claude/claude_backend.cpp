@@ -45,6 +45,11 @@ std::string ReasonSentence(const std::string& type) {
 
 ClaudeBackend::ClaudeBackend() : capabilities_(ClaudeCapabilities()) {}
 
+bool ClaudeBackend::ListConversations(const std::wstring& projectDir,
+                                      std::vector<agent::Conversation>* out) {
+  return ProjectConversations(projectDir, out);
+}
+
 bool ClaudeBackend::Start(const agent::StartOptions& options,
                           Callbacks callbacks) {
   callbacks_ = std::move(callbacks);
