@@ -93,6 +93,7 @@ MainWindow::~MainWindow() {
 
 bool MainWindow::Open(HINSTANCE instance,
                       std::unique_ptr<agent::Backend> backend,
+                      const std::string& backendName,
                       const agent::StartOptions& options,
                       NewSessionFactory factory, UpdateCheck checkForUpdates,
                       std::wstring* failure) {
@@ -125,7 +126,9 @@ bool MainWindow::Open(HINSTANCE instance,
   GetClientRect(hwnd_, &client);
   Arrange(client.right, client.bottom);
 
-  if (!OpenSession(std::move(backend), options, failure)) return false;
+  if (!OpenSession(std::move(backend), backendName, options, failure)) {
+    return false;
+  }
   Show(SW_SHOW);
   if (SessionWindow* active = Active()) active->pane()->FocusPrompt();
   WarnIfMute();
@@ -133,12 +136,14 @@ bool MainWindow::Open(HINSTANCE instance,
 }
 
 bool MainWindow::OpenSession(std::unique_ptr<agent::Backend> backend,
+                             const std::string& backendName,
                              const agent::StartOptions& options,
                              std::wstring* failure) {
   // Owned before it is opened: a session that fails to start destroys its
   // window on the way out, and the reap that follows has to find it.
   sessions_.push_back(std::make_unique<SessionWindow>());
   SessionWindow* session = sessions_.back().get();
+  session->SetBackendName(backendName);
   if (!session->Open(
           client_, instance_, &status_, std::move(backend), options,
           [this] { PostMessageW(hwnd_, kMsgReap, 0, 0); }, failure)) {
@@ -163,11 +168,34 @@ void MainWindow::Renumber() {
 }
 
 void MainWindow::NewSession() {
-  std::unique_ptr<agent::Backend> backend;
-  agent::StartOptions options;
-  if (!factory_ || !factory_(hwnd_, &backend, &options)) return;
+  if (!factory_) return;
+  NewSessionContext context;
+  std::vector<SessionWindow*> open;
+  const SessionWindow* active = Active();
+  for (const auto& session : sessions_) {
+    if (session->pane() == nullptr) continue;
+    if (session.get() == active) context.active = static_cast<int>(open.size());
+    open.push_back(session.get());
+    context.open.push_back({session->backendName(), session->project(),
+                            session->conversationId()});
+  }
+  NewSessionMade made;
+  if (!factory_(hwnd_, context, &made)) return;
+  // The conversation is open already.  Its window comes forward, and the
+  // focus with it (SessionWindow's WM_SETFOCUS), which NVDA announces as it
+  // does on Ctrl+Tab.  The session may have closed meanwhile only if the
+  // dialog was up for its whole ending -- then there is nothing to show.
+  if (made.switchTo >= 0) {
+    if (made.switchTo < static_cast<int>(open.size()) &&
+        open[made.switchTo]->pane() != nullptr) {
+      SendMessageW(client_, WM_MDIACTIVATE,
+                   reinterpret_cast<WPARAM>(open[made.switchTo]->handle()), 0);
+    }
+    return;
+  }
   std::wstring failure;
-  if (!OpenSession(std::move(backend), options, &failure)) {
+  if (!OpenSession(std::move(made.backend), made.backendName, made.options,
+                   &failure)) {
     std::wstring text = i18n::Text(i18n::Str::kSessionStartFailed);
     if (!failure.empty()) text += L"\n" + failure;
     MessageBoxW(hwnd_, text.c_str(), L"" APP_NAME, MB_OK | MB_ICONERROR);

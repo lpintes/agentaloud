@@ -267,28 +267,52 @@ bool CheckForUpdatesAsked(HWND owner, app::Settings& settings,
 // The file is read again for the backend chosen, and then the model
 // overwritten with the field: an emptied field means the CLI's default, and
 // ApplySettings would fill it back in.
+//
+// A conversation chosen in the list is carried on by id, like --resume.
+// One that `open` already has is not started at all: *switchTo is its index
+// there then, and the arguments are left alone.
 bool AskNewSession(HWND owner, const app::Arguments& typed,
-                   const app::Settings& settings, app::Arguments* arguments) {
+                   const app::Settings& settings,
+                   const std::vector<ui::OpenConversation>& open,
+                   app::Arguments* arguments, int* switchTo) {
   ui::NewSession choice;
   choice.backend = arguments->backend;
   choice.project = arguments->project;
+  choice.open = open;
   for (const std::string& name : kBackends) {
     ui::NewSessionBackend entry;
     entry.name = name;
-    entry.models = MakeBackend(name)->capabilities().models;
+    const agent::Capabilities capabilities = MakeBackend(name)->capabilities();
+    entry.models = capabilities.models;
     entry.model = !typed.model.empty()
                       ? typed.model
                       : model::Utf16FromUtf8(
                             settings.Get(name + "." + app::kModelKey));
+    // A backend of its own for every asking: the dialog asks from a thread
+    // of its own, and may ask again before the last answer came.
+    if (capabilities.resume) {
+      entry.list = [name](const std::wstring& projectDir,
+                          std::vector<agent::Conversation>* out) {
+        return MakeBackend(name)->ListConversations(projectDir, out);
+      };
+    }
     choice.backends.push_back(std::move(entry));
   }
   ui::NewSessionDialog dialog(&choice);
   if (dialog.ShowModal(owner, IDD_NEW_SESSION) != IDOK) return false;
+  *switchTo = choice.switchTo;
+  if (choice.switchTo >= 0) return true;
   arguments->backend = choice.backend;
   arguments->permissionMode = typed.permissionMode;
   app::ApplySettings(arguments, settings);
   arguments->model = choice.model;
   arguments->project = choice.project;
+  // "Nový rozhovor" is where the list starts, not an answer to what the
+  // line said: a typed -c or --resume stands unless a row was chosen.
+  if (!choice.resumeId.empty()) {
+    arguments->resume = true;
+    arguments->resumeId = choice.resumeId;
+  }
   return true;
 }
 
@@ -474,7 +498,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   // After the checks, or --help typed on its own -- or a refused option --
   // would be answered with a dialog asking which project.
   if (arguments.project.empty()) {
-    if (!AskNewSession(nullptr, typed, settings, &arguments)) {
+    int none = -1;  // nothing is open yet to switch to
+    if (!AskNewSession(nullptr, typed, settings, {}, &arguments, &none)) {
       CoUninitialize();
       return 0;  // cancelled, which is an answer
     }
@@ -504,12 +529,14 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   // A session from the menu starts from the line as typed, but without what
   // names a conversation: the first session is in it already, and the CLI
   // refuses a session id that is in use (invariant 14).  Without the words
-  // after -- too, which may name one as well.  The backend and the folder
-  // are the ones chosen last, which is the likeliest next answer.
+  // after -- too, which may name one as well.  Which conversation, the list
+  // in the dialog says.  The backend and the folder are the active
+  // session's, the one the reader is in; with none open, the ones chosen
+  // last.
   app::Arguments last = arguments;
   ui::NewSessionFactory factory = [&](HWND owner,
-                                      std::unique_ptr<agent::Backend>* made,
-                                      agent::StartOptions* options) {
+                                      const ui::NewSessionContext& context,
+                                      ui::NewSessionMade* made) {
     app::Arguments next = typed;
     next.resume = false;
     next.resumeId.clear();
@@ -517,7 +544,15 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     next.cliArgs.clear();
     next.backend = last.backend;
     next.project = last.project;
-    if (!AskNewSession(owner, typed, settings, &next)) return false;
+    if (context.active >= 0) {
+      next.backend = context.open[context.active].backend;
+      next.project = context.open[context.active].project;
+    }
+    if (!AskNewSession(owner, typed, settings, context.open, &next,
+                       &made->switchTo)) {
+      return false;
+    }
+    if (made->switchTo >= 0) return true;
     std::unique_ptr<agent::Backend> chosen = MakeBackend(next.backend);
     app::CheckMode(&next, chosen->capabilities());
     // A mode typed for one backend and refused by the other, as at startup.
@@ -528,8 +563,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     }
     next.project = Expand(next.project);
     last = next;
-    *made = std::move(chosen);
-    *options = OptionsFrom(next);
+    made->backend = std::move(chosen);
+    made->backendName = next.backend;
+    made->options = OptionsFrom(next);
     return true;
   };
 
@@ -540,8 +576,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   ui::UpdateCheck checkForUpdates = [&](HWND owner) {
     CheckForUpdatesAsked(owner, settings, settingsFile, false);
   };
-  if (!window.Open(instance, std::move(backend), OptionsFrom(arguments),
-                   std::move(factory), std::move(checkForUpdates), &failure)) {
+  const std::string backendName =
+      arguments.backend.empty() ? app::kDefaultBackend : arguments.backend;
+  if (!window.Open(instance, std::move(backend), backendName,
+                   OptionsFrom(arguments), std::move(factory),
+                   std::move(checkForUpdates), &failure)) {
     std::wstring text = i18n::Text(i18n::Str::kSessionStartFailed);
     if (!failure.empty()) text += L"\n" + failure;
     // To the console only when nothing came between it and this: after the

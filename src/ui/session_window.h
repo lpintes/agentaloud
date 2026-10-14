@@ -42,6 +42,14 @@ class SessionWindow : public win::Window {
   // The folder in one spelling for every way of writing it -- case and
   // slashes -- so that sessions in one folder can be numbered.
   const std::wstring& folderKey() const { return folderKey_; }
+  // As StartOptions::projectDir had it.
+  const std::wstring& project() const { return project_; }
+  // main.cpp's name for the backend, which the frame keeps without reading:
+  // the dialog Nová session matches open conversations by it.
+  const std::string& backendName() const { return backendName_; }
+  void SetBackendName(const std::string& name) { backendName_ = name; }
+  // agent::Backend::conversationId; empty once shut down or until known.
+  std::string conversationId() const;
   // Which of the sessions in its folder this is (app::SessionOrdinals): into
   // the title through the pane, and into the name NVDA says on Ctrl+Tab.
   void SetOrdinal(int ordinal);
@@ -62,6 +70,8 @@ class SessionWindow : public win::Window {
   StatusBar* bar_ = nullptr;
   std::wstring folder_;
   std::wstring folderKey_;
+  std::wstring project_;
+  std::string backendName_;
   Closed closed_;
   std::unique_ptr<SessionPane> pane_;
 };

@@ -72,6 +72,7 @@ const std::vector<Template>& Templates() {
         {IDC_NEW_MODEL_LABEL, Str::kDlgNewModel},
         {IDC_NEW_PROJECT_LABEL, Str::kDlgNewProject},
         {IDC_NEW_BROWSE, Str::kDlgNewBrowse},
+        {IDC_NEW_CONVERSATION_LABEL, Str::kDlgNewConversation},
         {IDOK, Str::kDlgNewStart},
         {IDCANCEL, Str::kDlgNewCancel}}},
       {IDD_FIND,

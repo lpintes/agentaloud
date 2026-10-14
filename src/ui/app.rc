@@ -228,7 +228,12 @@ END
 //
 // Spustiť is the default button: the fields come filled in from the command
 // line and the settings file, so Enter on the first field is the common case.
-IDD_NEW_SESSION DIALOGEX 0, 0, 300, 88
+//
+// Rozhovor is a list box, not a combo: the folder's conversations are what
+// the reader came to read, one per arrow key, and its first row "Nový
+// rozhovor" keeps that Enter what it was.  Full width, because a row is a
+// prompt.
+IDD_NEW_SESSION DIALOGEX 0, 0, 300, 186
 STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION APP_NAME " — nová session"
 FONT 9, "Segoe UI", 400, 0, 1
@@ -246,8 +251,12 @@ BEGIN
     EDITTEXT        IDC_NEW_PROJECT, 116, 44, 120, 12, ES_AUTOHSCROLL
     PUSHBUTTON      "&Vybrať…", IDC_NEW_BROWSE, 240, 43, 52, 14
 
-    DEFPUSHBUTTON   "&Spustiť", IDOK, 176, 66, 56, 14
-    PUSHBUTTON      "&Zrušiť", IDCANCEL, 236, 66, 56, 14
+    LTEXT           "&Rozhovor:", IDC_NEW_CONVERSATION_LABEL, 8, 64, 104, 8
+    LISTBOX         IDC_NEW_CONVERSATION, 8, 74, 284, 84,
+                    LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_BORDER | WS_TABSTOP
+
+    DEFPUSHBUTTON   "&Spustiť", IDOK, 176, 164, 56, 14
+    PUSHBUTTON      "&Zrušiť", IDCANCEL, 236, 164, 56, 14
 END
 
 // Hľadanie v prepise.  One field: case does not matter and the direction is

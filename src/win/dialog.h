@@ -44,6 +44,12 @@ class Dialog {
   // Read the controls back before the dialog closes with IDOK.  Return false
   // to keep it open, having said why.
   virtual bool OnOk() { return true; }
+  // Any other message: the dialog's own WM_APP ones, WM_DESTROY.  Return
+  // true when handled.
+  virtual bool OnMessage(UINT /*message*/, WPARAM /*wParam*/,
+                         LPARAM /*lParam*/) {
+    return false;
+  }
 
   HWND Item(int id) const { return GetDlgItem(hwnd_, id); }
   void SetChecked(int id, bool on) const;

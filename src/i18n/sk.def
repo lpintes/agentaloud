@@ -225,7 +225,8 @@ S(kKeysCopyId, L"Ctrl+Shift+C — skopíruje id session do schránky.")
 S(kKeysSessions,
   L"\n\n"
   L"Viac sessions:\n"
-  L"Ctrl+N — nová session, v ďalšom okne.\n"
+  L"Ctrl+N — nová session, v ďalšom okne; v dialógu aj starší rozhovor\n"
+  L"priečinka zo zoznamu Rozhovor.\n"
   L"Ctrl+Tab alebo Ctrl+F6 — ďalšia session, "
   L"Ctrl+Shift+Tab alebo Ctrl+Shift+F6 — predchádzajúca.\n"
   L"Ctrl+F4 — zavrie session. Alt+F4 — ukončí aplikáciu.\n"
@@ -300,6 +301,7 @@ S(kDlgNewBackend, L"&Backend:")
 S(kDlgNewModel, L"&Model (prázdny = predvolený):")
 S(kDlgNewProject, L"&Priečinok:")
 S(kDlgNewBrowse, L"&Vybrať…")
+S(kDlgNewConversation, L"&Rozhovor:")
 S(kDlgNewStart, L"&Spustiť")
 S(kDlgNewCancel, L"&Zrušiť")
 S(kDlgFindCaption, L"hľadať")
@@ -369,6 +371,12 @@ S(kNewPickFolder, L"Vyberte priečinok projektu")
 S(kNewEnterProject, L"Zadajte priečinok projektu.")
 S(kNewFolderMissing, L"Priečinok {0} neexistuje.")
 S(kNewChooseBackend, L"Vyberte backend.")
+S(kNewChooseConversation, L"Vyberte rozhovor zo zoznamu alebo Nový rozhovor.")
+S(kNewConversationNew, L"Nový rozhovor")
+S(kNewConversationsListing, L"Hľadám rozhovory…")
+S(kNewConversationsFailed, L"Rozhovory sa nepodarilo zistiť.")
+S(kNewConversationNoPrompt, L"(bez promptu)")
+S(kNewConversationOpen, L"otvorený: {0}")
 S(kNoSpeechDll,
   L"Vedľa {0} chýba nvdaControllerClient.dll, takže aplikácia nemá ako "
   L"hovoriť: klávesy fungujú, ale namiesto hlásení pípajú.\n\nSkopírujte "

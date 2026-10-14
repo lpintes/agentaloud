@@ -224,7 +224,8 @@ S(kKeysCopyId, L"Ctrl+Shift+C — copies the session id to the clipboard.")
 S(kKeysSessions,
   L"\n\n"
   L"More sessions:\n"
-  L"Ctrl+N — new session, in another window.\n"
+  L"Ctrl+N — new session, in another window; the dialog also carries on an\n"
+  L"older conversation of the folder, from the list Conversation.\n"
   L"Ctrl+Tab or Ctrl+F6 — next session, "
   L"Ctrl+Shift+Tab or Ctrl+Shift+F6 — previous.\n"
   L"Ctrl+F4 — closes the session. Alt+F4 — quits the application.\n"
@@ -298,6 +299,7 @@ S(kDlgNewBackend, L"&Backend:")
 S(kDlgNewModel, L"&Model (empty = default):")
 S(kDlgNewProject, L"&Folder:")
 S(kDlgNewBrowse, L"Bro&wse…")
+S(kDlgNewConversation, L"Con&versation:")
 S(kDlgNewStart, L"&Start")
 S(kDlgNewCancel, L"&Cancel")
 S(kDlgFindCaption, L"find")
@@ -364,6 +366,12 @@ S(kNewPickFolder, L"Choose the project folder")
 S(kNewEnterProject, L"Enter the project folder.")
 S(kNewFolderMissing, L"The folder {0} does not exist.")
 S(kNewChooseBackend, L"Choose a backend.")
+S(kNewChooseConversation, L"Choose a conversation from the list, or New conversation.")
+S(kNewConversationNew, L"New conversation")
+S(kNewConversationsListing, L"Looking for conversations…")
+S(kNewConversationsFailed, L"The conversations could not be listed.")
+S(kNewConversationNoPrompt, L"(no prompt)")
+S(kNewConversationOpen, L"open: {0}")
 S(kNoSpeechDll,
   L"nvdaControllerClient.dll is missing beside {0}, so the application has "
   L"no way to speak: the keys work, but they beep instead of speaking.\n\n"

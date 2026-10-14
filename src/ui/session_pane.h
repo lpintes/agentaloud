@@ -191,6 +191,10 @@ class SessionPane {
   bool busy() const { return busy_; }
   // What closing the session would kill (invariant 10), so that it asks first.
   const std::vector<agent::BackgroundTask>& tasks() const { return tasks_; }
+  // The backend's; empty until it knows.
+  std::string conversationId() const {
+    return backend_ ? backend_->conversationId() : std::string();
+  }
 
   // The window moved to a screen with a different scaling.  The controls need
   // a font for the new dpi; the layout follows from the WM_SIZE that comes

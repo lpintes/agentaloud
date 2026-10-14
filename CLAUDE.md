@@ -362,8 +362,11 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
 24. **Viac sessions je MDI a session nevie, čo ju hostí** (`SetActive`,
     `SetStatusBar`). Child musí mať `WS_MAXIMIZEBOX`; NVDA ho ohlási len
     vďaka `SessionWindow::Annotate`; klávesy rámu sú v akcelerátoroch.
-    Session z menu nepokračuje v rozhovore. Dve v tom istom priečinku dostanú
-    číslo (`app::SessionOrdinals`, `Renumber`).
+    Session z menu pokračuje len v rozhovore vybranom v zozname Rozhovor
+    dialógu Nová session (zisťuje sa mimo vlákna okna); už otvorený rozhovor
+    sa nespúšťa, prepne sa do jeho okna. Predvyplnenie z aktívnej session.
+    Dve v tom istom priečinku dostanú číslo (`app::SessionOrdinals`,
+    `Renumber`).
 25. **Proces CLI, ktorý skončil sám, je blok `SessionEnded` so stderr ako
     obsahom** (`win::Process` číta stderr vlastným vláknom, hlava + chvost).
     Nie po vlastnom `Stop()` (`stopping_`). Stavový riadok „agent nebeží".

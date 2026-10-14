@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "agent/backend.h"
+#include "ui/new_session_dialog.h"
 #include "ui/session_window.h"
 #include "ui/speech.h"
 #include "ui/status_bar.h"
@@ -25,12 +26,30 @@
 
 namespace ui {
 
+// What the frame tells the factory: the sessions running, and which of them
+// the reader is in -- the dialog starts from that one's backend and folder.
+struct NewSessionContext {
+  std::vector<OpenConversation> open;
+  int active = -1;  // into `open`, or -1
+};
+
+// What the factory hands back.  Either a backend to start, or `switchTo`:
+// the conversation chosen is open already, in that session (an index into
+// NewSessionContext::open).
+struct NewSessionMade {
+  std::unique_ptr<agent::Backend> backend;
+  agent::StartOptions options;
+  // main.cpp's name for the backend; opaque here, and handed back in
+  // OpenConversation::backend.
+  std::string backendName;
+  int switchTo = -1;
+};
+
 // Asks the reader what to start -- the dialog Nová session -- and makes it.
 // False when they cancelled, or when what they chose was refused; the
 // factory has said why then.
-using NewSessionFactory =
-    std::function<bool(HWND owner, std::unique_ptr<agent::Backend>* backend,
-                       agent::StartOptions* options)>;
+using NewSessionFactory = std::function<bool(
+    HWND owner, const NewSessionContext& context, NewSessionMade* made)>;
 
 // Pomocník → Skontrolovať aktualizácie.  From main.cpp, which holds the
 // settings the answer may write (a skipped version); the frame does not.
@@ -44,8 +63,9 @@ class MainWindow : public win::Window {
   // *failure is why the session did not start, or empty when that is not
   // known.
   bool Open(HINSTANCE instance, std::unique_ptr<agent::Backend> backend,
-            const agent::StartOptions& options, NewSessionFactory factory,
-            UpdateCheck checkForUpdates, std::wstring* failure);
+            const std::string& backendName, const agent::StartOptions& options,
+            NewSessionFactory factory, UpdateCheck checkForUpdates,
+            std::wstring* failure);
 
   // For win::RunMdiMessageLoop.
   HACCEL accelerators() const { return accelerators_; }
@@ -56,6 +76,7 @@ class MainWindow : public win::Window {
 
  private:
   bool OpenSession(std::unique_ptr<agent::Backend> backend,
+                   const std::string& backendName,
                    const agent::StartOptions& options, std::wstring* failure);
   // The menu items and their keys.
   void NewSession();

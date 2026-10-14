@@ -28,8 +28,9 @@ INT_PTR CALLBACK Dialog::DlgProc(HWND dialog, UINT message, WPARAM wParam,
       EndDialog(dialog, IDCANCEL);
       return TRUE;
     }
+    return FALSE;
   }
-  return FALSE;
+  return self->OnMessage(message, wParam, lParam) ? TRUE : FALSE;
 }
 
 INT_PTR Dialog::ShowModal(HWND owner, int templateId) {

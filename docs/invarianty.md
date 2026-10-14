@@ -1241,10 +1241,21 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
         ktoré nie je. Ctrl+N, Ctrl+Tab/Ctrl+F6 (aj so Shiftom) a Ctrl+F4
         chytá `TranslateAcceleratorW` v `win::RunMdiMessageLoop`, teda skôr,
         než ich uvidí prompt — Ctrl+Tab predtým prompt bral ako Tab.
-      • **Session z menu nepokračuje v rozhovore.** `--resume`, `-c` aj
-        slová za `--` platia len pre prvú: druhé použitie toho istého id CLI
-        odmietne (invariant 14). Backend a priečinok dialóg predvyplní
-        naposledy zvolenými.
+      • **Session z menu pokračuje len v rozhovore zo zoznamu.** `--resume`,
+        `-c` aj slová za `--` platia len pre prvú: druhé použitie toho istého
+        id CLI odmietne (invariant 14). Dialóg Nová session má zoznam
+        Rozhovor (claude-gui-lkk.7.11.3): prvý riadok „Nový rozhovor",
+        pod ním rozhovory priečinka z `agent::Backend::ListConversations`,
+        zisťované na vlastnom vlákne (studený disk sú pri Claude sekundy,
+        Codex púšťa vlastný proces). Rozhovor, ktorý už má otvorený iná
+        session (porovnáva sa meno backendu z `main.cpp` a
+        `conversationId`), je v zozname „otvorený: …" a jeho výber session
+        nespustí, ale prenesie dopredu jej okno (`NewSessionMade::switchTo`).
+        Backend a priečinok dialóg predvyplní z aktívnej session; bez nej
+        naposledy zvolenými. Zoznam sa obnoví pri zmene backendu, po
+        odchode z poľa priečinka a po Vybrať; Enter priamo z poľa priečinka
+        so zmeneným priečinkom zoznam vráti na „Nový rozhovor", lebo vybraný
+        riadok patril inému priečinku.
 
     **Session sa volá podľa priečinka, a dve v tom istom priečinku dostanú
     číslo** — „cesta (2)" v titulku (teda aj v ráme a v menu Okno), v mene

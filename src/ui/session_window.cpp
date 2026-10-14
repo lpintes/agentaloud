@@ -102,6 +102,7 @@ bool SessionWindow::Open(HWND mdiClient, HINSTANCE instance, StatusBar* bar,
   }
   folder_ = FolderName(options.projectDir);
   folderKey_ = FolderKey(options.projectDir);
+  project_ = options.projectDir;
   Annotate(folder_);
   pane_ = std::make_unique<SessionPane>();
   if (!pane_->Create(hwnd_, instance)) {
@@ -120,6 +121,10 @@ bool SessionWindow::Open(HWND mdiClient, HINSTANCE instance, StatusBar* bar,
     return false;
   }
   return true;
+}
+
+std::string SessionWindow::conversationId() const {
+  return pane_ ? pane_->conversationId() : std::string();
 }
 
 void SessionWindow::SetOrdinal(int ordinal) {
