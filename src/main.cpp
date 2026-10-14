@@ -274,11 +274,13 @@ bool CheckForUpdatesAsked(HWND owner, app::Settings& settings,
 bool AskNewSession(HWND owner, const app::Arguments& typed,
                    const app::Settings& settings,
                    const std::vector<ui::OpenConversation>& open,
-                   app::Arguments* arguments, int* switchTo) {
+                   bool focusConversations, app::Arguments* arguments,
+                   int* switchTo) {
   ui::NewSession choice;
   choice.backend = arguments->backend;
   choice.project = arguments->project;
   choice.open = open;
+  choice.focusConversations = focusConversations;
   for (const std::string& name : kBackends) {
     ui::NewSessionBackend entry;
     entry.name = name;
@@ -385,6 +387,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   // --help must end without a window ever existing -- and Msftedit.dll below
   // is the first thing that would put one on screen if it failed.
   app::Arguments arguments = app::Parse(CommandLineWords());
+  app::ResolveResume(&arguments, [](const std::wstring& word) {
+    const DWORD attributes = GetFileAttributesW(Expand(word).c_str());
+    return attributes != INVALID_FILE_ATTRIBUTES &&
+           (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+  });
   // Kept as typed: Nová session may choose another backend, and then the
   // file's mode and model have to be read again for that one, under what the
   // line said and not under what the file said for the first.
@@ -497,9 +504,19 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   }
   // After the checks, or --help typed on its own -- or a refused option --
   // would be answered with a dialog asking which project.
-  if (arguments.project.empty()) {
+  //
+  // A bare --resume is a question too, about which conversation, and goes
+  // there even with a folder on the line.  It does not stand after the
+  // dialog: "Nový rozhovor" chosen there is a new one, not a --resume to
+  // pass on bare.
+  const bool pickConversation = arguments.resume && arguments.resumeId.empty();
+  if (pickConversation) arguments.resume = false;
+  if (arguments.project.empty() || pickConversation) {
+    // In full in the field: "." read out is no answer to which folder.
+    arguments.project = Expand(arguments.project);
     int none = -1;  // nothing is open yet to switch to
-    if (!AskNewSession(nullptr, typed, settings, {}, &arguments, &none)) {
+    if (!AskNewSession(nullptr, typed, settings, {}, pickConversation,
+                       &arguments, &none)) {
       CoUninitialize();
       return 0;  // cancelled, which is an answer
     }
@@ -548,7 +565,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       next.backend = context.open[context.active].backend;
       next.project = context.open[context.active].project;
     }
-    if (!AskNewSession(owner, typed, settings, context.open, &next,
+    if (!AskNewSession(owner, typed, settings, context.open, false, &next,
                        &made->switchTo)) {
       return false;
     }

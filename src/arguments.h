@@ -9,6 +9,7 @@
 // No windows.h.  Reading argv off the process, the folder picker and turning
 // "." into a full path stay in main.cpp; this sees a list of strings.
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -33,7 +34,8 @@ struct Arguments {
   std::wstring permissionMode;
   std::wstring model;
   // --resume was given, with what followed it.  The id may be empty: a bare
-  // --resume at the end of the line is passed on as it is (invariant 14).
+  // --resume asks for the list of conversations in Nová session, and is not
+  // passed on (claude-gui-lkk.7.11.4).
   bool resume = false;
   std::wstring resumeId;
   // -c: carry on the newest conversation of the project.  Which one that is,
@@ -69,6 +71,15 @@ extern const char kDefaultBackend[];
 
 // The words on the line, without the program's own name.
 Arguments Parse(const std::vector<std::wstring>& words);
+
+// `--resume <folder>` is a bare --resume in that folder: the word after it is
+// taken for the id wherever it stands, and an id or a title is never a folder
+// that exists, while `--resume .` is exactly what someone types who wants to
+// pick one here.  Only when no folder was named apart from it -- with one,
+// the word is what it said it was.  `isFolder` gets the word as typed; the
+// file system stays in main.cpp.
+void ResolveResume(Arguments* arguments,
+                   const std::function<bool(const std::wstring&)>& isFolder);
 
 // What can only be checked once it is known which backends exist and what the
 // chosen one can do: that the backend is one of `known`, and that the mode is

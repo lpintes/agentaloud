@@ -119,6 +119,11 @@ bool NewSessionDialog::OnInit() {
   ShowModels(selected);
   SetText(IDC_NEW_PROJECT, session_->project);
   ListConversations();
+  if (session_->focusConversations) {
+    SendMessageW(hwnd_, WM_NEXTDLGCTL,
+                 reinterpret_cast<WPARAM>(Item(IDC_NEW_CONVERSATION)), TRUE);
+    return true;
+  }
   return false;  // the dialog manager puts the focus on the backend list
 }
 

@@ -65,9 +65,10 @@ bool ClaudeBackend::Start(const agent::StartOptions& options,
       Ascii(options.mode == "manual" ? std::string("default") : options.mode);
   session.extraArgs = options.extraArgs;
   if (options.resume == agent::StartOptions::Resume::ById) {
-    // An empty id is a bare --resume, passed on bare: under --print the CLI
-    // refuses it with a message of its own rather than opening a picker
-    // (invariant 14), and saying that is its job, not ours.
+    // An empty id no longer comes from the command line -- a bare --resume
+    // opens the list in Nová session there (claude-gui-lkk.7.11.4).  Were it
+    // to come, it goes on bare: under --print the CLI refuses it with a
+    // message of its own rather than opening a picker (invariant 14).
     session.extraArgs.push_back(L"--resume");
     if (!options.resumeId.empty()) session.extraArgs.push_back(options.resumeId);
   } else if (options.resume == agent::StartOptions::Resume::Latest) {

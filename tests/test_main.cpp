@@ -1085,6 +1085,35 @@ void TestArguments() {
   app::Arguments both = app::Parse(W{L"-c", L"--resume", L"abc", L"."});
   CHECK(both.continueLatest);
   CHECK_EQ(both.resumeId, std::wstring(L"abc"));
+  // Slovo s pomlckou za --resume je dalsia volba, nie id.
+  app::Arguments bareBeforeOption = app::Parse(W{L"--resume", L"-c", L"."});
+  CHECK(bareBeforeOption.resume);
+  CHECK(bareBeforeOption.resumeId.empty());
+  CHECK(bareBeforeOption.continueLatest);
+  CHECK_EQ(bareBeforeOption.project, std::wstring(L"."));
+
+  // --resume <priecinok>: priecinok je projekt a --resume je hole, ale len
+  // ked ziadny iny priecinok na riadku nie je.
+  auto isFolder = [](const std::wstring& word) {
+    return word == L"." || word == L"C:\\proj";
+  };
+  app::Arguments folder = app::Parse(W{L"--resume", L"C:\\proj"});
+  app::ResolveResume(&folder, isFolder);
+  CHECK(folder.resume);
+  CHECK(folder.resumeId.empty());
+  CHECK_EQ(folder.project, std::wstring(L"C:\\proj"));
+  app::Arguments dot = app::Parse(W{L"-r", L"."});
+  app::ResolveResume(&dot, isFolder);
+  CHECK(dot.resumeId.empty());
+  CHECK_EQ(dot.project, std::wstring(L"."));
+  app::Arguments id = app::Parse(W{L"--resume", L"abc"});
+  app::ResolveResume(&id, isFolder);
+  CHECK_EQ(id.resumeId, std::wstring(L"abc"));
+  CHECK(id.project.empty());
+  app::Arguments named = app::Parse(W{L"C:\\proj", L"--resume", L"."});
+  app::ResolveResume(&named, isFolder);
+  CHECK_EQ(named.resumeId, std::wstring(L"."));
+  CHECK_EQ(named.project, std::wstring(L"C:\\proj"));
 
   // Backend: bez volby predvoleny, neznamy sa odmietne a vymenuju sa zname.
   const std::vector<std::string> known = {"claude"};

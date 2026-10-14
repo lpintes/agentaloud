@@ -62,6 +62,9 @@ struct NewSession {
   std::wstring project;
   // In only.
   std::vector<OpenConversation> open;
+  // In only: the focus starts in the list of conversations rather than on
+  // the backend -- a bare --resume asked for the list and nothing else.
+  bool focusConversations = false;
   // Out: the conversation to carry on, empty for a new one.
   std::wstring resumeId;
   // Out: an index into `open` whose window should come forward instead of a

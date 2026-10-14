@@ -641,7 +641,7 @@ void CodexBackend::OnResponse(const Json& message) {
         params["threadId"] = Utf8(options_.resumeId);
         Request(Purpose::ResumeThread, "thread/resume", std::move(params));
       } else if (options_.resume != Resume::None) {
-        // -c, and a bare --resume with it: which thread was last is asked of
+        // -c, and an empty id with it: which thread was last is asked of
         // Codex itself, limited to this folder.  Unlike Claude's -c this
         // finds the terminal's threads too, and rightly -- they live in the
         // same store and resume the same way, so carrying one on is

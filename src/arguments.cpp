@@ -77,12 +77,18 @@ Arguments Parse(const std::vector<std::wstring>& words) {
     // takes a session title there as well ("--resume requires a valid session
     // ID or session title when used with --print"), and a check here would be
     // a second, narrower idea of what is legal.  A --resume with nothing after
-    // it is passed on bare and the CLI says so itself: measured 2026-09-06, it
-    // does NOT open the interactive picker under --print, it refuses with that
-    // message and ends the turn with a `result` carrying is_error.
+    // it is not passed on: measured 2026-09-06, the CLI does NOT open the
+    // interactive picker under --print, it refuses with that message and ends
+    // the turn with a `result` carrying is_error.  It opens Nová session with
+    // the list of conversations instead (main.cpp).
+    //
+    // A word with a dash is the next option, not the value: an id never
+    // starts with one, and `--resume -c` taken as id "-c" would be a session
+    // refused for a reason nobody typed.
     } else if (word == L"--resume" || word == L"-r") {
       arguments.resume = true;
-      if (i + 1 < words.size() && words[i + 1] != L"--") {
+      if (i + 1 < words.size() && !words[i + 1].empty() &&
+          words[i + 1][0] != L'-') {
         arguments.resumeId = words[++i];
       }
     // Not answered here: it is a question about this folder, and which
@@ -115,6 +121,15 @@ Arguments Parse(const std::vector<std::wstring>& words) {
     }
   }
   return arguments;
+}
+
+void ResolveResume(Arguments* arguments,
+                   const std::function<bool(const std::wstring&)>& isFolder) {
+  if (!arguments->resume || arguments->resumeId.empty()) return;
+  if (!arguments->project.empty()) return;
+  if (!isFolder(arguments->resumeId)) return;
+  arguments->project = arguments->resumeId;
+  arguments->resumeId.clear();
 }
 
 void CheckBackend(Arguments* arguments, const std::vector<std::string>& known) {
