@@ -37,6 +37,11 @@ enum class EventKind {
   ControlResponse,        // its answer to something we asked
   RateLimit,
   Result,                 // end of turn: cost, tokens, stop_reason
+  // /clear: the conversation behind this process is a new one from here on,
+  // with a session id of its own.  The record itself still carries the old
+  // id, and its new_conversation_id is NOT the new session id either -- that
+  // one comes on the records after it (measured 2026-10-14, claude-gui-qcr).
+  ConversationReset,
 };
 
 struct Event {

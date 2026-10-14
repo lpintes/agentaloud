@@ -169,6 +169,10 @@ void Session::OnLine(std::string_view line) {
     // This is what is left for the run where CoCreateGuid failed and the
     // session was launched without --session-id after all.
     if (sessionId_.empty()) sessionId_ = event.sessionId;
+    // After /clear the next record carries the new conversation's id, and
+    // the line above takes it.  Keeping the old one would point F2, the
+    // copied id and "already open" at a conversation this process left.
+    if (event.kind == EventKind::ConversationReset) sessionId_.clear();
   }
 
   if (event.kind == EventKind::ControlResponse) {

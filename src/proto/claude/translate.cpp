@@ -509,6 +509,13 @@ std::vector<agent::Event> Translator::Translate(const Json& record) {
       events.push_back(out);
       break;
     }
+    case EventKind::ConversationReset:
+      // The cost resets by itself, with the result that ends the /clear
+      // turn.  The context does not: it is read off assistant records, and
+      // /clear makes none, so the old conversation's size would stay until the
+      // next answer.  Zero is "not known", which is the truth until then.
+      events.push_back(agent::ContextUsed{0, 0});
+      break;
     case EventKind::Unknown:
       events.push_back(agent::Unrecognised{
           event.raw.value("type", std::string("<no type>"))});

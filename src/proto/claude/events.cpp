@@ -44,6 +44,8 @@ Event Classify(Json record) {
     event.kind = EventKind::RateLimit;
   } else if (type == "result") {
     event.kind = EventKind::Result;
+  } else if (type == "conversation_reset") {
+    event.kind = EventKind::ConversationReset;
   }
   event.raw = std::move(record);
   return event;
@@ -211,6 +213,7 @@ const char* KindName(EventKind kind) {
     case EventKind::ControlResponse: return "control_response";
     case EventKind::RateLimit: return "rate_limit";
     case EventKind::Result: return "result";
+    case EventKind::ConversationReset: return "conversation_reset";
     case EventKind::Unknown: break;
   }
   return "unknown";

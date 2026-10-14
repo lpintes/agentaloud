@@ -808,8 +808,17 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
         tom istom texte poslanom cez `--input-format stream-json` sa raz
         namiesto spustenia rozbehlo hľadanie súborov po disku. Príkaz teda nie
         je volanie funkcie, je to prosba — a appka to nesmie sľubovať inak.
-      • **Lokálne príkazy terminálu (`/model`, `/clear`, `/context`) tam
-        nefungujú vôbec.** V zozname od CLI sú (79 položiek, z toho 43
+      • **Lokálne príkazy terminálu (`/model`, `/context`) tam nefungujú
+        vôbec.** Výnimkou je **`/clear`, ktorý CLI vykoná samo** (odmerané
+        14. 10. 2026, claude-gui-qcr; v septembri ešte nie): pošle
+        `conversation_reset`, `SessionStart:clear` hook, nový `system/init`
+        s **novým `session_id`** a `result` s nulovou cenou, bez záznamu
+        `assistant`. Nové id nie je `new_conversation_id` z
+        `conversation_reset`, ale to zo záznamov po ňom; `Session` preto pri
+        `conversation_reset` id zabudne a vezme ďalšie. Kontext adaptér
+        vynuluje (`ContextUsed{0}` = neznámy), lebo inak ho počíta len zo
+        záznamu `assistant`. Codex `/clear` nepozná.
+        V zozname od CLI sú (79 položiek, z toho 43
         skillov), ale nič ich neodlišuje: položka má len `name`,
         `description`, `argumentHint` a niekedy `aliases`. Appka ich preto
         nefiltruje — vymyslieť si delenie, ktoré protokol nehovorí, je horšie

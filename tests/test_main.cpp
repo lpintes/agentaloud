@@ -2018,6 +2018,23 @@ void TestContextTokensParsing() {
   CHECK_EQ(ignored, -1LL);
 }
 
+void TestClearResetsContext() {
+  TEST("translate: /clear vynuluje kontext, nie je neznamy zaznam");
+  // Odmerane 14. 10. 2026 (claude-gui-qcr): po /clear pride conversation_reset,
+  // novy system/init s novym session_id a result s nulovou cenou, ale ziadny
+  // assistant. Kontext by teda zostal z predosleho rozhovoru.
+  const auto reset = proto::Json::parse(R"({
+    "type": "conversation_reset", "trigger": "clear",
+    "new_conversation_id": "fa55840b-71d2-4723-91a3-472b0d2338c8",
+    "session_id": "668484e0-02e8-4d3c-9ca5-244c0b82200f"})");
+  CHECK(proto::Classify(reset).kind == proto::EventKind::ConversationReset);
+  const auto events = proto::TranslateRecord(reset);
+  CHECK(EventsOf<agent::Unrecognised>(events).empty());
+  const auto context = EventsOf<agent::ContextUsed>(events);
+  CHECK_EQ(context.size(), size_t{1});
+  if (!context.empty()) CHECK_EQ(context[0].tokens, 0LL);
+}
+
 void TestNewlinesAreOneCharacter() {
   TEST("transcript: kazdy zlom riadku je prave jeden znak");
   // RichEdit pocita odstavcovy zlom ako jeden znak.  Keby text s "\r\n"
@@ -4779,6 +4796,7 @@ int main(int argc, char** argv) {
   TestTranslatorModelAndTurn();
   TestUsageParsing();
   TestContextTokensParsing();
+  TestClearResetsContext();
   TestNewlinesAreOneCharacter();
   TestAnsiEscapesAreStripped();
   TestToolPathsAreShortened();

@@ -325,6 +325,8 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
 17. **Slash príkaz v headless režime vykoná model, nie CLI** (cez `Skill`),
     a nemusí ho vykonať vôbec. F4 (`ShowCommands`) príkaz vloží do promptu,
     neodošle. Zoznam len z odpovede na `initialize`; „ešte nie je" sa povie.
+    Výnimka: `/clear` vykoná CLI samo — `conversation_reset`, potom nové
+    `session_id` (`Session` ho prevezme) a kontext sa vynuluje.
 18. **História z disku ide tými istými volaniami ako živý ťah**:
     `ReadSessionRecords` (len `user`/`assistant`, bez sidechainov) →
     `TranslateHistory` → `model::RestoreHistory` po jednej udalosti. `user`
