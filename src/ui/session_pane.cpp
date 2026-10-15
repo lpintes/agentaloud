@@ -236,13 +236,16 @@ size_t BookmarkSlot(WPARAM key) {
 }
 
 // A program missing from PATH is the likely case and gets a sentence that says
-// what to do; anything else is the system's own words, with the number to
+// what to do -- or, when the path was set, a sentence that points at the
+// setting rather than at the installation; anything else is the system's own words, with the number to
 // search for.  The folder is not among the likely ones -- the command line
 // and the dialog both check it before a session is started.
 std::wstring StartFailureText(const agent::StartFailure& failure) {
   if (failure.systemError == ERROR_FILE_NOT_FOUND ||
       failure.systemError == ERROR_PATH_NOT_FOUND) {
-    return i18n::Format(Str::kProgramNotFound, {failure.program});
+    return i18n::Format(failure.configured ? Str::kProgramPathNotFound
+                                           : Str::kProgramNotFound,
+                        {failure.program});
   }
   wchar_t* buffer = nullptr;
   const DWORD length = FormatMessageW(

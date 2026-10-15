@@ -1133,6 +1133,25 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     zvoleného, inak by preklep v `codex.` čakal na deň, keď sa Codex použije.
     Chýbajúci súbor nie je chyba — prvé spustenie žiadny nemá.
 
+    **CLI a jeho prostredie sú tiež nastavenie backendu**
+    (claude-gui-lkk.72): `<backend>.executable` a `<backend>.env.<MENO>`,
+    spolu `agent::Program`, ktorý skladá `app::ProgramFor`. Prenosný Codex
+    z GitHubu sa volá `codex-x86_64-pc-windows-msvc.exe` a po PATH sa pod
+    menom `codex` nenájde; home Codexu môže byť na šifrovanom disku. Relatívna
+    cesta zo súboru je **voči priečinku appky** (prenosný `config\` cestuje
+    s balíkom), z voľby `--executable` voči aktuálnemu priečinku, ako každá
+    cesta na príkazovom riadku. `--executable` platí **len pre backend, ktorý
+    zvolil štart** — v Novej session by inak cesta ku `codex.exe` dostala aj
+    Claude. Premenné len zo súboru, hodnota doslova (bez `%VAR%`), prázdna
+    hodnota je šablóna a nepošle sa, mená líšiace sa veľkosťou písmen sú
+    duplicita. Existencia súboru sa pri kontrole neoveruje — nenájdený program
+    povie štart (invariant 25). Program dostáva aj zoznam rozhovorov
+    v dialógu Nová session, lebo `CODEX_HOME` a `CLAUDE_CONFIG_DIR` určujú,
+    kde rozhovory ležia (`ClaudeBackend::ConfigDir`). Overené naostro
+    15. 10. 2026: prenosný `config\settings.txt` s `codex\codex-alt.exe`
+    a prázdnym `CODEX_HOME` spustil `codex-alt.exe app-server`, ten zapisoval
+    do nového home a hlásil, že nie je prihlásený.
+
     **`claude.permission-mode` prebije projektový `permissions.defaultMode`**
     z `.claude/settings.json` aj `settings.local.json`, lebo appka ho posiela
     ako `--permission-mode` a voľba vyhráva (odmerané
@@ -1322,7 +1341,9 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     „Nepodarilo sa spustiť session." (claude-gui-lkk.17): backend vráti
     `agent::StartFailure` (program a `GetLastError`), panel z neho spraví
     vetu — chýbajúci program na PATH vlastnou, čokoľvek iné slovami systému
-    s číslom. Hranica je **vznik procesu**: `Start` oboch adaptérov po ňom
+    s číslom. Keď cestu určilo nastavenie alebo `--executable`
+    (`StartFailure::configured`), veta cestu vymenuje a ukáže na nastavenie,
+    nie na inštaláciu: „Je na ceste PATH?" by poslalo hľadať na zlé miesto. Hranica je **vznik procesu**: `Start` oboch adaptérov po ňom
     vracia `true` aj vtedy, keď zlyhá prvý zápis do kanála, lebo také dieťa
     je mŕtve a jeho koniec povie viac než `GetLastError` nula. Priečinok
     z príkazového riadka sa overuje už v `main.cpp` a odmieta ako zlá voľba

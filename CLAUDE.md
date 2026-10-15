@@ -353,7 +353,10 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
     Kľúče s prefixom backendu. Shift+Tab sa neukladá. Zápis mení len svoje
     riadky (`Settings::Set` + `Serialize`, `win::WriteFileBytes`). Prednosť:
     príkazový riadok > súbor > zabudované (`app::ApplySettings`). Kontrolujú
-    sa riadky všetkých backendov.
+    sa riadky všetkých backendov. CLI a prostredie: `<backend>.executable`
+    (relatívne voči priečinku appky) a `<backend>.env.<MENO>` →
+    `agent::Program` (`app::ProgramFor`); `--executable` len pre backend
+    štartu; program dostáva aj zoznam rozhovorov.
 23. **Aktualizuje sa celý balík a nič sa nevymení, kým nie je všetko
     overené**: súčet ZIP-u → rozbalenie do `.update-new\` →
     `update::PlanReplace` → výmena so zálohou v `.update-old\` a návratom
@@ -373,7 +376,7 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
     obsahom** (`win::Process` číta stderr vlastným vláknom, hlava + chvost).
     Nie po vlastnom `Stop()` (`stopping_`). Stavový riadok „agent nebeží".
     Proces, ktorý nevznikol, blok nemá — `agent::StartFailure` a hláška pri
-    štarte.
+    štarte; nastavená cesta (`configured`) ukáže na nastavenie, nie na PATH.
 26. **Pri úlohách na pozadí Claude odpovie `success`, aj keď nič
     nespravil.** `interrupt` mimo ťahu zastaví subagentov, nie príkazy —
     `Session::StopAllTasks` pošle aj `stop_task` na každý príkaz
