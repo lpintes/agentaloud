@@ -82,6 +82,11 @@ constexpr ToolEntry kTools[] = {
     {"Grep", agent::ToolKind::Search, "pattern", false},
     {"WebFetch", agent::ToolKind::Fetch, "url", false},
     {"Skill", agent::ToolKind::Other, "skill", false},
+    {"ToolSearch", agent::ToolKind::Search, "query", false},
+    {"WebSearch", agent::ToolKind::Search, "query", false},
+    {"TaskStop", agent::ToolKind::Other, "task_id", false},
+    {"TaskOutput", agent::ToolKind::Other, "task_id", false},
+    {"SendMessage", agent::ToolKind::Other, "summary", false},
     {kAskUserQuestionTool, agent::ToolKind::Question, nullptr, false},
     {kExitPlanModeTool, agent::ToolKind::Plan, nullptr, false},
 };
@@ -158,8 +163,11 @@ std::string ResultText(const Json& block) {
       // Nothing useful can be done with it in a RichEdit; the view offers to
       // open it instead.  See claude-gui-lkk.5.
       text += i18n::Utf8(i18n::Str::kImage);
+    } else if (type == "tool_reference") {
+      // ToolSearch's answer: a tool now loaded.  Its name is all of it.
+      text += StringField(part, "tool_name");
     } else {
-      text += part.dump();
+      text += ReadableJson(part);
     }
   }
   return text;
@@ -236,16 +244,14 @@ agent::ToolCall ToolCallFromInput(const std::string& name,
   if (entry != nullptr) call.kind = entry->kind;
 
   if (!input.is_object()) {
-    // Not a shape any tool has.  Shown whole, as JSON, under no field name.
-    call.fields.push_back({std::string(), input.dump(2)});
-    call.primary = input.dump();
+    // Not a shape any tool has.  Shown whole, under no field name.
+    call.fields.push_back({std::string(), ReadableJson(input)});
+    call.primary = OneLine(call.fields.back().value);
     return call;
   }
 
   for (auto it = input.begin(); it != input.end(); ++it) {
-    call.fields.push_back({it.key(), it.value().is_string()
-                                         ? it.value().get<std::string>()
-                                         : it.value().dump()});
+    call.fields.push_back({it.key(), ReadableField(it.value())});
   }
 
   if (entry != nullptr && entry->primary != nullptr) {
@@ -257,7 +263,14 @@ agent::ToolCall ToolCallFromInput(const std::string& name,
     // the best there is when no argument says it alone.  A question renders
     // its summary out of the questions and comes here only when it has none.
     call.primary = StringField(input, "description");
-    if (call.primary.empty()) call.primary = input.dump();
+  }
+  // Every argument, then, as the body has them -- an MCP tool's arguments
+  // are only known to its server.  A call with none says just its name.
+  if (call.primary.empty()) {
+    for (const agent::ToolField& field : call.fields) {
+      if (!call.primary.empty()) call.primary += "; ";
+      call.primary += field.name + ": " + OneLine(field.value);
+    }
   }
 
   if (name == "Edit") {
@@ -362,6 +375,13 @@ std::vector<agent::Event> Translator::Translate(const Json& record) {
               ToolCallFromInput(name, StringField(item, "id"), arguments);
           // "Task" is what the tool was called before it was "Agent".
           if (name == kExitPlanModeTool) planCalls_.insert(call.id);
+          // A command's output and a file's content are the truth, JSON or
+          // not; what an MCP server answers is data for a program.
+          if (call.kind != agent::ToolKind::Shell &&
+              call.kind != agent::ToolKind::ReadFile &&
+              call.kind != agent::ToolKind::Fetch) {
+            readableResults_.insert(call.id);
+          }
           if (name == "Agent" || name == "Task") {
             // The name goes into the call's summary as well, which is the
             // one place that says what "Explore 2" was sent to do.
@@ -400,6 +420,9 @@ std::vector<agent::Event> Translator::Translate(const Json& record) {
         if (!item.is_object()) continue;
         if (StringField(item, "type") == "tool_result") {
           agent::ToolResult result = MakeToolResult(item);
+          if (readableResults_.erase(result.callId) != 0) {
+            result.text = ReadableIfJson(result.text);
+          }
           // The plan sent back (kKeepPlanningInstruction).  Only for a plan:
           // the same sentence after any other denial, in a terminal session
           // replayed from disk, is not a plan returned.

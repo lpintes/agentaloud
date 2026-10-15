@@ -168,31 +168,30 @@ agent::ToolCall FileChangeCall(const Json& item) {
 void ArgumentFields(const Json& arguments, agent::ToolCall* call) {
   if (arguments.is_object()) {
     for (auto it = arguments.begin(); it != arguments.end(); ++it) {
-      call->fields.push_back({it.key(), it.value().is_string()
-                                            ? it.value().get<std::string>()
-                                            : it.value().dump()});
+      call->fields.push_back({it.key(), ReadableField(it.value())});
     }
   } else if (!arguments.is_null()) {
-    call->fields.push_back({std::string(), arguments.dump(2)});
+    call->fields.push_back({std::string(), ReadableJson(arguments)});
   }
   if (call->primary.empty() && !call->fields.empty()) {
-    call->primary = call->fields.front().value;
+    call->primary = OneLine(call->fields.front().value);
   }
 }
 
 // MCP and dynamic tool results: a list of content parts like an MCP server's.
 std::string ContentText(const Json& content) {
-  if (!content.is_array()) return content.is_null() ? "" : content.dump();
+  if (!content.is_array()) return ReadableJson(content);
   std::string text;
   for (const Json& part : content) {
     if (!text.empty()) text.push_back('\n');
     const std::string type = StringField(part, "type");
     if (type == "text" || type == "inputText") {
-      text += StringField(part, "text");
+      // An MCP server answers a program, and mostly in JSON (claude-gui-lkk.69).
+      text += ReadableIfJson(StringField(part, "text"));
     } else if (type == "image" || type == "inputImage") {
       text += i18n::Utf8(i18n::Str::kImage);
     } else {
-      text += part.dump();
+      text += ReadableJson(part);
     }
   }
   return text;

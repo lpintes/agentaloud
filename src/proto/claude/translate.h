@@ -85,6 +85,8 @@ class Translator {
   std::map<std::string, std::string> agentIds_;   // agent_id -> name
   // ExitPlanMode call ids, for what their denial is shown as.
   std::set<std::string> planCalls_;
+  // Calls whose result, if JSON, is shown as ReadableIfJson; gone once it is.
+  std::set<std::string> readableResults_;
   // A task went to the background since the last answer to background_tasks
   // -- the only sign that Ctrl+B did anything (MakeBackgroundTasks).
   bool movedSinceAnswer_ = false;

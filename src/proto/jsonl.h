@@ -48,6 +48,22 @@ bool ParseLine(std::string_view line, Json* out, std::string* error);
 // breath -- a prompt of twenty lines there would bury everything after it.
 std::string OneLine(std::string_view text);
 
+// JSON said as text: "key: value" a line, nested values indented under their
+// key, list items numbered, a list of plain values on one line.  For the
+// arguments and answers of tools that have no shape of our own -- MCP servers
+// above all -- where the dump was braces, quotes and "\n" read out one by one
+// (claude-gui-lkk.69).
+std::string ReadableJson(const Json& value);
+
+// The same for one argument, to go behind "name:".  A value that takes lines
+// of its own starts with '\n' and comes indented.
+std::string ReadableField(const Json& value);
+
+// `text` as ReadableJson when the whole of it is a JSON object or array, else
+// unchanged.  Only for what a tool returned that no one reads verbatim: a
+// command's output or a file is the truth even when it is JSON.
+std::string ReadableIfJson(const std::string& text);
+
 }  // namespace proto
 
 #endif

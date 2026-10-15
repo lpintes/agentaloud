@@ -350,7 +350,10 @@ std::wstring RenderFields(const std::vector<agent::ToolField>& fields) {
     if (!body.empty()) body.push_back(L'\n');
     // A nameless field is an input that was not an object at all; it is
     // shown as it came.
-    if (!field.name.empty()) body += Widen(field.name) + L": ";
+    // A value with lines of its own comes from the adapter on the next line,
+    // indented (proto::ReadableField); a space before it would end the line.
+    const bool own = !field.value.empty() && field.value.front() == '\n';
+    if (!field.name.empty()) body += Widen(field.name) + (own ? L":" : L": ");
     body += Widen(field.value);
   }
   return body;
@@ -464,8 +467,10 @@ Block MakeToolUse(const agent::ToolCall& call, const std::wstring& root) {
   block.toolName = Widen(call.name);
   block.toolKind = call.kind;
   block.body = RenderToolCall(call);
-  block.summary = block.toolName + L": " +
-                  OneLine(PrimaryText(call, root), kSummaryLimit);
+  // A call without arguments is its name alone, not "name:" and a pause.
+  const std::wstring primary = OneLine(PrimaryText(call, root), kSummaryLimit);
+  block.summary =
+      primary.empty() ? block.toolName : block.toolName + L": " + primary;
   const std::wstring detail = InputDetail(call);
   if (!detail.empty()) block.summary += L", " + detail;
   block.collapsed = true;

@@ -2545,6 +2545,68 @@ void TestPermissionTextMatchesTranscript() {
   CHECK(shown.find(L'\r') == std::wstring::npos);
 }
 
+// Nastroje bez vlastneho tvaru (MCP, ToolSearch) ukazovali v prepise surovy
+// JSON -- zatvorky, uvodzovky a "\n" citane po jednom (claude-gui-lkk.69).
+// Tvary su z korpusu, nie z dokumentacie.
+void TestShapelessToolsReadAsText() {
+  TEST("transcript: nastroj bez vlastneho tvaru sa cita ako text, nie JSON");
+  model::Transcript transcript;
+  proto::Translator translator;
+  transcript.Append(translator.Translate(proto::Json::parse(R"({
+    "type": "assistant",
+    "message": {"content": [
+      {"type": "tool_use", "id": "toolu_S", "name": "ToolSearch",
+       "input": {"max_results": 1, "query": "select:ExitPlanMode"}},
+      {"type": "tool_use", "id": "toolu_M", "name": "mcp__screenreader__run_sequence",
+       "input": {"gap_ms": 200, "steps": [
+         {"kind": "press", "gestures": ["nvda+end", "enter"]},
+         {"kind": "delay"}]}},
+      {"type": "tool_use", "id": "toolu_N", "name": "mcp__screenreader__status",
+       "input": {}},
+      {"type": "tool_use", "id": "toolu_B", "name": "Bash",
+       "input": {"command": "gh repo view --json name"}}
+    ]}
+  })")));
+  const auto& blocks = transcript.blocks();
+  CHECK_EQ(blocks.size(), size_t{4});
+  CHECK_EQ(blocks[0].summary, std::wstring(L"ToolSearch: select:ExitPlanMode"));
+  CHECK_EQ(blocks[1].summary,
+           std::wstring(L"mcp__screenreader__run_sequence: gap_ms: 200; "
+                        L"steps: 1. gestures: nvda+end, enter kind: press "
+                        L"2. kind: delay"));
+  CHECK_EQ(blocks[1].body,
+           std::wstring(L"gap_ms: 200\nsteps:\n  1.\n"
+                        L"    gestures: nvda+end, enter\n    kind: press\n"
+                        L"  2.\n    kind: delay"));
+  // Bez argumentov len meno, nie "status: {}".
+  CHECK_EQ(blocks[2].summary, std::wstring(L"mcp__screenreader__status"));
+
+  transcript.Append(translator.Translate(proto::Json::parse(R"({
+    "type": "user",
+    "message": {"content": [
+      {"type": "tool_result", "tool_use_id": "toolu_S", "content": [
+        {"type": "tool_reference", "tool_name": "ExitPlanMode"}]},
+      {"type": "tool_result", "tool_use_id": "toolu_N",
+       "content": "{\"state\":\"disconnected\",\"readers\":[\"nvda\",\"orca\"]}"},
+      {"type": "tool_result", "tool_use_id": "toolu_B",
+       "content": "{\"name\":\"agentaloud\"}"}
+    ]}
+  })")));
+  auto bodyOf = [&](const char* id) {
+    for (const model::Block& block : transcript.blocks()) {
+      if (block.kind == model::BlockKind::ToolResult && block.toolUseId == id) {
+        return block.body;
+      }
+    }
+    return std::wstring(L"<none>");
+  };
+  CHECK_EQ(bodyOf("toolu_S"), std::wstring(L"ExitPlanMode"));
+  CHECK_EQ(bodyOf("toolu_N"),
+           std::wstring(L"readers: nvda, orca\nstate: disconnected"));
+  // Vystup prikazu je pravda, aj ked je to JSON.
+  CHECK_EQ(bodyOf("toolu_B"), std::wstring(L"{\"name\":\"agentaloud\"}"));
+}
+
 void TestFailedToolResultReadsLikeAnError() {
   TEST("transcript: neuspesny nastroj povie, co sa pokazilo");
   model::Transcript transcript;
@@ -4944,6 +5006,7 @@ int main(int argc, char** argv) {
   TestCodexSubagentSpeaker();
   TestCodexSubagentNickname();
   TestSummariesAreOneLine();
+  TestShapelessToolsReadAsText();
   TestAskUserQuestionRoundTrip();
   TestQuestionsReadAsText();
   TestSessionPickIgnoresMtime();
