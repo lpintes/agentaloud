@@ -1,5 +1,7 @@
 #include "win/process.h"
 
+#include <algorithm>
+#include <cwchar>
 #include <vector>
 
 namespace win {
@@ -52,6 +54,58 @@ HANDLE MakeKillOnCloseJob() {
     return nullptr;
   }
   return job;
+}
+
+// Our environment with `overrides` laid over it, as the double-NUL-terminated
+// block CreateProcessW takes.  Sorted by name, case-insensitively, because
+// the documentation of CreateProcess asks for it and a child that looks a
+// variable up by bisecting would otherwise miss it.  The "=C:=C:\..." entries
+// that carry the current directory of each drive start with '=' and so sort
+// first, where the system keeps them.
+std::vector<wchar_t> EnvironmentBlock(const Process::Environment& overrides) {
+  auto sameName = [](const std::wstring& a, const std::wstring& b) {
+    return CompareStringOrdinal(a.c_str(), static_cast<int>(a.size()),
+                                b.c_str(), static_cast<int>(b.size()),
+                                TRUE) == CSTR_EQUAL;
+  };
+  std::vector<std::pair<std::wstring, std::wstring>> variables;
+  if (wchar_t* inherited = GetEnvironmentStringsW()) {
+    for (const wchar_t* entry = inherited; *entry != L'\0';
+         entry += wcslen(entry) + 1) {
+      // Searched from the second character, so that the name of a drive's
+      // entry keeps its leading '='.
+      const wchar_t* equals = entry[0] != L'\0' ? wcschr(entry + 1, L'=') : nullptr;
+      if (equals == nullptr) continue;
+      variables.emplace_back(std::wstring(entry, equals), std::wstring(equals + 1));
+    }
+    FreeEnvironmentStringsW(inherited);
+  }
+  for (const auto& [name, value] : overrides) {
+    bool replaced = false;
+    for (auto& variable : variables) {
+      if (sameName(variable.first, name)) {
+        variable.second = value;
+        replaced = true;
+      }
+    }
+    if (!replaced) variables.emplace_back(name, value);
+  }
+  std::stable_sort(variables.begin(), variables.end(),
+                   [](const auto& a, const auto& b) {
+                     return CompareStringOrdinal(
+                                a.first.c_str(), static_cast<int>(a.first.size()),
+                                b.first.c_str(), static_cast<int>(b.first.size()),
+                                TRUE) == CSTR_LESS_THAN;
+                   });
+  std::vector<wchar_t> block;
+  for (const auto& [name, value] : variables) {
+    block.insert(block.end(), name.begin(), name.end());
+    block.push_back(L'=');
+    block.insert(block.end(), value.begin(), value.end());
+    block.push_back(L'\0');
+  }
+  block.push_back(L'\0');
+  return block;
 }
 
 // How much of stderr is kept.  The head is where a CLI that refuses to start
@@ -163,10 +217,17 @@ bool Process::Start(const std::wstring& commandLine,
   // failure this is here to stop.  A job created without one is no job at all.
   job_ = MakeKillOnCloseJob();
 
+  // Null, the inherited environment as it is, unless there is something to
+  // add: a block of our own is a copy, and a copy can only drift.
+  std::vector<wchar_t> environment;
+  if (!environment_.empty()) environment = EnvironmentBlock(environment_);
+
   PROCESS_INFORMATION info = {};
   const BOOL started = CreateProcessW(
       nullptr, mutableLine.data(), nullptr, nullptr, TRUE,
-      CREATE_NO_WINDOW | (job_ ? CREATE_SUSPENDED : 0u), nullptr,
+      CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT |
+          (job_ ? CREATE_SUSPENDED : 0u),
+      environment.empty() ? nullptr : environment.data(),
       workingDir.empty() ? nullptr : workingDir.c_str(), &startup, &info);
 
   if (!started) return fail();

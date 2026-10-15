@@ -3366,7 +3366,26 @@ void TestSessionFilePath() {
   // ktora neexistuje, a to je odpoved volajuceho, nie chyba; prazdne id vsak
   // cestu nema vobec, inak by z neho vznikol adresar s ".jsonl" na konci.
   CHECK(proto::SessionFilePath(L"C:\\b\\mluv", L"").empty());
+  // CLAUDE_CONFIG_DIR z nastaveni (agent::Program) dostane len dieta, nie
+  // tento proces.  Vyhrava nad nasim, inak by zoznam a historia citali iny
+  // domov, nez do ktoreho CLI pise (claude-gui-lkk.72).
+  CHECK_EQ(proto::SessionFilePath(L"C:\\b\\mluv", L"abc-123", L"D:\\prenosny"),
+           std::wstring(L"D:\\prenosny\\projects\\C--b-mluv\\abc-123.jsonl"));
   _wputenv_s(L"CLAUDE_CONFIG_DIR", L"");
+}
+
+void TestProgramFind() {
+  TEST("agent::Program: premenna prostredia podla mena");
+  agent::Program program;
+  program.environment = {{L"CODEX_HOME", L"D:\\a"},
+                         {L"Path", L"x"},
+                         {L"codex_home", L"D:\\b"}};
+  // Windows mena porovnava bez ohladu na velkost pismen, a ked je meno
+  // dvakrat, plati posledne -- tak ho dostane aj dieta.
+  const std::wstring* home = program.Find(L"Codex_Home");
+  CHECK(home != nullptr && *home == L"D:\\b");
+  CHECK(program.Find(L"CODEX") == nullptr);
+  CHECK(agent::Program{}.Find(L"PATH") == nullptr);
 }
 
 void TestProjectKey() {
@@ -5017,6 +5036,7 @@ int main(int argc, char** argv) {
   TestSessionSummaryFindsTheHumanPrompt();
   TestHistoryRestore();
   TestSessionFilePath();
+  TestProgramFind();
   TestProjectKey();
   TestFixtureBasic(fixtures);
   TestFixtureDenied(fixtures);

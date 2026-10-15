@@ -50,7 +50,18 @@ const char* Decision(agent::Verdict verdict) {
 
 }  // namespace
 
-CodexBackend::CodexBackend() : capabilities_(CodexCapabilities()) {}
+CodexBackend::CodexBackend(agent::Program program)
+    : program_(std::move(program)), capabilities_(CodexCapabilities()) {}
+
+// Found on PATH by CreateProcessW, the same way `claude` is, unless the
+// settings name the executable.  That takes the native installer's codex.exe
+// (chatgpt.com/codex/install.ps1); the npm package puts only shims there -- a
+// .cmd, a .ps1 and a shell script that start node -- and CreateProcessW runs
+// none of them.  A portable codex keeps the name it was released under,
+// codex-x86_64-pc-windows-msvc.exe, and is found only by its path.
+std::wstring CodexBackend::AppServerLine() const {
+  return win::Process::Quote(ProgramName()) + L" app-server";
+}
 
 bool CodexBackend::ListConversations(const std::wstring& projectDir,
                                      std::vector<agent::Conversation>* out) {
@@ -117,8 +128,10 @@ bool CodexBackend::ListConversations(const std::wstring& projectDir,
       finish(false);
     }
   });
+  // The same CODEX_HOME as the session's, or the list is another home's.
+  process.SetEnvironment(program_.environment);
   if (!process.Start(
-          L"codex app-server", {},
+          AppServerLine(), {},
           [&](std::string_view bytes) { assembler->Feed(bytes); },
           // Dead before the last page: whatever it said is not the list.
           [&](const win::Process::Exit&) { finish(false); })) {
@@ -168,11 +181,7 @@ bool CodexBackend::Start(const agent::StartOptions& options,
     }
   }
 
-  // Found on PATH by CreateProcessW, the same way `claude` is.  That takes
-  // the native installer's codex.exe (chatgpt.com/codex/install.ps1); the
-  // npm package puts only shims there -- a .cmd, a .ps1 and a shell script
-  // that start node -- and CreateProcessW runs none of them.
-  std::wstring line = L"codex app-server";
+  std::wstring line = AppServerLine();
   for (const std::wstring& argument : options.extraArgs) {
     line += L' ';
     line += win::Process::Quote(argument);
@@ -180,6 +189,7 @@ bool CodexBackend::Start(const agent::StartOptions& options,
 
   assembler_ = std::make_unique<LineAssembler>(
       [this](std::string_view text) { OnLine(text); });
+  process_.SetEnvironment(program_.environment);
   if (!process_.Start(
           line, options.projectDir,
           [this](std::string_view bytes) { assembler_->Feed(bytes); },

@@ -38,7 +38,7 @@ namespace proto::codex {
 
 class CodexBackend : public agent::Backend {
  public:
-  CodexBackend();
+  explicit CodexBackend(agent::Program program = {});
   ~CodexBackend() override;
 
   const agent::Capabilities& capabilities() const override {
@@ -49,7 +49,7 @@ class CodexBackend : public agent::Backend {
                          std::vector<agent::Conversation>* out) override;
   bool Start(const agent::StartOptions& options, Callbacks callbacks) override;
   agent::StartFailure startFailure() const override {
-    return {L"codex", process_.startError()};
+    return {ProgramName(), process_.startError(), !program_.path.empty()};
   }
   bool SendPrompt(const std::string& utf8Text) override;
   bool Interrupt() override;
@@ -127,7 +127,15 @@ class CodexBackend : public agent::Backend {
   void OnThreadOpened(const Json& result, bool resumed);
   void Emit(std::vector<agent::Event> batch);
   void TurnOver();
+  // `codex app-server` as the command line starts it: the program, then the
+  // subcommand.  A failure names only the program.
+  std::wstring ProgramName() const {
+    return program_.path.empty() ? L"codex" : program_.path;
+  }
+  std::wstring AppServerLine() const;
 
+  // Constant after construction, so any thread reads it.
+  const agent::Program program_;
   agent::Capabilities capabilities_;
   Callbacks callbacks_;
   agent::StartOptions options_;

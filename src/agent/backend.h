@@ -20,6 +20,7 @@
 
 #include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "agent/events.h"
@@ -175,6 +176,22 @@ struct QuestionAnswer {
 
 // ---- Starting ---------------------------------------------------------------
 
+// How to start the CLI, given to the adapter when it is made, because every
+// process it starts needs it -- the conversation list too, and that is asked
+// of a backend that is never started (claude-gui-lkk.72).  A portable
+// installation is the reason: an executable that is not on PATH or not under
+// the name the adapter knows, and a home of its own instead of the profile.
+struct Program {
+  // The executable, absolute.  Empty: the adapter's own name, found on PATH.
+  std::wstring path;
+  // Set for the CLI on top of the environment it would inherit, in order.
+  std::vector<std::pair<std::wstring, std::wstring>> environment;
+
+  // The value `name` is given here, the last one when given twice, or null.
+  // Names compare ASCII case-insensitively, as Windows compares them.
+  const std::wstring* Find(const std::wstring& name) const;
+};
+
 struct StartOptions {
   std::wstring projectDir;  // required
   std::wstring model;       // empty: the CLI's configured default
@@ -212,11 +229,15 @@ struct Conversation {
 // ends up here: one that starts and then refuses its arguments makes Start
 // succeed, and says why itself, off stderr, in SessionEnded (invariant 25).
 struct StartFailure {
-  // What was looked for on PATH, as a reader would type it to try it by hand.
+  // What was started, as a reader would type it to try it by hand: the name
+  // looked for on PATH, or Program::path when there is one.
   std::wstring program;
   // The system's error code for the attempt.  A number and not words: the
   // port does not include windows.h, and the words are the UI's to find.
   unsigned long systemError = 0;
+  // Whether `program` is Program::path rather than a name looked for on PATH:
+  // "not found" then means a wrong setting, not a missing installation.
+  bool configured = false;
 };
 
 class Backend {

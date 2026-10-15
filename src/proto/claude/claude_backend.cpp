@@ -43,11 +43,17 @@ std::string ReasonSentence(const std::string& type) {
 
 }  // namespace
 
-ClaudeBackend::ClaudeBackend() : capabilities_(ClaudeCapabilities()) {}
+ClaudeBackend::ClaudeBackend(agent::Program program)
+    : program_(std::move(program)), capabilities_(ClaudeCapabilities()) {}
+
+std::wstring ClaudeBackend::ConfigDir() const {
+  const std::wstring* configured = program_.Find(L"CLAUDE_CONFIG_DIR");
+  return configured ? *configured : std::wstring();
+}
 
 bool ClaudeBackend::ListConversations(const std::wstring& projectDir,
                                       std::vector<agent::Conversation>* out) {
-  return ProjectConversations(projectDir, out);
+  return ProjectConversations(projectDir, out, ConfigDir());
 }
 
 bool ClaudeBackend::Start(const agent::StartOptions& options,
@@ -64,6 +70,8 @@ bool ClaudeBackend::Start(const agent::StartOptions& options,
   session.permissionMode =
       Ascii(options.mode == "manual" ? std::string("default") : options.mode);
   session.extraArgs = options.extraArgs;
+  session.program = program_.path;
+  session.environment = program_.environment;
   if (options.resume == agent::StartOptions::Resume::ById) {
     // An empty id no longer comes from the command line -- a bare --resume
     // opens the list in Nová session there (claude-gui-lkk.7.11.4).  Were it
@@ -85,7 +93,7 @@ bool ClaudeBackend::Start(const agent::StartOptions& options,
     // picked: the restored transcript is the answer, and Ctrl+Home leads to
     // its first prompt.
     SessionSummary latest;
-    if (LatestSession(options.projectDir, &latest)) {
+    if (LatestSession(options.projectDir, &latest, ConfigDir())) {
       session.extraArgs.push_back(L"--resume");
       session.extraArgs.push_back(latest.id);
     }
@@ -105,7 +113,8 @@ bool ClaudeBackend::Start(const agent::StartOptions& options,
   if (ResumesConversation(session.extraArgs) &&
       ReadSessionRecords(
           SessionFilePath(session.workingDir,
-                          ResumedConversation(session.extraArgs)),
+                          ResumedConversation(session.extraArgs),
+                          ConfigDir()),
           &records)) {
     std::vector<agent::Event> history = TranslateHistory(records, &translator_);
     for (const agent::Event& event : history) {
@@ -299,8 +308,9 @@ bool ClaudeBackend::StartSignIn() {
   // once and reads the code the page shows off stdin.  It also opens the
   // browser itself, and nothing on its command line stops that (measured,
   // tools/probe_noauth.py login).
+  process->SetEnvironment(program_.environment);
   const bool started = process->Start(
-      L"claude auth login", projectDir_,
+      win::Process::Quote(ProgramName()) + L" auth login", projectDir_,
       [this, generation](std::string_view bytes) {
         OnSignInOutput(generation, bytes);
       },

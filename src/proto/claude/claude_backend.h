@@ -24,7 +24,7 @@ namespace proto {
 
 class ClaudeBackend : public agent::Backend {
  public:
-  ClaudeBackend();
+  explicit ClaudeBackend(agent::Program program = {});
   ~ClaudeBackend() override = default;
 
   const agent::Capabilities& capabilities() const override {
@@ -37,7 +37,7 @@ class ClaudeBackend : public agent::Backend {
   // to onHistory before the process starts, on the calling thread.
   bool Start(const agent::StartOptions& options, Callbacks callbacks) override;
   agent::StartFailure startFailure() const override {
-    return {L"claude", session_.startError()};
+    return {ProgramName(), session_.startError(), !program_.path.empty()};
   }
   bool SendPrompt(const std::string& utf8Text) override;
   bool Interrupt() override;
@@ -68,7 +68,16 @@ class ClaudeBackend : public agent::Backend {
   // dropped.
   void OnSignInOutput(unsigned generation, std::string_view bytes);
   void OnSignInExit(unsigned generation, const win::Process::Exit& exit);
+  // The executable as the command line starts it, and as a failure names it.
+  std::wstring ProgramName() const {
+    return program_.path.empty() ? L"claude" : program_.path;
+  }
+  // CLAUDE_CONFIG_DIR as the CLI gets it from program_, empty when it is not
+  // set there: where its sessions are on disk (proto/claude/sessions.h).
+  std::wstring ConfigDir() const;
 
+  // Constant after construction, so any thread reads it.
+  const agent::Program program_;
   agent::Capabilities capabilities_;
   Callbacks callbacks_;
   Session session_;

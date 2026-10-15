@@ -58,6 +58,10 @@ class Session {
     // claude-gui-lkk.7.2.
     std::wstring sessionId;
     std::vector<std::wstring> extraArgs;  // for spikes and experiments
+    // agent::Program: the executable (empty: `claude` on PATH) and what is
+    // set in its environment.
+    std::wstring program;
+    win::Process::Environment environment;
   };
 
   // Both are CALLED ON THE READER THREAD.  A GUI has to post across; here they

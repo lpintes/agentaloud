@@ -24,6 +24,8 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <utility>
+#include <vector>
 
 namespace win {
 
@@ -64,6 +66,16 @@ class Process {
   // On false, startError() says why.
   bool Start(const std::wstring& commandLine, const std::wstring& workingDir,
              OutputCallback onOutput, ExitCallback onExit = nullptr);
+
+  // Variables the child gets on top of our own environment, name and value;
+  // a name we have already is overridden, case-insensitively, as Windows
+  // compares them.  Everything else is inherited as it is: a child given only
+  // these would lose PATH, SystemRoot and the profile, and most CLIs do not
+  // start without them.  Takes effect at the next Start().
+  using Environment = std::vector<std::pair<std::wstring, std::wstring>>;
+  void SetEnvironment(Environment overrides) {
+    environment_ = std::move(overrides);
+  }
 
   // GetLastError() of the step of Start() that failed; 0 after a success.
   // ERROR_FILE_NOT_FOUND from CreateProcessW is "the program is not on PATH"
@@ -116,6 +128,7 @@ class Process {
   // than a std::thread, because the destructor may have to cancel its read
   // and CancelSynchronousIo takes a thread HANDLE.
   HANDLE errorThread_ = nullptr;
+  Environment environment_;
   OutputCallback onOutput_;
   ExitCallback onExit_;
   std::atomic<bool> stopping_{false};

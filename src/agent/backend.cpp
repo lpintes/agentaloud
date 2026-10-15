@@ -32,6 +32,21 @@ std::string NextMode(const Capabilities& capabilities,
   return {};
 }
 
+const std::wstring* Program::Find(const std::wstring& name) const {
+  auto lower = [](wchar_t c) {
+    return c >= L'A' && c <= L'Z' ? static_cast<wchar_t>(c + (L'a' - L'A')) : c;
+  };
+  const std::wstring* found = nullptr;
+  for (const auto& [key, value] : environment) {
+    if (key.size() == name.size() &&
+        std::equal(key.begin(), key.end(), name.begin(),
+                   [&](wchar_t a, wchar_t b) { return lower(a) == lower(b); })) {
+      found = &value;
+    }
+  }
+  return found;
+}
+
 const Mode* FindMode(const Capabilities& capabilities, const std::string& id) {
   for (const Mode& mode : capabilities.modes) {
     if (mode.id == id) return &mode;

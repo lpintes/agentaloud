@@ -46,7 +46,13 @@ std::wstring ProjectKey(const std::wstring& projectPath);
 // ~/.claude/projects/<key>, or CLAUDE_CONFIG_DIR/projects/<key> when that is
 // set -- the CLI honours it and a lookup that ignored it would quietly read
 // the wrong machine's worth of sessions.  Empty when the home is unknown.
-std::wstring ProjectSessionDir(const std::wstring& projectPath);
+//
+// `configDir` is the CLAUDE_CONFIG_DIR the CLI is given (agent::Program),
+// which wins over ours: the lookup has to read where that CLI writes, and a
+// variable set only for the child is not in this process's environment.  The
+// same parameter on everything below, for that reason.
+std::wstring ProjectSessionDir(const std::wstring& projectPath,
+                               const std::wstring& configDir = {});
 
 // Summarizes one .jsonl.  False for a file that holds no user or assistant
 // record: a conversation nobody ever had is not one to carry on.
@@ -64,7 +70,8 @@ bool ReadSessionSummary(const std::wstring& path, SessionSummary* out);
 // so a path built from one simply will not exist -- which is an answer for the
 // caller, not an error to report.
 std::wstring SessionFilePath(const std::wstring& projectPath,
-                             const std::wstring& id);
+                             const std::wstring& id,
+                             const std::wstring& configDir = {});
 
 // The records of one session file that a transcript can be built from, in the
 // order they were written.
@@ -117,20 +124,23 @@ bool IsInterruptMark(const Json& record);
 // for two sessions closed minutes apart it decides on something that has
 // nothing to do with either.  ISO 8601 with a Z sorts correctly as text, which
 // is why the stamp is never parsed for this.
-bool LatestSession(const std::wstring& projectPath, SessionSummary* out);
+bool LatestSession(const std::wstring& projectPath, SessionSummary* out,
+                   const std::wstring& configDir = {});
 
 // Every conversation of the project, newest first by the same measure as
 // LatestSession.  True with an empty list for a project nobody has worked in
 // -- the CLI makes the directory with the first session -- and false only
 // when the home is unknown.
 bool ProjectSessions(const std::wstring& projectPath,
-                     std::vector<SessionSummary>* out);
+                     std::vector<SessionSummary>* out,
+                     const std::wstring& configDir = {});
 
 // ProjectSessions as the port has it: ClaudeBackend::ListConversations.
 // Here and not in the adapter so that the tests, which do not link the
 // adapter, see it.
 bool ProjectConversations(const std::wstring& projectPath,
-                          std::vector<agent::Conversation>* out);
+                          std::vector<agent::Conversation>* out,
+                          const std::wstring& configDir = {});
 
 // An ISO 8601 UTC stamp as seconds since 1970, or 0 when it cannot be read.
 long long UnixSeconds(const std::string& isoStamp);

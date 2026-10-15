@@ -115,10 +115,13 @@ std::wstring ProjectKey(const std::wstring& projectPath) {
   return key;
 }
 
-std::wstring ProjectSessionDir(const std::wstring& projectPath) {
+std::wstring ProjectSessionDir(const std::wstring& projectPath,
+                              const std::wstring& configDir) {
   std::wstring home;
-  if (const wchar_t* configured = _wgetenv(L"CLAUDE_CONFIG_DIR");
-      configured && *configured) {
+  if (!configDir.empty()) {
+    home = configDir;
+  } else if (const wchar_t* configured = _wgetenv(L"CLAUDE_CONFIG_DIR");
+             configured && *configured) {
     home = configured;
   } else if (const wchar_t* profile = _wgetenv(L"USERPROFILE");
              profile && *profile) {
@@ -131,8 +134,9 @@ std::wstring ProjectSessionDir(const std::wstring& projectPath) {
 }
 
 std::wstring SessionFilePath(const std::wstring& projectPath,
-                             const std::wstring& id) {
-  const std::wstring directory = ProjectSessionDir(projectPath);
+                             const std::wstring& id,
+                             const std::wstring& configDir) {
+  const std::wstring directory = ProjectSessionDir(projectPath, configDir);
   if (directory.empty() || id.empty()) return {};
   return directory + L"\\" + id + L".jsonl";
 }
@@ -220,9 +224,10 @@ bool ReadSessionSummary(const std::wstring& path, SessionSummary* out) {
 }
 
 bool ProjectSessions(const std::wstring& projectPath,
-                     std::vector<SessionSummary>* out) {
+                     std::vector<SessionSummary>* out,
+                     const std::wstring& configDir) {
   out->clear();
-  const std::wstring directory = ProjectSessionDir(projectPath);
+  const std::wstring directory = ProjectSessionDir(projectPath, configDir);
   if (directory.empty()) return false;
   std::error_code code;
   std::filesystem::directory_iterator entries(
@@ -248,9 +253,10 @@ bool ProjectSessions(const std::wstring& projectPath,
   return true;
 }
 
-bool LatestSession(const std::wstring& projectPath, SessionSummary* out) {
+bool LatestSession(const std::wstring& projectPath, SessionSummary* out,
+                   const std::wstring& configDir) {
   std::vector<SessionSummary> sessions;
-  if (!ProjectSessions(projectPath, &sessions) || sessions.empty()) {
+  if (!ProjectSessions(projectPath, &sessions, configDir) || sessions.empty()) {
     return false;
   }
   *out = std::move(sessions.front());
@@ -258,10 +264,11 @@ bool LatestSession(const std::wstring& projectPath, SessionSummary* out) {
 }
 
 bool ProjectConversations(const std::wstring& projectPath,
-                          std::vector<agent::Conversation>* out) {
+                          std::vector<agent::Conversation>* out,
+                          const std::wstring& configDir) {
   out->clear();
   std::vector<SessionSummary> sessions;
-  if (!ProjectSessions(projectPath, &sessions)) return false;
+  if (!ProjectSessions(projectPath, &sessions, configDir)) return false;
   for (SessionSummary& session : sessions) {
     agent::Conversation conversation;
     conversation.id = std::move(session.id);

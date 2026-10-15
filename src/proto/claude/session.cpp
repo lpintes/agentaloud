@@ -24,7 +24,8 @@ std::wstring NewSessionId() {
 }
 
 std::wstring BuildCommandLine(const Session::Options& options) {
-  std::wstring line = L"claude";
+  std::wstring line =
+      options.program.empty() ? L"claude" : win::Process::Quote(options.program);
   auto add = [&line](const wchar_t* argument) {
     line += L' ';
     line += argument;
@@ -133,6 +134,7 @@ bool Session::Start(const Options& options, EventCallback onEvent,
   // read differently is corrected, not kept.  Mode names are ASCII.
   mode_.Seed(std::string(options.permissionMode.begin(),
                          options.permissionMode.end()));
+  process_.SetEnvironment(options.environment);
   if (!process_.Start(
           BuildCommandLine(effective), options.workingDir,
           [this](std::string_view bytes) { OnBytes(bytes); },
