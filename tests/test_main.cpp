@@ -3678,7 +3678,7 @@ const char* const kKnownDiskOnlyTypes[] = {
     "agent-name", "agent-setting", "ai-title", "artifact-autoreact-ledger",
     "artifact-comment-monitor", "bridge-session", "cost-state",
     "file-history-delta", "frame-link", "mode", "permission-mode",
-    "pr-link",
+    "pr-link", "custom-title", "dev-mods",
 };
 
 void SoakOverCorpus(const std::string& root) {
