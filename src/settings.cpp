@@ -26,6 +26,22 @@ std::wstring Joined(const std::vector<std::string>& words) {
   return out;
 }
 
+std::string AsciiLower(std::string text) {
+  for (char& ch : text) {
+    if (ch >= 'A' && ch <= 'Z') ch = static_cast<char>(ch - 'A' + 'a');
+  }
+  return text;
+}
+
+// "C:\x", "C:/x", "\\server\x" and "\x" are not relative; "x" and "..\x" are.
+// So is "C:x" -- relative to the current directory of C:, which no file
+// written by hand means, and which the application folder serves better.
+bool IsRelative(const std::wstring& path) {
+  if (!path.empty() && (path[0] == L'\\' || path[0] == L'/')) return false;
+  return !(path.size() >= 3 && path[1] == L':' &&
+           (path[2] == L'\\' || path[2] == L'/'));
+}
+
 }  // namespace
 
 void Settings::Complain(int line, const std::wstring& text) {
@@ -156,11 +172,32 @@ void Settings::Check(const std::map<std::string, agent::Capabilities>& backends)
                              ? backends.end()
                              : backends.find(key.substr(0, dot));
     const std::string name = dot == std::string::npos ? "" : key.substr(dot + 1);
+    const bool env = name.starts_with(kEnvPrefix) &&
+                     name.size() > std::string_view(kEnvPrefix).size();
     if (backend == backends.end() ||
-        (name != kPermissionModeKey && name != kModelKey)) {
+        (name != kPermissionModeKey && name != kModelKey &&
+         name != kExecutableKey && !env)) {
       Complain(entry.line, i18n::Format(i18n::Str::kUnknownKey, {Wide(key)}));
       continue;
     }
+    // Windows does not tell CODEX_HOME from codex_home, and of two lines that
+    // differ only in case one would win by an order nobody sees -- the same
+    // trap as a key given twice, so the same complaint.
+    if (env) {
+      for (const auto& [other, otherEntry] : entries_) {
+        if (other != key && otherEntry.line < entry.line &&
+            AsciiLower(other) == AsciiLower(key)) {
+          Complain(entry.line,
+                   i18n::Format(i18n::Str::kSettingsDuplicate,
+                                {Wide(other), std::to_wstring(otherEntry.line)}));
+        }
+      }
+      continue;
+    }
+    // Not checked for being there: that is said when the session starts, with
+    // the path in full (invariant 25), and a missing CLI must not keep the
+    // other backend from starting.
+    if (name == kExecutableKey) continue;
     // The model is not checked, for the reason --model is not: the list is
     // the CLI's and changes with every release.
     if (!empty && name == kPermissionModeKey &&
@@ -188,6 +225,31 @@ void ApplySettings(Arguments* arguments, const Settings& settings) {
   if (arguments->model.empty()) {
     arguments->model = Wide(settings.Get(backend + "." + kModelKey));
   }
+}
+
+agent::Program ProgramFor(const Settings& settings, const std::string& backend,
+                          const std::wstring& typedExecutable,
+                          const std::wstring& appDirectory) {
+  agent::Program program;
+  program.path = typedExecutable;
+  if (program.path.empty()) {
+    program.path = Wide(settings.Get(backend + "." + kExecutableKey));
+    if (!program.path.empty() && IsRelative(program.path)) {
+      program.path = appDirectory + L"\\" + program.path;
+    }
+  }
+  const std::string prefix = backend + "." + kEnvPrefix;
+  for (const auto& [key, entry] : settings.entries()) {
+    // Empty is a template line, as everywhere in the file -- not a request to
+    // set the variable to nothing.
+    if (!key.starts_with(prefix) || key.size() == prefix.size() ||
+        entry.value.empty()) {
+      continue;
+    }
+    program.environment.emplace_back(Wide(key.substr(prefix.size())),
+                                     Wide(entry.value));
+  }
+  return program;
 }
 
 }  // namespace app

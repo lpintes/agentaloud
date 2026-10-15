@@ -1105,6 +1105,12 @@ void TestArguments() {
   app::Arguments dangling = app::Parse(W{L"--model"});
   CHECK(!dangling.error.empty());
   CHECK(dangling.project.empty());
+  app::Arguments danglingExe = app::Parse(W{L"--executable"});
+  CHECK(!danglingExe.error.empty());
+  app::Arguments exe = app::Parse(W{L"--executable", L"bin\\codex.exe", L"."});
+  CHECK(exe.error.empty());
+  CHECK_EQ(exe.executable, std::wstring(L"bin\\codex.exe"));
+  CHECK_EQ(exe.project, std::wstring(L"."));
 
   // Za -- ide vsetko do CLI, aj to, co vyzera ako priecinok alebo nase volby.
   app::Arguments forwarded = app::Parse(
@@ -1220,9 +1226,10 @@ void TestArguments() {
     CHECK(text.find(L"C:\\nastavenia\\settings.txt") != std::wstring::npos);
     CHECK(text.find(L"" APP_NAME L" 2026.10.1 ") == 0);
     for (const wchar_t* option :
-         {L"--backend", L"--permission-mode", L"--model", L"--resume",
-          L"--continue", L"--help", L"--version", L"--check-updates",
-          L"language=", L"F1"}) {
+         {L"--backend", L"--permission-mode", L"--model", L"--executable",
+          L"--resume", L"--continue", L"--help", L"--version",
+          L"--check-updates", L"language=", L".executable=", L".env.",
+          L"F1"}) {
       CHECK(text.find(option) != std::wstring::npos);
     }
     for (const std::string& name : known) {
@@ -1284,6 +1291,20 @@ void TestSettings() {
   CHECK(twice.find(L"riadku 1") != std::wstring::npos);
   // Prva chyba sa nepreplaca dalsou.
   CHECK(errorOf("x\ny\n").find(L"riadok 1") == 0);
+  // CLI a prostredie (lkk.72): cesta sa neoveruje, meno premennej musi byt.
+  CHECK(errorOf("codex.executable=Z:\\nie\\je.exe\nclaude.executable=\n"
+                "codex.env.CODEX_HOME=E:\\c\nclaude.env.X=\n").empty());
+  CHECK(!errorOf("codex.env.=x\n").empty());
+  CHECK(!errorOf("codex.env=x\n").empty());
+  CHECK(!errorOf("env.CODEX_HOME=x\n").empty());
+  CHECK(!errorOf("gemini.executable=x\n").empty());
+  // Windows neodlisi velkost pismen v mene premennej: druhy riadok je
+  // ten isty kluc.  Iny backend nie.
+  const std::wstring envTwice =
+      errorOf("codex.env.CODEX_HOME=a\ncodex.env.codex_home=b\n");
+  CHECK(envTwice.find(L"riadok 2") == 0);
+  CHECK(envTwice.find(L"CODEX_HOME") != std::wstring::npos);
+  CHECK(errorOf("codex.env.X=a\nclaude.env.x=b\n").empty());
 
   // Prednost: prikazovy riadok > subor > zabudovane.  Rezim a model sa beru
   // pre backend, ktory naozaj pobezi, nech ho povedal ktokolvek.
@@ -1313,6 +1334,30 @@ void TestSettings() {
   app::CheckBackend(&chosen, {"claude", "codex"});
   app::CheckMode(&chosen, backends["codex"]);
   CHECK(chosen.error.empty());
+
+  // Program zo suboru: relativna cesta voci priecinku appky, absolutna ako
+  // je, napisana na riadku vyhra.  Prazdna premenna je sablona, nie "".
+  const app::Settings programs = app::Settings::Parse(
+      "codex.executable=bin\\codex-x.exe\ncodex.env.CODEX_HOME=E:\\c \xc4\x8d\n"
+      "codex.env.EMPTY=\nclaude.executable=D:/cli/claude.exe\n"
+      "claude.env.CLAUDE_CONFIG_DIR=F:\\c\n");
+  const agent::Program codexProgram =
+      app::ProgramFor(programs, "codex", L"", L"C:\\app");
+  CHECK_EQ(codexProgram.path, std::wstring(L"C:\\app\\bin\\codex-x.exe"));
+  CHECK_EQ(codexProgram.environment.size(), size_t{1});
+  const std::wstring* home = codexProgram.Find(L"codex_home");
+  CHECK(home != nullptr && *home == L"E:\\c \u010d");
+  CHECK(codexProgram.Find(L"CLAUDE_CONFIG_DIR") == nullptr);
+  CHECK_EQ(app::ProgramFor(programs, "claude", L"", L"C:\\app").path,
+           std::wstring(L"D:/cli/claude.exe"));
+  CHECK_EQ(app::ProgramFor(programs, "codex", L"C:\\typed.exe", L"C:\\app").path,
+           std::wstring(L"C:\\typed.exe"));
+  CHECK_EQ(app::ProgramFor(app::Settings::Parse("codex.executable=\\\\srv\\c.exe\n"),
+                           "codex", L"", L"C:\\app").path,
+           std::wstring(L"\\\\srv\\c.exe"));
+  // Bez riadku: meno adaptera po PATH.
+  CHECK(app::ProgramFor(app::Settings::Parse(""), "codex", L"", L"C:\\app")
+            .path.empty());
 }
 
 // Zapis do suboru nastaveni (invariant 22): co zapis nemeni, zostane bajt po

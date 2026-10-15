@@ -8,6 +8,7 @@
 #include <objbase.h>
 #include <shellapi.h>
 
+#include <functional>
 #include <map>
 #include <string>
 #include <vector>
@@ -42,11 +43,20 @@ const std::vector<std::string> kBackends = {"claude", "codex"};
 // From the git tag, so no copy of it can go stale (Makefile).  ASCII.
 const wchar_t kVersion[] = L"" APP_VERSION;
 
-std::unique_ptr<agent::Backend> MakeBackend(const std::string& name) {
-  if (name == "claude") return std::make_unique<proto::ClaudeBackend>();
-  if (name == "codex") return std::make_unique<proto::codex::CodexBackend>();
+// Without `program` for its capabilities only; whatever starts the CLI or
+// reads its conversations gets the one the settings say (ProgramFor).
+std::unique_ptr<agent::Backend> MakeBackend(const std::string& name,
+                                            agent::Program program = {}) {
+  if (name == "claude") {
+    return std::make_unique<proto::ClaudeBackend>(std::move(program));
+  }
+  if (name == "codex") {
+    return std::make_unique<proto::codex::CodexBackend>(std::move(program));
+  }
   return nullptr;
 }
+
+using ProgramSource = std::function<agent::Program(const std::string& backend)>;
 
 // "." is a perfectly good thing to type and a useless thing to read back: the
 // title bar answers "which checkout is this", and the status bar wants the
@@ -272,7 +282,7 @@ bool CheckForUpdatesAsked(HWND owner, app::Settings& settings,
 // One that `open` already has is not started at all: *switchTo is its index
 // there then, and the arguments are left alone.
 bool AskNewSession(HWND owner, const app::Arguments& typed,
-                   const app::Settings& settings,
+                   const app::Settings& settings, const ProgramSource& programFor,
                    const std::vector<ui::OpenConversation>& open,
                    bool focusConversations, app::Arguments* arguments,
                    int* switchTo) {
@@ -292,10 +302,13 @@ bool AskNewSession(HWND owner, const app::Arguments& typed,
                             settings.Get(name + "." + app::kModelKey));
     // A backend of its own for every asking: the dialog asks from a thread
     // of its own, and may ask again before the last answer came.
+    // With its program, because where the conversations are is its
+    // environment's to say (CODEX_HOME, CLAUDE_CONFIG_DIR).
     if (capabilities.resume) {
-      entry.list = [name](const std::wstring& projectDir,
-                          std::vector<agent::Conversation>* out) {
-        return MakeBackend(name)->ListConversations(projectDir, out);
+      entry.list = [name, program = programFor(name)](
+                       const std::wstring& projectDir,
+                       std::vector<agent::Conversation>* out) {
+        return MakeBackend(name, program)->ListConversations(projectDir, out);
       };
     }
     choice.backends.push_back(std::move(entry));
@@ -406,12 +419,25 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     ui::signals::SetEnabled(settings.Sounds());
   }
   app::CheckBackend(&arguments, kBackends);
+  // --executable is the CLI of the backend this start chose, whoever chose it;
+  // a backend chosen later in Nová session gets the one the file says.
+  const std::string startBackend = arguments.backend;
+  const std::wstring typedExecutable = Expand(arguments.executable);
+  const std::wstring appDirectory = win::ExecutableDirectory();
+  const ProgramSource programFor = [&settings, startBackend, typedExecutable,
+                                    appDirectory](const std::string& name) {
+    return app::ProgramFor(settings, name,
+                           name == startBackend ? typedExecutable
+                                                : std::wstring(),
+                           appDirectory);
+  };
   // Made now, before the folder picker: its capabilities are what the mode is
   // checked against, and a refused mode must not be answered with "which
   // folder?".  Making it starts nothing -- the process comes with Start.
+  const std::string firstBackend =
+      arguments.backend.empty() ? app::kDefaultBackend : arguments.backend;
   std::unique_ptr<agent::Backend> backend =
-      MakeBackend(arguments.backend.empty() ? app::kDefaultBackend
-                                            : arguments.backend);
+      MakeBackend(firstBackend, programFor(firstBackend));
   if (backend) app::CheckMode(&arguments, backend->capabilities());
   if (arguments.help) {
     // The dialog is the wrong answer here and it is the fallback anyway: it is
@@ -515,12 +541,12 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     // In full in the field: "." read out is no answer to which folder.
     arguments.project = Expand(arguments.project);
     int none = -1;  // nothing is open yet to switch to
-    if (!AskNewSession(nullptr, typed, settings, {}, pickConversation,
-                       &arguments, &none)) {
+    if (!AskNewSession(nullptr, typed, settings, programFor, {},
+                       pickConversation, &arguments, &none)) {
       CoUninitialize();
       return 0;  // cancelled, which is an answer
     }
-    backend = MakeBackend(arguments.backend);
+    backend = MakeBackend(arguments.backend, programFor(arguments.backend));
     app::CheckMode(&arguments, backend->capabilities());
     // Only a mode typed for one backend and refused by the other gets here.
     // A dialog, because the console this was started from -- if any -- has
@@ -565,12 +591,13 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       next.backend = context.open[context.active].backend;
       next.project = context.open[context.active].project;
     }
-    if (!AskNewSession(owner, typed, settings, context.open, false, &next,
-                       &made->switchTo)) {
+    if (!AskNewSession(owner, typed, settings, programFor, context.open, false,
+                       &next, &made->switchTo)) {
       return false;
     }
     if (made->switchTo >= 0) return true;
-    std::unique_ptr<agent::Backend> chosen = MakeBackend(next.backend);
+    std::unique_ptr<agent::Backend> chosen =
+        MakeBackend(next.backend, programFor(next.backend));
     app::CheckMode(&next, chosen->capabilities());
     // A mode typed for one backend and refused by the other, as at startup.
     if (!next.error.empty()) {

@@ -92,8 +92,9 @@ class Settings {
 
   // Checks every key against what the backends are and what each of them can
   // do: `backend` must name one of them, `<backend>.permission-mode` must be
-  // one of that backend's modes, check-updates and sounds are 0 or 1, and nothing else
-  // may be there.  Every
+  // one of that backend's modes, check-updates and sounds are 0 or 1,
+  // `<backend>.env.` is followed by a name, given once whatever its case, and
+  // nothing else may be there.  Every
   // backend's lines are checked, not just the chosen one's -- a typo in the
   // codex lines would otherwise wait to be found the day codex is used.
   // Sets error() and does nothing when there is one already.
@@ -128,6 +129,13 @@ inline constexpr char kLastUpdateCheckKey[] = "last-update-check";
 inline constexpr char kSkippedVersionKey[] = "skipped-version";
 // "0" turns our own tones off (claude-gui-lkk.75).
 inline constexpr char kSoundsKey[] = "sounds";
+// The CLI and its environment, per backend (claude-gui-lkk.72):
+// codex.executable=bin\codex-x86_64-pc-windows-msvc.exe and
+// codex.env.CODEX_HOME=E:\codex.  For a portable installation, whose CLI is
+// neither on PATH nor called what the adapter calls it, and whose
+// configuration does not live in the profile.
+inline constexpr char kExecutableKey[] = "executable";
+inline constexpr char kEnvPrefix[] = "env.";
 
 // Fills in what the command line left empty: the command line wins, the file
 // comes next, and the built-in default -- which CheckBackend supplies -- last.
@@ -135,6 +143,19 @@ inline constexpr char kSoundsKey[] = "sounds";
 // whichever of the two said which one that is.  Call after Parse and before
 // CheckBackend and CheckMode.
 void ApplySettings(Arguments* arguments, const Settings& settings);
+
+// The CLI `backend` runs: `typedExecutable` when there is one -- the command
+// line wins here too, and main.cpp has made it absolute already -- or
+// `<backend>.executable`, and `<backend>.env.<NAME>` for its environment.
+//
+// A relative path in the file is relative to `appDirectory`, not to the
+// working directory: the file of a portable installation travels with the
+// package, and the working directory is whatever the shortcut said.  An
+// environment value is taken as it is written -- whether it is a path, only
+// the CLI knows.
+agent::Program ProgramFor(const Settings& settings, const std::string& backend,
+                          const std::wstring& typedExecutable,
+                          const std::wstring& appDirectory);
 
 }  // namespace app
 

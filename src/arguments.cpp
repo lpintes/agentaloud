@@ -51,7 +51,7 @@ Arguments Parse(const std::vector<std::wstring>& words) {
     // the same silent swap this whole check exists to stop, only one word
     // further along.
     const bool wantsValue = word == L"--permission-mode" || word == L"--model" ||
-                            word == L"--backend";
+                            word == L"--backend" || word == L"--executable";
     if (wantsValue && i + 1 >= words.size()) {
       complain(i18n::Format(Str::kArgNeedsValue, {word}));
       break;
@@ -69,6 +69,11 @@ Arguments Parse(const std::vector<std::wstring>& words) {
     // and a copy of it here would be a copy that goes stale.
     } else if (word == L"--model") {
       arguments.model = words[++i];
+    // Not checked for being there: the start says so, with the path in full
+    // (invariant 25).  Relative to the working directory, made absolute in
+    // main.cpp -- typed at a prompt, that is what it means.
+    } else if (word == L"--executable") {
+      arguments.executable = words[++i];
     // Carry on an earlier conversation.  Taken with its value wherever it
     // stands -- so `AgentAloud --resume <id> .` works and `AgentAloud .
     // --resume <id>` works too.

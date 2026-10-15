@@ -33,6 +33,10 @@ struct Arguments {
   std::string backend;
   std::wstring permissionMode;
   std::wstring model;
+  // --executable: the CLI of the backend this start chose, as typed.  Not of
+  // a backend chosen later in Nová session -- a path to codex.exe handed to
+  // the Claude adapter is a session that fails for a reason nobody typed.
+  std::wstring executable;
   // --resume was given, with what followed it.  The id may be empty: a bare
   // --resume asks for the list of conversations in Nová session, and is not
   // passed on (claude-gui-lkk.7.11.4).
