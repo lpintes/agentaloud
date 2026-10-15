@@ -74,7 +74,11 @@ zapísala ho rodičovská session Claude Code, nie sonda. Claude si
 - **Vlákno spred prihlásenia má model pre API kľúč** (`gpt-6.1-sol`) a konto
   ChatGPT každý ťah na ňom odmietne: `turn/completed status: failed`,
   `codexErrorInfo: "other"`, správa „The 'gpt-6.1-sol' model is not supported
-  when using Codex with a ChatGPT account.“ (400). `model/list` po prihlásení
+  when using Codex with a ChatGPT account.“ (400). **Pole `turn.error.message`
+  tú vetu nenesie priamo** — je v ňom celé telo odpovede servera ako JSON
+  reťazec, `{"type":"error","status":400,"error":{"type":
+  "invalid_request_error","message":"The 'gpt-6.1-sol' …"}}` (naostro
+  15. 10. 2026, claude-gui-lkk.44.17). `model/list` po prihlásení
   dá modely konta s `isDefault` (`gpt-6-luna`); `turn/start` s poľom `model`
   vlákno zachráni a model platí aj pre ďalšie ťahy. Zmenu modelu Codex
   žiadnou notifikáciou neohlási. Sonda `tools/probe_codex_model_after_signin.py`.

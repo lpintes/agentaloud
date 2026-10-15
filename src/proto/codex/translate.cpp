@@ -652,6 +652,17 @@ bool FailedOnSignIn(const Json& error) {
 
 namespace {
 
+// A refused request carries the server's whole response body as its message,
+// {"type":"error","status":400,"error":{"message":"..."}} -- seen live, the
+// probe notes had only quoted the sentence.  The reader wants the sentence.
+std::string ErrorSentence(const std::string& message) {
+  if (message.empty() || message.front() != '{') return message;
+  const Json body = Json::parse(message, nullptr, false);
+  std::string sentence = StringField(Field(body, "error"), "message");
+  if (sentence.empty()) sentence = StringField(body, "message");
+  return sentence.empty() ? message : sentence;
+}
+
 // What a failed turn says of itself.  Without it the reader hears the turn
 // end and nothing else, and takes the agent for silent (a 400 for a model
 // the account cannot use, claude-gui-lkk.44.17).  It is the agent's text, as
@@ -663,7 +674,7 @@ void ReportTurnError(const Json& turn, std::vector<agent::Event>* events) {
     events->push_back(agent::SignInRequired{});
     return;
   }
-  std::string text = StringField(error, "message");
+  std::string text = ErrorSentence(StringField(error, "message"));
   const std::string details = StringField(error, "additionalDetails");
   if (!details.empty()) text += text.empty() ? details : "\n" + details;
   if (!text.empty()) events->push_back(agent::AssistantText{std::move(text)});

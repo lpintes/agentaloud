@@ -4653,20 +4653,34 @@ void TestCodexFailedTurnError() {
   TEST("codex: zlyhany tah povie svoju chybu");
   proto::codex::Translator translator;
   translator.SetThread("main");
-  // Tvar z naostro odmietnuteho modelu (tools/probe_noauth.notes.md).
+  // Tvar naostro odmietnuteho modelu: message je cele telo odpovede servera
+  // ako JSON retazec, citatel ma pocut len vetu z neho.
   const auto events = translator.Translate(proto::Json::parse(
       R"({"method":"turn/completed","params":{"threadId":"main","turn":{
           "id":"t1","status":"failed","error":{"additionalDetails":null,
-          "codexErrorInfo":"other","message":"The 'gpt-6.1-sol' model is not supported when using Codex with a ChatGPT account."}}}})"));
+          "codexErrorInfo":"other","message":"{\"type\":\"error\",\"status\":400,\"error\":{\"type\":\"invalid_request_error\",\"message\":\"The 'gpt-6.1-sol' model is not supported when using Codex with a ChatGPT account.\"}}"}}}})"));
   const auto texts = EventsOf<agent::AssistantText>(events);
   CHECK_EQ(texts.size(), size_t{1});
   if (!texts.empty()) {
-    CHECK(texts[0].text.find("is not supported") != std::string::npos);
+    CHECK_EQ(texts[0].text, std::string("The 'gpt-6.1-sol' model is not "
+                                        "supported when using Codex with a "
+                                        "ChatGPT account."));
     CHECK(texts[0].by.empty());
   }
   CHECK(EventsOf<agent::SignInRequired>(events).empty());
   // Text pred koncom tahu, aby ho ohlasenie povedalo skor nez "hotovo".
   CHECK(!events.empty() && std::holds_alternative<agent::TurnEnded>(events.back()));
+
+  // Obycajna veta, aj zatvorka, ktora nie je JSON, ide nezmenena.
+  for (const std::string message : {"Something broke.", "{not json"}) {
+    proto::Json turn = proto::Json::parse(
+        R"({"method":"turn/completed","params":{"threadId":"main",
+            "turn":{"id":"t3","status":"failed","error":{}}}})");
+    turn["params"]["turn"]["error"]["message"] = message;
+    const auto plain = EventsOf<agent::AssistantText>(translator.Translate(turn));
+    CHECK_EQ(plain.size(), size_t{1});
+    if (!plain.empty()) CHECK_EQ(plain[0].text, message);
+  }
 
   // Uspesny tah chybu nema.
   const auto ok = translator.Translate(proto::Json::parse(
