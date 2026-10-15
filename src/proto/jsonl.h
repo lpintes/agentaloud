@@ -17,7 +17,11 @@
 
 namespace proto {
 
-using Json = nlohmann::json;
+// Ordered, because what has no shape of our own is read out in the order the
+// server wrote it, and a server puts the name of a thing before its details;
+// sorted, the name came last (claude-gui-lkk.78).  Records have a dozen keys,
+// so the linear lookup costs nothing.  Equality is order-sensitive now.
+using Json = nlohmann::ordered_json;
 
 class LineAssembler {
  public:

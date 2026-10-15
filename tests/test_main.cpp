@@ -2572,11 +2572,13 @@ void TestShapelessToolsReadAsText() {
   CHECK_EQ(blocks[0].summary, std::wstring(L"ToolSearch: select:ExitPlanMode"));
   CHECK_EQ(blocks[1].summary,
            std::wstring(L"mcp__screenreader__run_sequence: gap_ms: 200; "
-                        L"steps: 1. gestures: nvda+end, enter kind: press "
+                        L"steps: 1. kind: press gestures: nvda+end, enter "
                         L"2. kind: delay"));
+  // Kluce v poradi, v akom prisli, nie abecedne: "kind" je meno polozky
+  // a patri pred jej podrobnosti (claude-gui-lkk.78).
   CHECK_EQ(blocks[1].body,
            std::wstring(L"gap_ms: 200\nsteps:\n  1.\n"
-                        L"    gestures: nvda+end, enter\n    kind: press\n"
+                        L"    kind: press\n    gestures: nvda+end, enter\n"
                         L"  2.\n    kind: delay"));
   // Bez argumentov len meno, nie "status: {}".
   CHECK_EQ(blocks[2].summary, std::wstring(L"mcp__screenreader__status"));
@@ -2602,7 +2604,7 @@ void TestShapelessToolsReadAsText() {
   };
   CHECK_EQ(bodyOf("toolu_S"), std::wstring(L"ExitPlanMode"));
   CHECK_EQ(bodyOf("toolu_N"),
-           std::wstring(L"readers: nvda, orca\nstate: disconnected"));
+           std::wstring(L"state: disconnected\nreaders: nvda, orca"));
   // Vystup prikazu je pravda, aj ked je to JSON.
   CHECK_EQ(bodyOf("toolu_B"), std::wstring(L"{\"name\":\"agentaloud\"}"));
 }
