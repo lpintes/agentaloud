@@ -364,3 +364,19 @@ BEGIN
     PUSHBUTTON      "O&dovzdať kód", IDC_SIGNIN_SUBMIT, 164, 154, 64, 14
     PUSHBUTTON      "&Zrušiť", IDCANCEL, 236, 154, 56, 14
 END
+
+// Odkazy v bloku (Alt+Enter v prepise).  The address is the row, whole: it is
+// the only thing that tells two links apart.  NVDA reads a row whole however
+// much of it the list has room to draw.
+IDD_LINKS DIALOGEX 0, 0, 300, 140
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION APP_NAME " — odkazy v bloku"
+FONT 9, "Segoe UI", 400, 0, 1
+BEGIN
+    LTEXT           "&Odkazy:", IDC_LINKS_LIST_LABEL, 8, 8, 284, 8
+    LISTBOX         IDC_LINKS_LIST, 8, 18, 284, 96,
+                    LBS_NOINTEGRALHEIGHT | LBS_NOTIFY | WS_VSCROLL | WS_TABSTOP
+
+    DEFPUSHBUTTON   "O&tvoriť", IDOK, 176, 120, 56, 14
+    PUSHBUTTON      "&Zavrieť", IDCANCEL, 236, 120, 56, 14
+END

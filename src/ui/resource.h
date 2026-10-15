@@ -20,6 +20,7 @@
 #define IDD_TASKS           108
 #define IDD_PLAN_APPROVAL   109
 #define IDD_SIGN_IN         110
+#define IDD_LINKS           111
 
 #define IDC_DETAILS_ID          1000
 #define IDC_DETAILS_MODEL       1001
@@ -137,5 +138,9 @@
 #define IDC_SIGNIN_URL_LABEL    1201
 #define IDC_SIGNIN_CODE_LABEL   1202
 #define IDC_SIGNIN_ANSWER_LABEL 1203
+
+// Odkazy v bloku.  See ui/links_dialog.h.
+#define IDC_LINKS_LIST          1210
+#define IDC_LINKS_LIST_LABEL    1211
 
 #endif

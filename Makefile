@@ -124,7 +124,7 @@ APP_PURE_SRCS := src/arguments.cpp src/settings.cpp src/version.cpp src/update.c
 # Transkript a jeho mapa rozsahov.  Nevie o windows.h, a prave preto sa da
 # testovat bez okna -- co je vacsina toho, preco maju tie testy cenu.
 MODEL_SRCS := src/model/utf.cpp src/model/transcript.cpp src/model/bookmarks.cpp \
-              src/model/history.cpp src/model/background.cpp
+              src/model/history.cpp src/model/background.cpp src/model/links.cpp
 
 UI_SRCS := src/ui/session_pane.cpp src/ui/session_window.cpp src/ui/main_window.cpp src/ui/speech.cpp \
            src/ui/status_bar.cpp src/ui/session_details.cpp \
@@ -133,7 +133,7 @@ UI_SRCS := src/ui/session_pane.cpp src/ui/session_window.cpp src/ui/main_window.
            src/ui/new_session_dialog.cpp src/ui/dialog_texts.cpp \
            src/ui/find_dialog.cpp src/ui/about_dialog.cpp \
            src/ui/tasks_dialog.cpp src/ui/plan_dialog.cpp \
-           src/ui/sign_in_dialog.cpp src/ui/signals.cpp
+           src/ui/sign_in_dialog.cpp src/ui/links_dialog.cpp src/ui/signals.cpp
 
 APP_SRCS := $(I18N_SRCS) $(WIN_SRCS) $(AGENT_SRCS) $(PROTO_SRCS) $(MODEL_SRCS) $(UI_SRCS) \
             $(APP_PURE_SRCS) src/version_current.cpp src/updater.cpp src/main.cpp

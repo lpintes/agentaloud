@@ -11,11 +11,13 @@
 #include "i18n/i18n.h"
 #include "model/background.h"
 #include "model/history.h"
+#include "model/links.h"
 #include "model/utf.h"
 #include "ui/ask_dialog.h"
 #include "ui/command_dialog.h"
 #include "ui/find_dialog.h"
 #include "ui/keys_dialog.h"
+#include "ui/links_dialog.h"
 #include "ui/permission_dialog.h"
 #include "ui/plan_dialog.h"
 #include "ui/resource.h"
@@ -1222,6 +1224,29 @@ void SessionPane::ToggleBlockAtCaret() {
   GoToBlock(*index);
 }
 
+void SessionPane::OpenAtCaret() {
+  const size_t caret = CaretOffset(transcript_);
+  // What is on screen, so a collapsed block offers what its one line shows.
+  if (const std::optional<model::Link> link =
+          model::LinkAt(model_.Text(), caret)) {
+    if (!ui::OpenLink(link->url)) {
+      Announce(i18n::Text(Str::kLinkOpenFailed));
+    }
+    return;
+  }
+  const std::optional<size_t> index = model_.BlockAt(caret);
+  // The list is of the whole block, folded part included: the address worth
+  // opening is usually in the tool output a collapsed block hides.
+  std::vector<model::Link> links;
+  if (index.has_value()) links = model::DistinctLinks(model_.ExpandedText(*index));
+  if (links.empty()) {
+    Announce(i18n::Text(Str::kNothingToOpen));
+    return;
+  }
+  ShowLinks(host_, std::move(links),
+            [this](const std::wstring& text) { Announce(text); });
+}
+
 void SessionPane::SetStatus(std::wstring text) {
   status_ = std::move(text);
   // Into the bar and not into the title any more.  The title is announced when
@@ -1988,6 +2013,13 @@ LRESULT CALLBACK SessionPane::TranscriptProc(HWND window, UINT message,
     pane->ToggleBlockAtCaret();
     return 0;
   }
+  // Alt makes it a system key, and the character after it a system one: let
+  // the '\r' through and DefWindowProc beeps at a menu key nothing has.
+  if (message == WM_SYSKEYDOWN && wParam == VK_RETURN) {
+    pane->OpenAtCaret();
+    return 0;
+  }
+  if (message == WM_SYSCHAR && wParam == L'\r') return 0;
   // The same key in both boxes, for the same reason as the chords below: the
   // reader should not have to know where the focus is to stop a turn.
   if (message == WM_KEYDOWN && wParam == VK_ESCAPE) {

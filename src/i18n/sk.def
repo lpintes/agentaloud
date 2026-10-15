@@ -145,6 +145,9 @@ S(kBackgroundUnsupported, L"tento agent nevie presunúť prácu do pozadia")
 S(kTasksNone, L"na pozadí nič nebeží")
 S(kTaskAgent, L"agent: {0}")
 S(kTaskShell, L"príkaz: {0}")
+S(kNothingToOpen, L"v tomto bloku nie je žiadny odkaz")
+S(kLinkOpenFailed, L"odkaz sa nepodarilo otvoriť")
+S(kLinkRow, L"{0}: {1}")
 S(kStoppingTask, L"zastavujem {0}")
 S(kTaskStopped, L"zastavené: {0}")
 S(kCloseSessionTasks, L"{0}. Zavrieť session a všetko zastaviť?")
@@ -196,6 +199,7 @@ S(kKeysMoving,
   L"Shift znamená dozadu. Týchto sedem písmen platí len v prepise.\n"
   L"Ctrl+Shift+T, R, P, A, K, E, B — to isté dopredu, aj z poľa Prompt.\n"
   L"Enter — zbalí alebo rozbalí blok pod kurzorom. Len v prepise.\n"
+  L"Alt+Enter — otvorí v prehliadači odkaz pod kurzorom, inak ponúkne zoznam odkazov v bloku. Len v prepise.\n"
   L"Ctrl+C — skopíruje označený text. Robí to samotné pole prepisu.\n"
   L"\n"
   L"Záložky, z oboch polí:\n"
@@ -310,6 +314,9 @@ S(kDlgFindOk, L"&Nájsť")
 S(kDlgTasksCaption, L"úlohy na pozadí")
 S(kDlgTasksList, L"&Úlohy:")
 S(kDlgTasksStop, L"Z&astaviť")
+S(kDlgLinksCaption, L"odkazy v bloku")
+S(kDlgLinksList, L"&Odkazy:")
+S(kDlgLinksOpen, L"O&tvoriť")
 S(kDlgPlanCaption, L"schválenie plánu")
 S(kDlgPlanText, L"P&lán:")
 S(kDlgPlanMode, L"Po schválení pokračovať v &režime:")

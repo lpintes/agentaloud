@@ -45,6 +45,7 @@
 #include "model/background.h"
 #include "model/bookmarks.h"
 #include "model/history.h"
+#include "model/links.h"
 #include "model/transcript.h"
 #include "model/utf.h"
 #include "proto/claude/ask.h"
@@ -806,6 +807,70 @@ void TestFindSearchesCollapsedBlocks() {
 
   CHECK(!transcript.Find(L"seno", 0, false, fold).has_value());
   CHECK(!transcript.Find(L"", 0, false, fold).has_value());
+}
+
+void TestLinksInText() {
+  TEST("links: hranice adresy v texte (lkk.74)");
+  auto only = [](const std::wstring& text) {
+    const std::vector<model::Link> links = model::FindLinks(text);
+    return links.size() == 1 ? links[0].url : std::wstring(L"<" +
+           std::to_wstring(links.size()) + L">");
+  };
+  // Koniec vety a interpunkcia nie su sucast adresy, lomka na konci ano.
+  CHECK(only(L"Pozri https://example.com.") == L"https://example.com");
+  CHECK(only(L"https://example.com/a/, potom") == L"https://example.com/a/");
+  CHECK(only(L"Naozaj http://x.org/?q=1!") == L"http://x.org/?q=1");
+  // Zatvorky: markdown a veta zatvorku zatvoria, Wikipedia ju ma v paroch.
+  CHECK(only(L"[docs](https://x.org/d)") == L"https://x.org/d");
+  CHECK(only(L"(pozri https://x.org/d)") == L"https://x.org/d");
+  CHECK(only(L"https://en.wikipedia.org/wiki/C_(jazyk).") ==
+        L"https://en.wikipedia.org/wiki/C_(jazyk)");
+  // Uvodzovky vsetkych druhov, backtick, lomene zatvorky, JSON.
+  CHECK(only(L"`https://x.org/a`") == L"https://x.org/a");
+  CHECK(only(L"<https://x.org/a>") == L"https://x.org/a");
+  CHECK(only(L"{\"url\":\"https://x.org/a\"}") == L"https://x.org/a");
+  CHECK(only(L"\x201Ehttps://x.org/a\x201C") == L"https://x.org/a");
+  CHECK(only(L"**https://x.org/a**") == L"https://x.org/a");
+  // Velke pismena v scheme, diakritika v ceste.
+  CHECK(only(L"HTTPS://x.org/čaj") == L"HTTPS://x.org/čaj");
+  // Nic za schemou, schema vnutri slova, ina schema.
+  CHECK(model::FindLinks(L"https:// a http://").empty());
+  CHECK(model::FindLinks(L"xhttps://x.org").empty());
+  CHECK(model::FindLinks(L"file:///c:/x ftp://x.org").empty());
+
+  const std::wstring text = L"a https://a.org b\nhttps://b.org https://a.org";
+  const std::vector<model::Link> links = model::FindLinks(text);
+  CHECK_EQ(links.size(), size_t{3});
+  CHECK_EQ(links[0].start, size_t{2});
+  CHECK_EQ(links[0].length, size_t{13});
+  CHECK_EQ(links[1].start, size_t{18});
+
+  // Kurzor na prvom znaku plati, za poslednym uz nie.
+  CHECK(!model::LinkAt(text, 1).has_value());
+  CHECK(model::LinkAt(text, 2)->url == L"https://a.org");
+  CHECK(model::LinkAt(text, 14)->url == L"https://a.org");
+  CHECK(!model::LinkAt(text, 15).has_value());
+  CHECK(model::LinkAt(text, 20)->url == L"https://b.org");
+
+  const std::vector<model::Link> distinct = model::DistinctLinks(text);
+  CHECK_EQ(distinct.size(), size_t{2});
+  CHECK(distinct[0].url == L"https://a.org");
+  CHECK(distinct[1].url == L"https://b.org");
+
+  // Nazov z markdownu; hola adresa ho nema; zatvorky v nazve sa paruju; nazov
+  // neprejde cez zlom riadku.  Duplikat prevezme prvy nazov, ktory dostal.
+  const std::vector<model::Link> titled = model::DistinctLinks(
+      L"1. [PEP 744 – JIT (CPython)](https://peps.python.org/pep-0744/)\n"
+      L"hola https://www.python.org/ a [Python](https://www.python.org/)\n"
+      L"[zlom\n](https://x.org) [](https://y.org)");
+  CHECK_EQ(titled.size(), size_t{4});
+  CHECK(titled[0].title == L"PEP 744 – JIT (CPython)");
+  CHECK(titled[0].url == L"https://peps.python.org/pep-0744/");
+  CHECK(titled[1].url == L"https://www.python.org/");
+  CHECK(titled[1].title == L"Python");
+  CHECK(titled[2].title.empty());
+  CHECK(titled[3].title.empty());
+  CHECK(model::FindLinks(L"https://a.org")[0].title.empty());
 }
 
 void TestRateLimitParsing() {
@@ -4841,6 +4906,7 @@ int main(int argc, char** argv) {
   TestBookmarksSurviveCollapsing();
   TestBookmarkIntoCollapsedBlock();
   TestFindSearchesCollapsedBlocks();
+  TestLinksInText();
   TestRateLimitParsing();
   TestResetToSayPicksShortestUnlessExhausted();
   TestInitializeResponseParsing();

@@ -143,6 +143,9 @@ S(kBackgroundUnsupported, L"this agent cannot move work to the background")
 S(kTasksNone, L"nothing runs in the background")
 S(kTaskAgent, L"agent: {0}")
 S(kTaskShell, L"command: {0}")
+S(kNothingToOpen, L"there is no link in this block")
+S(kLinkOpenFailed, L"the link could not be opened")
+S(kLinkRow, L"{0}: {1}")
 S(kStoppingTask, L"stopping {0}")
 S(kTaskStopped, L"stopped: {0}")
 S(kCloseSessionTasks, L"{0}. Close the session and stop all of it?")
@@ -195,6 +198,7 @@ S(kKeysMoving,
   L"Shift means backwards. These seven letters work only in the transcript.\n"
   L"Ctrl+Shift+T, R, P, A, K, E, B — the same forwards, from the Prompt field too.\n"
   L"Enter — collapses or expands the block under the cursor. Only in the transcript.\n"
+  L"Alt+Enter — opens the link under the cursor in the browser, otherwise offers the links in the block. Only in the transcript.\n"
   L"Ctrl+C — copies the selected text. The transcript field does that itself.\n"
   L"\n"
   L"Bookmarks, from either field:\n"
@@ -308,6 +312,9 @@ S(kDlgFindOk, L"&Find")
 S(kDlgTasksCaption, L"background tasks")
 S(kDlgTasksList, L"&Tasks:")
 S(kDlgTasksStop, L"&Stop")
+S(kDlgLinksCaption, L"links in the block")
+S(kDlgLinksList, L"Lin&ks:")
+S(kDlgLinksOpen, L"&Open")
 S(kDlgPlanCaption, L"plan approval")
 S(kDlgPlanText, L"&Plan:")
 S(kDlgPlanMode, L"After approval continue in &mode:")

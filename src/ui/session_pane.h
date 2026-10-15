@@ -115,6 +115,12 @@ class SessionPane {
   // unreachable on screen -- a hole, not a missing convenience.
   void ToggleBlockAtCaret();
 
+  // Alt+Enter in the transcript (claude-gui-lkk.74): the link under the
+  // caret, else the list of the block's links, else a sentence saying there
+  // are none.  A path under the caret is claude-gui-lkk.7.10's, and goes in
+  // between the first two.
+  void OpenAtCaret();
+
   // Esc, from either box.  Stops the turn in flight and writes a mark into
   // the transcript where it was stopped.  Says so out loud in both cases,
   // including the case where nothing was running: a key that answers with
