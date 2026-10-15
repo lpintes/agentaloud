@@ -1,7 +1,6 @@
 #include "proto/claude/sessions.h"
 
 #include <algorithm>
-#include <cstdio>
 #include <cstdlib>
 #include <ctime>
 #include <filesystem>
@@ -94,10 +93,6 @@ size_t FirstWord(const std::string& text) {
 constexpr std::string_view kNoOutputNudge =
     "[Your previous response had no visible output";
 constexpr std::string_view kInterruptMark = "[Request interrupted by user";
-
-std::wstring Widen(const std::string& ascii) {
-  return std::wstring(ascii.begin(), ascii.end());
-}
 
 }  // namespace
 
@@ -294,21 +289,6 @@ long long UnixSeconds(const std::string& isoStamp) {
   const std::time_t moment = _mkgmtime(&utc);
   if (moment == static_cast<std::time_t>(-1)) return 0;
   return static_cast<long long>(moment);
-}
-
-std::wstring LocalTimeText(const std::string& isoStamp) {
-  const std::time_t moment = static_cast<std::time_t>(UnixSeconds(isoStamp));
-  if (moment == 0) return Widen(isoStamp);
-  // localtime and not localtime_r: this is asked once, at startup, from the
-  // thread that has not started the reader yet.  The result is copied out
-  // before anything else can be asked.
-  const std::tm* local = std::localtime(&moment);
-  if (!local) return Widen(isoStamp);
-  wchar_t buffer[64];
-  std::swprintf(buffer, 64, L"%d. %d. %d %d:%02d", local->tm_mday,
-                local->tm_mon + 1, local->tm_year + 1900, local->tm_hour,
-                local->tm_min);
-  return buffer;
 }
 
 }  // namespace proto

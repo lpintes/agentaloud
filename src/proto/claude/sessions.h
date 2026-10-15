@@ -135,11 +135,6 @@ bool ProjectConversations(const std::wstring& projectPath,
 // An ISO 8601 UTC stamp as seconds since 1970, or 0 when it cannot be read.
 long long UnixSeconds(const std::string& isoStamp);
 
-// An ISO 8601 UTC stamp as local wall-clock time, "6. 9. 2026 14:32".  The
-// stamp is handed back unchanged when it cannot be read, because a stamp the
-// reader can puzzle over beats a blank where the time should be.
-std::wstring LocalTimeText(const std::string& isoStamp);
-
 }  // namespace proto
 
 #endif

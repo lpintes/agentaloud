@@ -3240,8 +3240,8 @@ void TestSessionFilePath() {
   _wputenv_s(L"CLAUDE_CONFIG_DIR", L"");
 }
 
-void TestProjectKeyAndTime() {
-  TEST("sessions: meno adresara projektu a cas do vety");
+void TestProjectKey() {
+  TEST("sessions: meno adresara projektu");
   // Overene na skutocnom adresari: C:\vcs\github.com\lpintes\claude-gui ->
   // C--vcs-github-com-lpintes-claude-gui.
   CHECK_EQ(proto::ProjectKey(L"C:\\vcs\\github.com\\lpintes\\claude-gui"),
@@ -3250,14 +3250,6 @@ void TestProjectKeyAndTime() {
   // adresara; koren si ju necha, lebo "C:" bez nej nie je cesta.
   CHECK_EQ(proto::ProjectKey(L"C:\\b\\mluv\\"), std::wstring(L"C--b-mluv"));
   CHECK_EQ(proto::ProjectKey(L"C:\\"), std::wstring(L"C--"));
-
-  _putenv_s("TZ", "UTC0");
-  _tzset();
-  CHECK_EQ(proto::LocalTimeText("2026-09-06T12:34:56.789Z"),
-           std::wstring(L"6. 9. 2026 12:34"));
-  // Nezrozumitelny cas sa vrati tak, ako prisiel: prazdno na mieste casu by
-  // vyzeralo ako session bez casu, nie ako pokazeny zaznam.
-  CHECK_EQ(proto::LocalTimeText("neskoro"), std::wstring(L"neskoro"));
 }
 
 void TestFixtureBasic(const std::string& dir) {
@@ -4894,7 +4886,7 @@ int main(int argc, char** argv) {
   TestSessionSummaryFindsTheHumanPrompt();
   TestHistoryRestore();
   TestSessionFilePath();
-  TestProjectKeyAndTime();
+  TestProjectKey();
   TestFixtureBasic(fixtures);
   TestFixtureDenied(fixtures);
   TestFixtureClaudeNoAuth(fixtures);
