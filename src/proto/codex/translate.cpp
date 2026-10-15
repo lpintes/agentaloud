@@ -650,6 +650,27 @@ bool FailedOnSignIn(const Json& error) {
   return false;
 }
 
+namespace {
+
+// What a failed turn says of itself.  Without it the reader hears the turn
+// end and nothing else, and takes the agent for silent (a 400 for a model
+// the account cannot use, claude-gui-lkk.44.17).  It is the agent's text, as
+// Claude's own error is a message of the CLI's making.  Signed out is the
+// event's to say, in the pane's words.
+void ReportTurnError(const Json& turn, std::vector<agent::Event>* events) {
+  const Json& error = Field(turn, "error");
+  if (FailedOnSignIn(error)) {
+    events->push_back(agent::SignInRequired{});
+    return;
+  }
+  std::string text = StringField(error, "message");
+  const std::string details = StringField(error, "additionalDetails");
+  if (!details.empty()) text += text.empty() ? details : "\n" + details;
+  if (!text.empty()) events->push_back(agent::AssistantText{std::move(text)});
+}
+
+}  // namespace
+
 bool ParseSignInStart(const Json& result, agent::SignInPrompt* prompt,
                       std::string* loginId) {
   *loginId = StringField(result, "loginId");
@@ -958,9 +979,7 @@ std::vector<agent::Event> Translator::Translate(const Json& message) {
       ended.outcome = agent::TurnOutcome::Failed;
       // Only the error that ends the turn: those before it are retries, five
       // and five more, each on 401 (tools/probe_noauth.notes.md).
-      if (FailedOnSignIn(Field(Field(params, "turn"), "error"))) {
-        events.push_back(agent::SignInRequired{});
-      }
+      ReportTurnError(Field(params, "turn"), &events);
     }
     events.push_back(ended);
     // What the turn left running is in the background now -- an interrupted

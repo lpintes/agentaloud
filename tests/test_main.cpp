@@ -4649,6 +4649,32 @@ void TestCodexFixtureReasoning(const std::string& dir) {
   CHECK(CountKinds(replay.transcript).count(model::BlockKind::Thinking) > 0);
 }
 
+void TestCodexFailedTurnError() {
+  TEST("codex: zlyhany tah povie svoju chybu");
+  proto::codex::Translator translator;
+  translator.SetThread("main");
+  // Tvar z naostro odmietnuteho modelu (tools/probe_noauth.notes.md).
+  const auto events = translator.Translate(proto::Json::parse(
+      R"({"method":"turn/completed","params":{"threadId":"main","turn":{
+          "id":"t1","status":"failed","error":{"additionalDetails":null,
+          "codexErrorInfo":"other","message":"The 'gpt-6.1-sol' model is not supported when using Codex with a ChatGPT account."}}}})"));
+  const auto texts = EventsOf<agent::AssistantText>(events);
+  CHECK_EQ(texts.size(), size_t{1});
+  if (!texts.empty()) {
+    CHECK(texts[0].text.find("is not supported") != std::string::npos);
+    CHECK(texts[0].by.empty());
+  }
+  CHECK(EventsOf<agent::SignInRequired>(events).empty());
+  // Text pred koncom tahu, aby ho ohlasenie povedalo skor nez "hotovo".
+  CHECK(!events.empty() && std::holds_alternative<agent::TurnEnded>(events.back()));
+
+  // Uspesny tah chybu nema.
+  const auto ok = translator.Translate(proto::Json::parse(
+      R"({"method":"turn/completed","params":{"threadId":"main",
+          "turn":{"id":"t2","status":"completed"}}})"));
+  CHECK(EventsOf<agent::AssistantText>(ok).empty());
+}
+
 void TestCodexFixtureNoAuth(const std::string& dir) {
   TEST("codex fixtura noauth: neprihlasenie pred tahom aj na jeho konci");
   CodexReplay replay;
@@ -4658,6 +4684,8 @@ void TestCodexFixtureNoAuth(const std::string& dir) {
   CHECK_EQ(EventsOf<agent::SignInRequired>(replay.events).size(), size_t{1});
   CHECK_EQ(CountKinds(replay.transcript)[model::BlockKind::SignInRequired],
            size_t{1});
+  // Text 401 nie je pre citatela, neprihlasenie povie panel svojimi slovami.
+  CHECK(EventsOf<agent::AssistantText>(replay.events).empty());
   const auto ended = EventsOf<agent::TurnEnded>(replay.events);
   CHECK_EQ(ended.size(), size_t{1});
   if (!ended.empty()) {
@@ -4867,6 +4895,7 @@ int main(int argc, char** argv) {
   TestClaudeBackgroundMoved();
   TestClaudeShellTaskIds();
   TestCodexBackgroundTasks();
+  TestCodexFailedTurnError();
   TestBackgroundText();
   TestClaudeSessionPermissions();
   TestClaudeSessionScope();
