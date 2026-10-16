@@ -58,6 +58,11 @@ constexpr UINT kMsgQuestionByPrompt = WM_APP + 5;
 // The agent said it is not signed in, for the first time in this session:
 // ask whether to sign it in.  Posted from the drain for the reason above.
 constexpr UINT kMsgOfferSignIn = WM_APP + 6;
+// The transcript had to be rewritten from the model (SessionPane::Apply);
+// wParam is nonzero when even that did not make them agree.  Posted, so that
+// it is said after whatever answers the key that caused the edit: that answer
+// interrupts (invariant 7) and would otherwise cut this off.
+constexpr UINT kMsgRedrawn = WM_APP + 7;
 
 class SessionPane {
  public:
@@ -93,6 +98,7 @@ class SessionPane {
   void OnHistoryPosted();
   void OnQuestionByPrompt();
   void OnOfferSignIn();
+  void OnRedrawn(bool unrecoverable);
 
   void FocusPrompt() const;
   // Where the focus was when the window last lost it -- the prompt the first
@@ -403,6 +409,9 @@ class SessionPane {
   // Once the widget and the model have disagreed, the title says so for the
   // rest of the session -- renumbering must not wipe it.
   bool mismatch_ = false;
+  // The widget still disagreed after being rewritten from the model; Apply
+  // stops rewriting it (see there).
+  bool unrecoverable_ = false;
   // Everything the dialog shows, gathered as it arrives.  Kept here rather
   // than asked for when the dialog opens, because most of it comes off records
   // that have long gone past by then.

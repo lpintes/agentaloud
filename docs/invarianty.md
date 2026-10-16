@@ -1416,9 +1416,25 @@ výstupe nástroja pred tým, než sa titulok zmenil. Nájsť sa to dá aj po
 skončení: session je na disku, a čo hľadať, ukazuje soak nad korpusom, ktorý
 odvtedy riadiace znaky v prepise hlási.
 
-Titulok je pritom **jediné**, čo appka spraví — zotaviť sa z toho zatiaľ nevie
-(claude-gui-lkk.31), takže session, ktorá to raz ohlási, má navigáciu zlú až do
-zatvorenia.
+Titulok zostane až do zatvorenia session, aj keď sa appka zotaví — je to stopa
+pre toho, kto chybu hľadá. Zotavenie (claude-gui-lkk.31): model má pravdu
+a widget nie, takže `SessionPane::Apply` widget pri **každej** nezhode prepíše
+celým `model_.Text()` (`WM_SETREDRAW` vypnuté, `SetWindowTextW`), kurzor
+a `anchor_` dá na koniec — kurzor a výber boli offsety do zlého textu a preniesť
+sa nedajú — a povie „Prepis sa musel prekresliť, kurzor je na konci." Pri každej,
+nielen pri prvej, lebo príčina (napríklad `NUL`, ktorý skrátil `EM_REPLACESEL`)
+môže prísť znova. Ak widget nesedí ani s textom, ktorý práve dostal, počíta
+nejaký znak inak a prepisovanie po každej úprave by len zakaždým stratilo
+kurzor; kontrola sa vtedy vypne (`unrecoverable_`) a povie sa „Prepis nesedí
+s modelom ani po prekreslení."
+
+Veta sa **posiela** (`kMsgRedrawn`), nehovorí sa priamo v `Apply`. Úpravu často
+spustí klávesa — Ctrl+Enter pridá blok promptu — a jej odozva („pracujem") ide
+cez `Announce` s prerušením, teda `cancelSpeech`, ktorý vyprázdni frontu
+(invariant 7). Odmerané 16. 10. 2026 cez MCP screenreader: hovorená priamo
+prišla 4 ms pred „pracujem" a tá ju zmietla; poslaná príde až po ňom. Overené
+naostro tak, že sa do prepisu testovacej inštancie zvonka vložil cudzí text
+(`Set-LensText` posiela `WM_SETTEXT`) a odoslal sa prompt.
 
 Bez `--permission-prompt-tool stdio` sa z pravidla „ask" stane „deny" a nikto
 sa nás na nič nespýta. Prepínač je z `--help` vypadnutý, ale CLI ho prijíma.

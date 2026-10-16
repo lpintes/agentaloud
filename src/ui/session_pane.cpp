@@ -398,13 +398,41 @@ void SessionPane::Apply(const model::Edit& edit) {
   // it normalises, a character it substitutes -- navigation would land in the
   // wrong place and nothing else would say so.  Loud, in the title, because a
   // quiet log is a thing nobody reads.
-  if (!mismatch_ &&
+  if (!unrecoverable_ &&
       TextLength(transcript_) != static_cast<int>(model_.Text().size())) {
     // The session's own title, which the frame shows beside its name: the
     // mismatch is this session's, and the folder says which one that is.
     mismatch_ = true;
     ShowName();
+    // The model is right and the widget is not, so the widget is written
+    // again from it.  The caret and selection were offsets into the wrong
+    // text and cannot be carried over; the end is the one place that still
+    // means something.  Every mismatch gets this, not only the first: what
+    // caused it (a NUL that cut EM_REPLACESEL short) can come again.
+    SendMessageW(transcript_, WM_SETREDRAW, FALSE, 0);
+    SetWindowTextW(transcript_, model_.Text().c_str());
+    SendMessageW(transcript_, WM_SETREDRAW, TRUE, 0);
+    InvalidateRect(transcript_, nullptr, TRUE);
+    PutCaretAtEnd(transcript_);
+    anchor_ = model_.Text().size();
+    // A widget that disagrees with the text it was just given counts some
+    // character differently, and rewriting after every edit would only lose
+    // the caret every time.  The title stays; the checking stops.
+    unrecoverable_ =
+        TextLength(transcript_) != static_cast<int>(model_.Text().size());
+    // Said, because the caret has just moved under the reader -- but later,
+    // see kMsgRedrawn.
+    PostMessageW(host_, kMsgRedrawn, unrecoverable_ ? 1 : 0, 0);
   }
+}
+
+void SessionPane::OnRedrawn(bool unrecoverable) {
+  // Not an answer to a key, so it does not cut off what is being said
+  // (invariant 7).
+  if (!speech_.available()) return;
+  speech_.Say(i18n::Text(unrecoverable ? Str::kSayRangeMismatchStuck
+                                       : Str::kSayRangeMismatchRedrawn),
+              false);
 }
 
 void SessionPane::SetOrdinal(int ordinal) {

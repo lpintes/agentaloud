@@ -393,7 +393,10 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
 **NESÚLAD MAPY ROZSAHOV** v titulku session znamená, že dĺžka modelu
 nesedí s `EM_GETTEXTLENGTHEX` — neladí invariant 3, 4 alebo 8. Hľadaj znak,
 ktorý widget spočíta inak (raz to bol `NUL` z binárky) v poslednom výstupe
-nástroja. Zotaviť sa appka nevie (claude-gui-lkk.31).
+nástroja. Appka widget pri každej nezhode prepíše z modelu, kurzor dá na koniec
+a povie to (`kMsgRedrawn`, posielané, aby to neprerušila odozva na klávesu);
+titulok zostáva. Ak nesedí ani po prepise, kontrola sa vypne
+(`unrecoverable_`) a povie sa iná veta (claude-gui-lkk.31).
 
 Bez `--permission-prompt-tool stdio` sa z „ask" stane „deny". Prepínač nie je
 v `--help`, ale CLI ho berie.

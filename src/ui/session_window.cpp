@@ -197,6 +197,10 @@ LRESULT SessionWindow::HandleMessage(UINT message, WPARAM wParam,
       if (pane_) pane_->OnQuestionByPrompt();
       return 0;
 
+    case kMsgRedrawn:
+      if (pane_) pane_->OnRedrawn(wParam != 0);
+      return 0;
+
     case kMsgOfferSignIn:
       // To the front first, like a permission request: the question is about
       // this session's agent, and what is behind the box says which one.
