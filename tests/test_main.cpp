@@ -3225,6 +3225,133 @@ void TestPlanReadsAsTextAndFollowsPermission() {
             .empty());
 }
 
+// Tvar zo skutocnej session (aa-plan-test-67, CLI 2.1.294, 2026-10-12):
+// tool_use prepracovaneho planu nesie stary plan, schvaleny vysledok nesie
+// novy v toolUseResult.plan.  Inde na disku novy plan nie je (lkk.68).
+void TestResumedPlanReadsTheApprovedPlan() {
+  TEST("history: ExitPlanMode po --resume ukazuje schvaleny plan");
+  const std::vector<proto::Json> records = {
+      proto::Json::parse(R"J({
+    "type": "assistant",
+    "message": {"content": [
+      {"type": "tool_use", "id": "toolu_P", "name": "ExitPlanMode",
+       "input": {"plan": "# Plan: create bye.txt\n\n1. Write bye.txt",
+                 "planFilePath": "C:\\plans\\p.md"}}
+    ]}
+  })J"),
+      proto::Json::parse(R"J({
+    "type": "user",
+    "message": {"role": "user", "content": [
+      {"type": "tool_result", "tool_use_id": "toolu_P",
+       "content": "User has approved your plan.\n\n## Approved Plan:\n# Plan: create farewell.txt"}
+    ]},
+    "toolUseResult": {"plan": "# Plan: create farewell.txt\n\n1. Write farewell.txt",
+                      "isAgent": false, "filePath": "C:\\plans\\p.md"}
+  })J")};
+  model::Transcript transcript;
+  model::RestoreHistory(proto::TranslateHistory(records, nullptr), &transcript);
+  const std::vector<model::Block>& blocks = transcript.blocks();
+  CHECK_EQ(blocks.size(), size_t{2});
+  CHECK(blocks[0].summary.find(L"ExitPlanMode: Plan: create farewell.txt") ==
+        0);
+  CHECK(blocks[0].body.find(L"bye.txt") == std::wstring::npos);
+  std::string problem;
+  CHECK(transcript.CheckInvariants(&problem));
+}
+
+// Text volania s danym id v prepise po --resume.
+std::wstring PlanBodyAfterResume(const std::vector<proto::Json>& records,
+                                 const std::string& callId) {
+  model::Transcript transcript;
+  model::RestoreHistory(proto::TranslateHistory(records, nullptr), &transcript);
+  std::string problem;
+  CHECK(transcript.CheckInvariants(&problem));
+  for (const model::Block& block : transcript.blocks()) {
+    if (block.kind == model::BlockKind::ToolUse && block.toolUseId == callId) {
+      return block.body;
+    }
+  }
+  return L"<volanie nie je v prepise>";
+}
+
+proto::Json PlanToolUse(const std::string& id, const std::string& name,
+                        const std::string& input) {
+  return proto::Json::parse(
+      R"({"type": "assistant", "message": {"content": [{"type": "tool_use", "id": ")" +
+      id + R"(", "name": ")" + name + R"(", "input": )" + input + "}]}}");
+}
+
+proto::Json PlanToolResult(const std::string& id, bool error,
+                           const std::string& outcome) {
+  return proto::Json::parse(
+      R"({"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": ")" +
+      id + R"(", "is_error": )" + (error ? "true" : "false") +
+      R"(, "content": "x"}]}, "toolUseResult": )" + outcome + "}");
+}
+
+// Poradie zo skutocnej session (probe_plan_revise.py, CLI 2.1.294): Write
+// suboru planu, ExitPlanMode so STARYM planom, az potom vysledok Write a
+// vrateny ExitPlanMode.  Ziadost o povolenie niesla obsah suboru (lkk.68).
+void TestResumedReturnedPlanReadsThePlanFile() {
+  TEST("history: vrateny prepracovany plan po --resume je obsah suboru planu");
+  const std::string path = R"(C:\\plans\\mitten.md)";
+  const std::string bye = R"("# Plan: create bye.txt\n\n1. Write bye.txt")";
+  const std::string farewell =
+      R"("# Plan: create farewell.txt\n\n1. Write farewell.txt")";
+  const std::string exitBye =
+      R"({"plan": )" + bye + R"(, "planFilePath": ")" + path + R"("})";
+  const std::vector<proto::Json> records = {
+      PlanToolUse("w1", "Write",
+                  R"({"file_path": ")" + path + R"(", "content": )" + bye + "}"),
+      PlanToolResult("w1", false,
+                     R"({"type": "create", "filePath": ")" + path +
+                         R"(", "content": )" + bye + "}"),
+      PlanToolUse("e1", "ExitPlanMode", exitBye),
+      PlanToolResult("e1", true,
+                     R"("Error: Name the file farewell.txt instead.")"),
+      PlanToolUse("w2", "Write",
+                  R"({"file_path": ")" + path + R"(", "content": )" + farewell +
+                      "}"),
+      PlanToolUse("e2", "ExitPlanMode", exitBye),
+      // Cesta inak napisana: ten isty subor.
+      PlanToolResult("w2", false,
+                     R"({"type": "update", "filePath": "c:/plans/MITTEN.md", "content": )" +
+                         farewell + "}"),
+      PlanToolResult("e2", true, R"("User rejected tool use")")};
+  const std::wstring first = PlanBodyAfterResume(records, "e1");
+  CHECK(first.find(L"bye.txt") != std::wstring::npos);
+  const std::wstring second = PlanBodyAfterResume(records, "e2");
+  CHECK(second.find(L"farewell.txt") != std::wstring::npos);
+  CHECK(second.find(L"bye.txt") == std::wstring::npos);
+}
+
+// Edit nesie cely subor pred upravou (originalFile), takze netreba poznat
+// predchadzajuci Write.  Tvar toolUseResult z probe_plan_rounds.py.
+void TestResumedPlanFollowsAnEdit() {
+  TEST("history: plan upraveny cez Edit po --resume, aj bez znameho Write");
+  auto records = [](const std::string& oldString, bool all) {
+    const std::string stale =
+        R"({"plan": "# Plan\n\n1. qq\n2. qq", "planFilePath": "C:\\plans\\p.md"})";
+    return std::vector<proto::Json>{
+        PlanToolUse("e1", "ExitPlanMode", stale),
+        PlanToolResult("e1", true, R"("User rejected tool use")"),
+        PlanToolResult(
+            "d1", false,
+            R"({"filePath": "C:\\plans\\p.md", "oldString": ")" + oldString +
+                R"(", "newString": "b", "originalFile": "# Plan\n\n1. qq\n2. qq", "replaceAll": )" +
+                (all ? "true" : "false") + "}"),
+        PlanToolUse("e2", "ExitPlanMode", stale),
+        PlanToolResult("e2", true, R"("User rejected tool use")")};
+  };
+  CHECK_EQ(PlanBodyAfterResume(records("qq", false), "e2"),
+           std::wstring(L"# Plan\n\n1. b\n2. qq"));
+  CHECK_EQ(PlanBodyAfterResume(records("qq", true), "e2"),
+           std::wstring(L"# Plan\n\n1. b\n2. b"));
+  // Edit, ktory do suboru nesedi: radsej plan z tool_use nez vymysleny.
+  CHECK_EQ(PlanBodyAfterResume(records("z", false), "e2"),
+           std::wstring(L"# Plan\n\n1. qq\n2. qq"));
+}
+
 // Ktoru session vybere '-c'.  Su to testy prvej kategorie -- overuju MOJE
 // pravidlo (najnovsia podla casu posledneho zaznamu, ktory cas nesie), nie
 // format.  Zaznamy su preto minimalne, ale ich tvar vymysleny nie je: typy
@@ -5145,6 +5272,9 @@ int main(int argc, char** argv) {
   TestOwnInstructionsStayOutOfTranscript();
   TestPlanApproval();
   TestPlanReadsAsTextAndFollowsPermission();
+  TestResumedPlanReadsTheApprovedPlan();
+  TestResumedReturnedPlanReadsThePlanFile();
+  TestResumedPlanFollowsAnEdit();
   TestPermissionTextMatchesTranscript();
   TestFailedToolResultReadsLikeAnError();
   TestEmptyBlocksAreDropped();

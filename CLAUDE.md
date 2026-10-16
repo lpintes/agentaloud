@@ -307,7 +307,10 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
     spozná podľa `modesAfter`: schválenie nesie režim (`setMode`), „Plánovať
     ďalej" aj Esc sú zamietnutie s `interrupt` — ťah skončí, fokus do promptu.
     Text plánu je zo žiadosti, nie z `tool_use` (ten po prepracovaní nesie
-    starý): adaptér pri každej žiadosti pošle `agent::ToolCallChanged`.
+    starý): adaptér pri každej žiadosti pošle `agent::ToolCallChanged`;
+    po `--resume` ho pri každom výsledku `ExitPlanMode` pošle translátor
+    z obsahu súboru plánu, vyskladaného z výsledkov `Write`/`Edit`
+    (`Translator::FollowPlanFile`), schválený z `toolUseResult.plan`.
 14. **Id session určuje appka pred štartom** (`--session-id` z
     `NewSessionId`), okrem prípadu, keď rozhovor pomenúvajú `extraArgs`. To
     isté id druhýkrát nejde; obnovuje `--resume` (`Resume::ById`, prepis

@@ -58,6 +58,35 @@ std::string StringField(const Json& object, const char* name) {
   return found->get<std::string>();
 }
 
+// One plan file however it is spelled: ExitPlanMode and Write/Edit name it
+// with the same string today, but a path on Windows is the same file in
+// either case and with either slash.
+std::string PlanFileKey(std::string path) {
+  for (char& c : path) {
+    if (c == '/') c = '\\';
+    if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+  }
+  return path;
+}
+
+// What the tool did, beside the tool_result: "toolUseResult" on disk,
+// "tool_use_result" in the stream.  It belongs to the record, not to one
+// result, so a record with more results than one has none of it to give.
+const Json* ToolOutcome(const Json& record, const Json& content) {
+  int results = 0;
+  for (const Json& item : content) {
+    if (item.is_object() && StringField(item, "type") == "tool_result") {
+      ++results;
+    }
+  }
+  if (results != 1) return nullptr;
+  for (const char* key : {"toolUseResult", "tool_use_result"}) {
+    auto found = record.find(key);
+    if (found != record.end() && found->is_object()) return &*found;
+  }
+  return nullptr;
+}
+
 // What each tool is for, and which of its arguments says what the call does.
 // Falling back to the whole input would put a diff into a summary line.
 //
@@ -374,7 +403,12 @@ std::vector<agent::Event> Translator::Translate(const Json& record) {
           agent::ToolCall call =
               ToolCallFromInput(name, StringField(item, "id"), arguments);
           // "Task" is what the tool was called before it was "Agent".
-          if (name == kExitPlanModeTool) planCalls_.insert(call.id);
+          if (name == kExitPlanModeTool) {
+            const std::string file =
+                PlanFileKey(StringField(arguments, "planFilePath"));
+            planCalls_[call.id] = file;
+            if (!file.empty()) planFiles_.emplace(file, std::string());
+          }
           // A command's output and a file's content are the truth, JSON or
           // not; what an MCP server answers is data for a program.
           if (call.kind != agent::ToolKind::Shell &&
@@ -430,6 +464,8 @@ std::vector<agent::Event> Translator::Translate(const Json& record) {
               result.text.rfind(kInterruptedDenial, 0) == 0) {
             result.text = i18n::Utf8(i18n::Str::kPlanReturned);
           }
+          FollowPlanFile(ToolOutcome(event.raw, *content), result.callId,
+                         result.isError, &events);
           events.push_back(agent::ToolCallFinished{std::move(result)});
         }
       }
@@ -557,6 +593,56 @@ std::vector<agent::Event> Translator::Translate(const Json& record) {
       break;
   }
   return events;
+}
+
+// The tool_use of ExitPlanMode is not the plan the reader was shown.  Most
+// times it is, but after a revision it may still carry the one before
+// (tools/probe_plan_revise.py, CLI 2.1.294), while can_use_tool -- not on
+// disk -- carries what the plan file holds when the call runs.  The plan file
+// is one per session and each revision overwrites it, so what it held then is
+// read off the Write and Edit results in between, which do come before the
+// call's own result (tools/probe_plan_rounds.py).  An approved plan says it
+// outright, and that wins.
+void Translator::FollowPlanFile(const Json* outcome, const std::string& callId,
+                                bool isError,
+                                std::vector<agent::Event>* events) {
+  auto call = planCalls_.find(callId);
+  if (call == planCalls_.end()) {
+    if (isError || outcome == nullptr) return;
+    auto file = planFiles_.find(PlanFileKey(StringField(*outcome, "filePath")));
+    if (file == planFiles_.end()) return;
+    // Edit carries the whole file as it was before, so a plan first written
+    // before any ExitPlanMode named its file is no gap.
+    if (outcome->contains("oldString")) {
+      std::string text = StringField(*outcome, "originalFile");
+      const std::string from = StringField(*outcome, "oldString");
+      const std::string to = StringField(*outcome, "newString");
+      auto replaceAll = outcome->find("replaceAll");
+      const bool all = replaceAll != outcome->end() &&
+                       replaceAll->is_boolean() && replaceAll->get<bool>();
+      size_t at = from.empty() ? std::string::npos : text.find(from);
+      // What the file held is not known for sure: then not at all, rather
+      // than a plan nobody was shown.
+      if (at == std::string::npos) text.clear();
+      while (at != std::string::npos) {
+        text.replace(at, from.size(), to);
+        at = all ? text.find(from, at + to.size()) : std::string::npos;
+      }
+      file->second = std::move(text);
+    } else {
+      file->second = StringField(*outcome, "content");
+    }
+    return;
+  }
+  std::string plan;
+  if (!isError && outcome != nullptr) plan = StringField(*outcome, "plan");
+  if (plan.empty()) {
+    auto file = planFiles_.find(call->second);
+    if (file != planFiles_.end()) plan = file->second;
+  }
+  if (plan.empty()) return;
+  events->push_back(agent::ToolCallChanged{
+      ToolCallFromInput(kExitPlanModeTool, callId, Json{{"plan", plan}})});
 }
 
 std::vector<agent::Event> TranslateRecord(const Json& record) {

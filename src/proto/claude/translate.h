@@ -83,8 +83,18 @@ class Translator {
   std::map<std::string, std::string> subagents_;  // Agent call id -> name
   std::map<std::string, int> subagentCounts_;     // type -> how many so far
   std::map<std::string, std::string> agentIds_;   // agent_id -> name
-  // ExitPlanMode call ids, for what their denial is shown as.
-  std::set<std::string> planCalls_;
+  // The plan a revised ExitPlanMode showed the reader, put back into its call
+  // from what the plan file held when the call ran (claude-gui-lkk.68).
+  // `outcome` is the record's toolUseResult, null when it has none.
+  void FollowPlanFile(const Json* outcome, const std::string& callId,
+                      bool isError, std::vector<agent::Event>* events);
+
+  // ExitPlanMode call id -> its plan file (PlanFileKey), also for what the
+  // call's denial is shown as.
+  std::map<std::string, std::string> planCalls_;
+  // Plan file (PlanFileKey) -> what it holds; empty while not known.  Only
+  // files an ExitPlanMode named, so it is not every file the session wrote.
+  std::map<std::string, std::string> planFiles_;
   // Calls whose result, if JSON, is shown as ReadableIfJson; gone once it is.
   std::set<std::string> readableResults_;
   // A task went to the background since the last answer to background_tasks

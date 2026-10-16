@@ -608,8 +608,34 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     textu žiadna úprava). Ide frontou udalostí, nie priamo: panel ju pred
     dialógom nevyprázdni, a tak príde vždy za `ToolCallStarted`, ktorý
     opravuje. Plán sa ukazuje ako text (`ToolKind::Plan`), súhrn je jeho prvý
-    riadok bez `#`. Medzera: `--resume` prehrá zo záznamu na disku starý plán
-    — `can_use_tool` sa na disk nepíše.
+    riadok bez `#`.
+
+    `can_use_tool` sa na disk nepíše, takže `--resume` by prehral starý plán
+    pri každom kole, nielen pri schválenom — plán sa dá vrátiť koľkokrát
+    chce čitateľ. **Žiadosť nesie obsah súboru plánu v chvíli, keď volanie
+    beží**, a ten sa dá z disku zrekonštruovať (lkk.68, sondy
+    `tools/probe_plan_revise.py` a `tools/probe_plan_rounds.py`, CLI 2.1.294):
+
+    - Súbor plánu je jeden na session (meno vymyslí CLI) a každé kolo ho
+      prepíše `Write` alebo upraví `Edit`. Samotný súbor teda drží len
+      poslednú verziu.
+    - `Write` býva v zázname **pred** `tool_use` `ExitPlanMode`, ale jeho
+      výsledok **za** ním a pred výsledkom `ExitPlanMode`. Platí preto obsah
+      súboru pri výsledku `ExitPlanMode`, nie pri jeho `tool_use`.
+    - Výsledok nesie `toolUseResult` (v streame `tool_use_result`): `Write`
+      celý text v `content`, `Edit` celý pôvodný súbor v `originalFile` plus
+      `oldString`/`newString`/`replaceAll`. Netreba teda poznať predošlý
+      zápis.
+    - Schválený výsledok nesie `toolUseResult.plan` priamo; ten má prednosť.
+
+    `Translator::FollowPlanFile` sleduje len súbory, ktoré pomenoval
+    `planFilePath` niektorého `ExitPlanMode` (prvý plán pred ním netreba —
+    jeho `tool_use` je zhodný so žiadosťou), a pri každom výsledku
+    `ExitPlanMode` pošle `ToolCallChanged` pred `ToolCallFinished`. Naživo je
+    to ten istý text, aký prišiel zo žiadosti, a úprava žiadna. `Edit`, ktorý
+    do pôvodného súboru nesedí, obsah zahodí: radšej plán z `tool_use` než
+    vymyslený. Či `tool_use` nesie starý plán, nie je stále rovnaké — v jednej
+    sonde áno, v druhej nie; na tom oprava nestojí.
 
 14. **Id session si appka určuje sama a pozná ho pred štartom procesu.** Zo
     streamu príde až so záznamom, ktorý ho nesie, a odpoveď na `initialize` ho
