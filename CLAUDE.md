@@ -339,21 +339,21 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
     kým nie je v `kKeys…` každého `src/i18n/<jazyk>.def`. Čo sa medzi
     agentmi líši, skladá `KeysText` z `Capabilities`. Klávesa sa píše ako
     skratka („Shift+T"), nie ako znak.
-20. **Režim povolení je stav procesu; mení ho Shift+Tab aj CLI** (po
+20. **Režim povolení je stav procesu; mení ho Ctrl+Space (v termináli Shift+Tab) aj CLI** (po
     `ExitPlanMode`, zhodené `auto`) a hlási `system/status`. Jediný zdroj
     pravdy je `Session::permissionMode()`, pravidlá v
     `proto::PermissionModeTracker` (semienko z príkazového riadka,
     optimistický posun, odmietnutie späť na posledné slovo CLI, odmietnutý
     mód sa preskakuje). Cyklus `default → acceptEdits → plan → auto`;
     `bypassPermissions` za behu nejde. Zmenu zvonku ohlási `agent::ModeChanged`
-    → `FollowPermissionMode`. Shift+Tab sa ohlasuje synchrónne.
+    → `FollowPermissionMode`. Ctrl+Space sa ohlasuje synchrónne.
 21. **Model v stavovom riadku je ten, ktorý odpovedá** — `message.model`
     záznamu `assistant` (`ParseAnsweringModel`, bez subagentov a
     `<synthetic>`), nie `system/init`. Poradie: `--model` → história →
     `system/init` → `assistant`; drží `proto::Translator`.
 22. **Nastavenia mení len výslovný úkon; zlý riadok sa odmietne.**
     `%APPDATA%\AgentAloud\settings.txt` alebo prenosné `config\settings.txt`.
-    Kľúče s prefixom backendu. Shift+Tab sa neukladá. Zápis mení len svoje
+    Kľúče s prefixom backendu. Ctrl+Space sa neukladá. Zápis mení len svoje
     riadky (`Settings::Set` + `Serialize`, `win::WriteFileBytes`). Prednosť:
     príkazový riadok > súbor > zabudované (`app::ApplySettings`). Kontrolujú
     sa riadky všetkých backendov. CLI a prostredie: `<backend>.executable`

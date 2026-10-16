@@ -210,6 +210,14 @@ bool IsTasksChord(WPARAM key) {
          GetKeyState(VK_SHIFT) >= 0;
 }
 
+// Ctrl+Space cycles the permission mode.  Not the terminal's Shift+Tab: in a
+// window Shift+Tab is the reverse of Tab, and a reader moving back between
+// the two fields would change the mode without meaning to.
+bool IsModeChord(WPARAM key) {
+  return key == VK_SPACE && GetKeyState(VK_CONTROL) < 0 &&
+         GetKeyState(VK_SHIFT) >= 0 && GetKeyState(VK_MENU) >= 0;
+}
+
 // Case-blind in the reader's language.  CharLowerBuffW keeps the length,
 // which Transcript::Find needs: its offsets are into the unfolded text.
 std::wstring FoldCase(const std::wstring& text) {
@@ -1399,18 +1407,32 @@ void SessionPane::ShowRateLimit(const agent::RateLimitChanged& limit) {
     if (!text.empty()) text += L", ";
     text += length(window.minutes) + L" " + percent(window.used);
   }
+  // Day and time, not just time: a seven-day window resets on some other day,
+  // and "resets at 6:00" would be read as this morning.
+  const auto stamp = [](long long resetsAt) {
+    const std::time_t when = static_cast<std::time_t>(resetsAt);
+    std::tm local = {};
+    wchar_t out[32] = {};
+    if (localtime_s(&local, &when) == 0) {
+      std::wcsftime(out, 32, i18n::Text(Str::kLimitStampFormat), &local);
+    }
+    return std::wstring(out);
+  };
   const long long resetsAt = agent::ResetToSay(limit);
   if (text.empty() && limit.used >= 0) text = percent(limit.used);
   if (resetsAt > 0) {
-    const std::time_t when = static_cast<std::time_t>(resetsAt);
-    std::tm local = {};
-    if (localtime_s(&local, &when) == 0) {
-      wchar_t stamp[32] = {};
-      // Day and time, not just time: a seven-day window resets on some other
-      // day, and "resets at 6:00" would be read as this morning.
-      std::wcsftime(stamp, 32, i18n::Text(Str::kLimitStampFormat), &local);
+    const std::wstring when = stamp(resetsAt);
+    if (!when.empty()) {
       if (!text.empty()) text += L", ";
-      text += i18n::Format(Str::kLimitResets, {stamp});
+      text += i18n::Format(Str::kLimitResets, {when});
+    }
+  }
+  if (const agent::LimitWindow* longer = agent::LongResetToSay(limit)) {
+    const std::wstring when = stamp(longer->resetsAt);
+    if (!when.empty()) {
+      if (!text.empty()) text += L", ";
+      text += i18n::Format(Str::kLimitWindowResets,
+                           {length(longer->minutes), when});
     }
   }
   // The state, when there is one, is what names the field; otherwise the word
@@ -1984,19 +2006,22 @@ LRESULT CALLBACK SessionPane::PromptProc(HWND window, UINT message,
       }
       return 0;
     }
-    if (wParam == VK_TAB) {
-      // Shift+Tab is the terminal's key for the permission mode, and it is the
-      // same in both boxes like Esc and the chords.  Plain Tab is the toggle
-      // between the two controls -- done here rather than through
-      // IsDialogMessage because win::RunMessageLoop is shared with another
-      // project and this must not change how it behaves there.
-      if (GetKeyState(VK_SHIFT) < 0) {
-        pane->CyclePermissionMode();
-      } else {
-        SetFocus(pane->transcript_);
-      }
+    if (IsModeChord(wParam)) {
+      pane->CyclePermissionMode();
       return 0;
     }
+    if (wParam == VK_TAB) {
+      // Tab and Shift+Tab are the toggle between the two controls; with two
+      // there is no other way back.  Done here rather than through
+      // IsDialogMessage because win::RunMessageLoop is shared with another
+      // project and this must not change how it behaves there.
+      SetFocus(pane->transcript_);
+      return 0;
+    }
+  }
+  // Ctrl+Space types a space, like any chord its character.
+  if (message == WM_CHAR && wParam == L' ' && GetKeyState(VK_CONTROL) < 0) {
+    return 0;
   }
   // Neither of these may reach the box as a character.  TranslateMessage runs
   // in the message loop, BEFORE the key ever gets here, so a key this
@@ -2031,14 +2056,13 @@ LRESULT CALLBACK SessionPane::TranscriptProc(HWND window, UINT message,
     pane->ShowTasks();
     return 0;
   }
+  if (message == WM_KEYDOWN && IsModeChord(wParam)) {
+    pane->CyclePermissionMode();
+    return 0;
+  }
+  // Tab and Shift+Tab alike: the toggle back to the prompt.
   if (message == WM_KEYDOWN && wParam == VK_TAB) {
-    // Shift+Tab cycles the permission mode from here too; plain Tab is the
-    // toggle back to the prompt.
-    if (GetKeyState(VK_SHIFT) < 0) {
-      pane->CyclePermissionMode();
-    } else {
-      SetFocus(pane->prompt_);
-    }
+    SetFocus(pane->prompt_);
     return 0;
   }
   if (message == WM_KEYDOWN && wParam == VK_RETURN) {

@@ -989,7 +989,17 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     `subtype: "set_permission_mode"` a holým `mode`. Odpoveď je
     `control_response` `success`, telo vnorené ako pri `initialize`
     (`response.response.mode`) a headless CLI v ňom mód ozve späť; iný hostiteľ
-    smie potvrdiť prázdnym objektom. Odmerané `tools/probe_mode.py`
+    smie potvrdiť prázdnym objektom.
+
+    **V appke je to Ctrl+Space, nie Shift+Tab** (október 2026). V okne je
+    Shift+Tab spätný Tab a zvyk ho tak používať je silný: čitateľ, ktorý sa
+    vracal medzi prepisom a promptom, ticho prepol režim. Tab aj Shift+Tab
+    teraz len prepínajú medzi dvoma poľami. Ctrl+Space vyrobí `WM_CHAR`
+    medzery, ktorý `PromptProc` zahadzuje (pozri Conventions o dvojitom
+    zahodení). Kde sa nižšie a v komentároch kódu píše „Shift+Tab", myslí sa
+    tá istá akcia.
+
+    Odmerané `tools/probe_mode.py`
     (10. 9. 2026): po `plan` vrátil druhý `initialize`
     `current_permission_mode: "plan"`, takže sa zmena **usadí**, nie len
     potvrdí. Cyklus má **štyri** módy a je terminálový —

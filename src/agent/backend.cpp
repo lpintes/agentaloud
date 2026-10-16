@@ -100,4 +100,18 @@ long long ResetToSay(const RateLimitChanged& limit) {
   return limit.resetsAt;
 }
 
+const LimitWindow* LongResetToSay(const RateLimitChanged& limit) {
+  const LimitWindow* longest = nullptr;
+  for (const LimitWindow& window : limit.windows) {
+    if (window.resetsAt <= 0 || window.minutes <= 0) continue;
+    if (longest == nullptr || window.minutes > longest->minutes) {
+      longest = &window;
+    }
+  }
+  if (longest == nullptr || longest->resetsAt == ResetToSay(limit)) {
+    return nullptr;
+  }
+  return longest;
+}
+
 }  // namespace agent

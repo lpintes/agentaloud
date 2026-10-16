@@ -2144,6 +2144,29 @@ void TestResetToSayPicksShortestUnlessExhausted() {
   CHECK_EQ(agent::ResetToSay(bare), 5000LL);
 }
 
+void TestLongResetToSayIsTheWeekUnlessAlreadySaid() {
+  agent::RateLimitChanged limit;
+  limit.windows = {{7 * 24 * 60, 0.81, 9000}, {300, 0.32, 1000}};
+  const agent::LimitWindow* week = agent::LongResetToSay(limit);
+  CHECK(week != nullptr);
+  if (week != nullptr) CHECK_EQ(week->resetsAt, 9000LL);
+
+  // Vycerpany tyzden uz hovori ResetToSay, druhy raz nie.
+  limit.state = agent::LimitState::Exhausted;
+  limit.resetsAt = 9000;
+  CHECK(agent::LongResetToSay(limit) == nullptr);
+
+  // Jedine okno je to iste, co povie ResetToSay.
+  agent::RateLimitChanged one;
+  one.windows = {{300, 0.5, 1000}};
+  CHECK(agent::LongResetToSay(one) == nullptr);
+
+  // Tyzden bez casu sa nehovori.
+  agent::RateLimitChanged unknown;
+  unknown.windows = {{300, 0.5, 1000}, {7 * 24 * 60, 0.2, 0}};
+  CHECK(agent::LongResetToSay(unknown) == nullptr);
+}
+
 void TestUsageParsing() {
   TEST("events: cena a tokeny sa citaju z modelUsage, nie z usage");
   // Tvar je odpozorovany z tests/fixtures/basic.jsonl, nie vymysleny. Podstatne
@@ -5247,6 +5270,7 @@ int main(int argc, char** argv) {
   TestLinksInText();
   TestRateLimitParsing();
   TestResetToSayPicksShortestUnlessExhausted();
+  TestLongResetToSayIsTheWeekUnlessAlreadySaid();
   TestInitializeResponseParsing();
   TestPermissionModeSwitch();
   TestPortModeCycleMatchesClaude();

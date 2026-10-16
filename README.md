@@ -32,7 +32,7 @@ differently:
   request names the subagent;
 - a plan from plan mode has its own dialog: approve it and choose the mode
   the session goes on in, or send it back with what to change;
-- Shift+Tab switches the permission mode, as in the terminal; F1 lists every
+- Ctrl+Space switches the permission mode (Shift+Tab in the terminal); F1 lists every
   key, F2 shows the session's details — id, model, context, cost — and F4
   offers the agent's slash commands;
 - Ctrl+F and F3 search the transcript, collapsed blocks included;

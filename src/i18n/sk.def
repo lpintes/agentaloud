@@ -109,6 +109,7 @@ S(kStatusLimit, L"limit {0}")
 S(kLimitExhausted, L"limit vyčerpaný")
 S(kLimitWarning, L"blízko limitu")
 S(kLimitResets, L"obnova {0}")
+S(kLimitWindowResets, L"{0} obnova {1}")
 // wcsftime: day and month, then the time.
 S(kLimitStampFormat, L"%#d.%#m. %H:%M")
 S(kDurationDays, L"{0} d")
@@ -174,7 +175,7 @@ S(kKeysSending,
   L"Odosielanie a ťah:\n"
   L"Ctrl+Enter — odošle prompt. Len z poľa Prompt.\n"
   L"Esc — preruší bežiaci ťah. Z oboch polí.\n"
-  L"Tab — prepne medzi prepisom a promptom.\n")
+  L"Tab alebo Shift+Tab — prepne medzi prepisom a promptom.\n")
 S(kKeysTasks,
   L"Ctrl+T — úlohy na pozadí; zoznam sa za behu mení, Zastaviť zastaví "
   L"vybranú, Esc ho zavrie. Z oboch polí.\n")
@@ -188,8 +189,8 @@ S(kKeysBackground,
   L"Z oboch polí.\n")
 S(kKeysNoBackground,
   L"Ctrl+B — tento agent nevie presunúť prácu do pozadia.\n")
-S(kKeysModesNone, L"Shift+Tab — tento agent režimy za behu meniť nevie.\n")
-S(kKeysModesHeading, L"Shift+Tab — mení režim povolení dokola, z oboch polí:\n")
+S(kKeysModesNone, L"Ctrl+Space — tento agent režimy za behu meniť nevie.\n")
+S(kKeysModesHeading, L"Ctrl+Space — mení režim povolení dokola, z oboch polí:\n")
 S(kKeysModesStartOnly, L"Len pri štarte, cez --permission-mode: {0}.\n")
 S(kKeysMoving,
   L"\n"

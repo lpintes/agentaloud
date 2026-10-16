@@ -247,6 +247,11 @@ struct RateLimitChanged {
 // warning threshold on (claude-gui-lkk.70).
 long long ResetToSay(const RateLimitChanged& limit);
 
+// The longest window, when its reset is known and is not the one ResetToSay
+// already says; nullptr otherwise.  Said last in the field, so that a reader
+// who does not plan by the week has stopped listening before it.
+const LimitWindow* LongResetToSay(const RateLimitChanged& limit);
+
 // The CLI has finished starting: commands(), account() and the mode are now
 // what they are going to be.  With a SessionStart hook that is twenty seconds
 // in (invariant 17), so "not ready" is an ordinary state that has to be said.
