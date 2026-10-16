@@ -44,7 +44,10 @@ std::string ReasonSentence(const std::string& type) {
 }  // namespace
 
 ClaudeBackend::ClaudeBackend(agent::Program program)
-    : program_(std::move(program)), capabilities_(ClaudeCapabilities()) {}
+    : program_(std::move(program)), capabilities_(ClaudeCapabilities()) {
+  capabilities_.configHome = agent::ResolveConfigHome(
+      program_, L"CLAUDE_CONFIG_DIR", L".claude", /*emptyIsUnset=*/false);
+}
 
 std::wstring ClaudeBackend::ConfigDir() const {
   const std::wstring* configured = program_.Find(L"CLAUDE_CONFIG_DIR");

@@ -51,7 +51,10 @@ const char* Decision(agent::Verdict verdict) {
 }  // namespace
 
 CodexBackend::CodexBackend(agent::Program program)
-    : program_(std::move(program)), capabilities_(CodexCapabilities()) {}
+    : program_(std::move(program)), capabilities_(CodexCapabilities()) {
+  capabilities_.configHome = agent::ResolveConfigHome(
+      program_, L"CODEX_HOME", L".codex", /*emptyIsUnset=*/true);
+}
 
 // Found on PATH by CreateProcessW, the same way `claude` is, unless the
 // settings name the executable.  That takes the native installer's codex.exe

@@ -745,7 +745,23 @@ Block MakeInterrupted() {
 // is a terminal program's output, colours and all.  An empty one is said to
 // be empty, because nothing after the first line would read as the block
 // having been cut short.
-Block MakeSessionEnded(const agent::SessionEnded& ended) {
+//
+// Both blocks end with where the agent keeps its sign-in: a home the CLI does
+// not see looks like being signed out, or like a CLI that will not start, and
+// the variable that moved it is the one thing the reader can check.
+std::wstring ConfigHomeLine(const std::wstring& agentName,
+                            const agent::ConfigHome& home) {
+  if (home.fromVariable && home.path.empty()) {
+    return i18n::Format(Str::kConfigHomeEmpty, {agentName, home.variable});
+  }
+  if (home.path.empty()) return {};
+  return i18n::Format(home.fromVariable ? Str::kConfigHomeFromVariable
+                                        : Str::kConfigHomeDefault,
+                      {agentName, home.path, home.variable});
+}
+
+Block MakeSessionEnded(const agent::SessionEnded& ended,
+                       const std::wstring& configHomeLine) {
   Block block;
   block.kind = BlockKind::SessionEnded;
   std::wstring first = i18n::Text(Str::kSessionEndedNoCode);
@@ -762,6 +778,7 @@ Block MakeSessionEnded(const agent::SessionEnded& ended) {
   block.body = first + L'\n' +
                (output.empty() ? std::wstring(i18n::Text(Str::kSessionEndedSilent))
                                : output);
+  if (!configHomeLine.empty()) block.body += L'\n' + configHomeLine;
   block.summary = first;
   block.collapsible = false;
   // E finds it: it is the place the work stopped, whatever the code says --
@@ -847,7 +864,8 @@ std::vector<Edit> Transcript::Append(const std::vector<agent::Event>& events) {
     } else if (std::holds_alternative<agent::Interrupted>(event)) {
       made.push_back(MakeInterrupted());
     } else if (const auto* ended = std::get_if<agent::SessionEnded>(&event)) {
-      made.push_back(MakeSessionEnded(*ended));
+      made.push_back(
+          MakeSessionEnded(*ended, ConfigHomeLine(agentName_, configHome_)));
     } else if (std::holds_alternative<agent::SignInRequired>(event)) {
       // Codex says it twice in a row -- before the first turn and again when
       // that turn fails -- and the second line would tell the reader nothing.
@@ -858,8 +876,10 @@ std::vector<Edit> Transcript::Append(const std::vector<agent::Event>& events) {
       if (last != nullptr && last->kind == BlockKind::SignInRequired) continue;
       Block block;
       block.kind = BlockKind::SignInRequired;
-      block.body = i18n::Format(Str::kSignInRequired, {agentName_});
-      block.summary = block.body;
+      block.summary = i18n::Format(Str::kSignInRequired, {agentName_});
+      block.body = block.summary;
+      const std::wstring home = ConfigHomeLine(agentName_, configHome_);
+      if (!home.empty()) block.body += L'\n' + home;
       block.collapsible = false;
       // E finds it: it is where the work stopped.
       block.isError = true;

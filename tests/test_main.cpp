@@ -555,6 +555,87 @@ void TestSignInRequiredBlock() {
   CHECK_EQ(transcript.FirstLine(2), block.body);
 }
 
+void TestConfigHomeNamedInBlocks() {
+  TEST("transcript: neprihlasenie aj koniec CLI povedia, kde ma konfiguraciu");
+  model::Transcript transcript;
+  std::string problem;
+  CHECK(transcript.SetAgentName(L"codex"));
+  transcript.SetConfigHome({L"CODEX_HOME", L"E:\\codex", true});
+  transcript.Append({agent::SignInRequired{}});
+  CHECK(transcript.CheckInvariants(&problem));
+  const model::Block& signIn = transcript.blocks()[0];
+  // Suhrn a prvy riadok zostavaju jedna veta; priecinok je druhy riadok.
+  CHECK_EQ(signIn.summary, std::wstring(L"codex nie je prihlásený k účtu, "
+                                        L"takže neodpovie."));
+  CHECK_EQ(signIn.body,
+           signIn.summary + L"\ncodex má prihlásenie a nastavenia v "
+                            L"E:\\codex, ako určuje premenná CODEX_HOME.");
+  CHECK_EQ(transcript.FirstLine(0), signIn.summary);
+
+  // Za chybovym vystupom, nie pred nim: najprv to, co povedalo CLI.
+  model::Transcript ended;
+  CHECK(ended.SetAgentName(L"claude"));
+  ended.SetConfigHome({L"CLAUDE_CONFIG_DIR", L"C:\\Users\\x\\.claude", false});
+  ended.Append({agent::SessionEnded{true, 1, "boom\n"}});
+  CHECK(ended.CheckInvariants(&problem));
+  CHECK_EQ(ended.blocks()[0].body,
+           std::wstring(L"Agent skončil s kódom 1.\nboom\n"
+                        L"claude má prihlásenie a nastavenia v "
+                        L"C:\\Users\\x\\.claude, lebo premenná "
+                        L"CLAUDE_CONFIG_DIR nie je nastavená."));
+
+  // Claude berie prazdnu premennu ako priecinok "" a je v nom neprihlaseny.
+  model::Transcript empty;
+  CHECK(empty.SetAgentName(L"claude"));
+  empty.SetConfigHome({L"CLAUDE_CONFIG_DIR", L"", true});
+  empty.Append({agent::SignInRequired{}});
+  CHECK_EQ(empty.blocks()[0].body,
+           std::wstring(L"claude nie je prihlásený k účtu, takže neodpovie.\n"
+                        L"Premenná CLAUDE_CONFIG_DIR je nastavená, ale "
+                        L"prázdna, takže claude nemá priečinok na "
+                        L"prihlásenie a nastavenia."));
+}
+
+void TestResolveConfigHome() {
+  TEST("agent: konfiguracny priecinok CLI -- nastavenie, prostredie, profil");
+  const std::wstring var = L"AGENTALOUD_TEST_HOME";
+  const wchar_t* profile = _wgetenv(L"USERPROFILE");
+  CHECK(profile != nullptr);
+  const std::wstring byDefault = std::wstring(profile) + L"\\.cli";
+
+  _wputenv((var + L"=").c_str());  // zmaze zdedenu
+  agent::ConfigHome home = agent::ResolveConfigHome({}, var, L".cli", true);
+  CHECK_EQ(home.path, byDefault);
+  CHECK(!home.fromVariable);
+  CHECK_EQ(home.variable, var);
+
+  agent::Program program;
+  program.environment = {{L"agentaloud_test_home", L"E:\\cli"}};
+  home = agent::ResolveConfigHome(program, var, L".cli", true);
+  CHECK_EQ(home.path, std::wstring(L"E:\\cli"));
+  CHECK(home.fromVariable);
+
+  // Prazdna v nastaveniach: Codex ju berie ako nenastavenu, Claude nie.
+  program.environment = {{var, L""}};
+  home = agent::ResolveConfigHome(program, var, L".cli", true);
+  CHECK_EQ(home.path, byDefault);
+  CHECK(!home.fromVariable);
+  home = agent::ResolveConfigHome(program, var, L".cli", false);
+  CHECK(home.path.empty());
+  CHECK(home.fromVariable);
+
+  // Zdedena z prostredia appky, ked ju nastavenia nemenia.
+  _wputenv((var + L"=D:\\inherited").c_str());
+  home = agent::ResolveConfigHome({}, var, L".cli", true);
+  CHECK_EQ(home.path, std::wstring(L"D:\\inherited"));
+  CHECK(home.fromVariable);
+  // Nastavenia maju prednost pred zdedenou.
+  program.environment = {{var, L"E:\\cli"}};
+  CHECK_EQ(agent::ResolveConfigHome(program, var, L".cli", true).path,
+           std::wstring(L"E:\\cli"));
+  _wputenv((var + L"=").c_str());
+}
+
 void TestToolResultsSitBehindTheirCall() {
   TEST("transcript: vysledok stoji za svojim volanim, nie na konci");
   model::Transcript transcript;
@@ -5030,6 +5111,8 @@ int main(int argc, char** argv) {
   TestInterruptLeavesAMark();
   TestSessionEndedKeepsStderr();
   TestSignInRequiredBlock();
+  TestConfigHomeNamedInBlocks();
+  TestResolveConfigHome();
   TestToolResultsSitBehindTheirCall();
   TestBookmarksSurviveCollapsing();
   TestBookmarkIntoCollapsedBlock();

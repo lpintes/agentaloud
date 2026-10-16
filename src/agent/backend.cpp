@@ -47,6 +47,31 @@ const std::wstring* Program::Find(const std::wstring& name) const {
   return found;
 }
 
+ConfigHome ResolveConfigHome(const Program& program,
+                             const std::wstring& variable,
+                             const std::wstring& profileFolder,
+                             bool emptyIsUnset) {
+  ConfigHome home;
+  home.variable = variable;
+  const std::wstring* given = program.Find(variable);
+  std::wstring value;
+  bool set = given != nullptr;
+  if (set) {
+    value = *given;
+  } else if (const wchar_t* inherited = _wgetenv(variable.c_str())) {
+    set = true;
+    value = inherited;
+  }
+  if (set && (!value.empty() || !emptyIsUnset)) {
+    home.path = value;
+    home.fromVariable = true;
+  } else if (const wchar_t* profile = _wgetenv(L"USERPROFILE");
+             profile != nullptr && *profile) {
+    home.path = std::wstring(profile) + L'\\' + profileFolder;
+  }
+  return home;
+}
+
 const Mode* FindMode(const Capabilities& capabilities, const std::string& id) {
   for (const Mode& mode : capabilities.modes) {
     if (mode.id == id) return &mode;

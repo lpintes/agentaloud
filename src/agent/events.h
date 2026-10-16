@@ -319,6 +319,20 @@ struct SessionEnded {
 // (tools/probe_noauth.notes.md) -- and it may come more than once.
 struct SignInRequired {};
 
+// The folder a CLI reads its sign-in and settings from, and the variable that
+// moves it.  Not an event: Capabilities carries it, and the transcript names
+// it under SignInRequired and SessionEnded, because a CLI that does not see
+// the home the reader thinks it has looks signed out, or hangs, and nothing
+// else says so (claude-gui-lkk.73).
+struct ConfigHome {
+  std::wstring variable;  // "CODEX_HOME"; empty when the CLI has none
+  // Empty with fromVariable: the variable is set to nothing.  Empty without
+  // it: not even the default can be found, and nothing is said.
+  std::wstring path;
+  // Whether `path` came from `variable` rather than the default.
+  bool fromVariable = false;
+};
+
 // The answer to Backend::StartSignIn: where the reader goes to sign in.  Both
 // CLIs sign in through a web page and neither needs a console
 // (tools/probe_noauth.notes.md), but the page asks for different things.

@@ -146,6 +146,11 @@ class Transcript {
   // when blocks are already there.
   bool SetAgentName(const std::wstring& name);
 
+  // Where the agent keeps its sign-in -- agent::Capabilities::configHome.
+  // Named in the SignInRequired and SessionEnded blocks made after this; the
+  // default names nothing.
+  void SetConfigHome(const agent::ConfigHome& home) { configHome_ = home; }
+
   // Who said it, written in front of the line: "<agent>: " and "you: ", and
   // "<subagent>: " in front of every block of a subagent, its tools as well;
   // empty for everything else.  Not part of the block's text -- the
@@ -281,6 +286,7 @@ class Transcript {
   // Neutral until the pane names the agent: model/ does not know which CLI
   // runs, and the tests that do not care get a word that names none.
   std::wstring agentName_ = L"agent";
+  agent::ConfigHome configHome_;
 };
 
 }  // namespace model

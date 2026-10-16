@@ -377,6 +377,8 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
     Nie po vlastnom `Stop()` (`stopping_`). Stavový riadok „agent nebeží".
     Proces, ktorý nevznikol, blok nemá — `agent::StartFailure` a hláška pri
     štarte; nastavená cesta (`configured`) ukáže na nastavenie, nie na PATH.
+    Blok `SessionEnded` aj `SignInRequired` povie, kde má CLI prihlásenie
+    (`Capabilities::configHome` z `agent::ResolveConfigHome`, píše adaptér).
 26. **Pri úlohách na pozadí Claude odpovie `success`, aj keď nič
     nespravil.** `interrupt` mimo ťahu zastaví subagentov, nie príkazy —
     `Session::StopAllTasks` pošle aj `stop_task` na každý príkaz

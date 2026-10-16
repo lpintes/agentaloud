@@ -75,6 +75,10 @@ struct Capabilities {
   // an alias the CLI adds tomorrow must not be refused today.  Empty when the
   // adapter knows none without asking a running process.
   std::vector<std::string> models;
+  // Where the CLI keeps its sign-in and settings, for the sentences that say
+  // why it will not answer (claude-gui-lkk.73).  Per backend, not per CLI:
+  // the adapter fills it in from its Program when it is made.
+  ConfigHome configHome;
 };
 
 // The next mode in the cycle, or empty when `current` is empty -- the mode is
@@ -191,6 +195,16 @@ struct Program {
   // Names compare ASCII case-insensitively, as Windows compares them.
   const std::wstring* Find(const std::wstring& name) const;
 };
+
+// The home the CLI ends up with: `variable` as `program` sets it, else as this
+// process inherited it (the CLI inherits it too), else `profileFolder` under
+// %USERPROFILE%.  What an empty value means differs: Codex takes it for not
+// set, Claude takes it for a home of "" and is signed out in it (measured
+// 2026-10-16), and that is `emptyIsUnset`.
+ConfigHome ResolveConfigHome(const Program& program,
+                             const std::wstring& variable,
+                             const std::wstring& profileFolder,
+                             bool emptyIsUnset);
 
 struct StartOptions {
   std::wstring projectDir;  // required

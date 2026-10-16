@@ -1350,6 +1350,19 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     (kód 2); dialóg novej session overuje svoj. Hláška ide na konzolu len
     vtedy, keď sa priečinok písal — po dialógu sa čitateľ pozerá na okná.
 
+    **Blok `SessionEnded` aj `SignInRequired` končí vetou, kde má CLI
+    prihlásenie a nastavenia** (claude-gui-lkk.73). Domov, ktorý CLI nevidí,
+    vyzerá ako neprihlásený agent alebo nekonečné „pracujem“, a nič iné to
+    nepovie. Priečinok aj meno premennej dá adaptér pri vzniku
+    (`agent::ResolveConfigHome` → `Capabilities::configHome`): nastavenie
+    `<backend>.env.<MENO>`, inak zdedené prostredie, inak `%USERPROFILE%\.codex`
+    resp. `.claude`. Prázdna premenná sa líši (odmerané 16. 10. 2026): Codex
+    ju berie ako nenastavenú, Claude ako priečinok `""` a je v ňom
+    neprihlásený (`auth status`: `configDirectory: ""`) — veta to povie.
+    Neexistujúci `CODEX_HOME` Codex odmietne sám na stderr a skončí s 1;
+    Claude si chýbajúci priečinok založí, nedostupný (disk, ktorý nie je)
+    hlási ako neprihlásenie.
+
 26. **Pri úlohách na pozadí odpovie Claude `success` aj vtedy, keď nič
     nespravil — čo sa stalo, hovoria len záznamy pred odpoveďou.** Namerané
     sondou (`tools/probe_subagents.py`, scenáre C1, fg-bash, bg-bash,

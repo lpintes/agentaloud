@@ -440,6 +440,7 @@ bool SessionPane::Start(std::unique_ptr<agent::Backend> backend,
   // is part of every answer's rendered text.
   model_.SetAgentName(
       model::Utf16FromUtf8(backend_->capabilities().agentName));
+  model_.SetConfigHome(backend_->capabilities().configHome);
   // The folder name in the bar, the whole path in the title.  The bar is read
   // out in one breath along with three other fields, and a path of eight
   // components there buries everything after it; the title is announced when
