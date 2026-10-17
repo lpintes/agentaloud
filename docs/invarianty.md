@@ -546,10 +546,29 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     `_meta.persist` a pri príkaze podľa `availableDecisions`. Návrhy Claude
     idú späť s `destination` prepísaným z `localSettings` na `session`
     (`proto::SessionPermissions`) — inak by odpoveď v dialógu ticho zapísala
-    do `.claude/settings.local.json`. Z toho istého dôvodu sa neponúka
-    Codexovo „always" ani `acceptWithExecpolicyAmendment`. Vlastné širšie
+    do `.claude/settings.local.json`. Codexovo „always" ani
+    `acceptWithExecpolicyAmendment` sa neponúkajú: zapisujú pravidlo pre
+    celý účet, nie pre projekt. Vlastné širšie
     pravidlo (celý nástroj, prefix) by CLI prijalo, ale je to rozhodnutie,
     ktoré nikto nenavrhol. Odmerané `tools/probe_permission_session.py`.
+
+    **Na disk ide povolenie len samostatným tlačidlom „Povoliť v tomto
+    projekte" a zapisuje ho CLI, nie appka** (claude-gui-lkk.29). Je to
+    terminálové „Yes, and don't ask again for … in <priečinok>": návrhy idú
+    späť **nezmenené** (`proto::ProjectPermissions`) a CLI samo zapíše tie
+    s `destination: localSettings` do `.claude/settings.local.json` projektu;
+    tie so `session` (priečinok pri presmerovaní) drží len do konca session.
+    Odmerané sondou `asis` aj v appke (17. 10. 2026): súbor vytvorilo CLI,
+    nová session sa na ten istý príkaz nepýtala, `~/.claude/settings*.json`
+    ani zdieľaný `settings.json` projektu sa nezmenili. Tlačidlo sa ponúkne,
+    len keď aspoň jeden návrh ide do `localSettings`, a **vôbec nie, keď
+    niektorý mieri inam** (`userSettings`, `projectSettings`, chýbajúci cieľ)
+    — tlačidlo o projekte by klamalo. `setMode` (Write/Edit) chodí so
+    `session`, takže natrvalo sa režim nezapíše nikdy. Trvanie si čitateľ
+    vyberá tlačidlom, nie je to predvoľba: preto dve tlačidlá, nie jedno.
+    Vlastné pole „Natrvalo v projekte sa povolí:"
+    (`PermissionRequest::projectScope`, `proto::ProjectScope`) označí
+    riadky, ktoré platia len na session.
 
     Rozsah je teda **taký, aký ho CLI navrhlo, a dialóg ho povie** v poli „Na
     session sa povolí:" tesne pred tlačidlami (claude-gui-lkk.62), lebo býva

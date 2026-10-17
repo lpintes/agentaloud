@@ -24,7 +24,8 @@
 
 namespace ui {
 
-// Allow, AllowForSession (only when the request offers it) or Deny.  Deny is
+// Allow, AllowForSession or AllowInProject (each only when the request offers
+// it) or Deny.  Deny is
 // every other way out, Esc included: a permission prompt closed without an
 // answer is a refusal, because the tool runs only on a "yes".
 agent::Verdict AskPermission(HWND owner,

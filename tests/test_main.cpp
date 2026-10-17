@@ -4414,6 +4414,39 @@ void TestClaudeSessionPermissions() {
   CHECK(proto::SessionPermissions(request.suggestions).is_null());
 }
 
+// Tvar doslova zo sondy asis (17. 10. 2026, claude-gui-lkk.29): navrhy
+// poslane nezmenene, CLI samo zapisalo addRules do .claude/settings.local.json,
+// addDirectories so session nie.  Appka nic nezapisuje, len neprepise destination.
+void TestClaudeProjectPermissions() {
+  TEST("claude povolenie v projekte: navrhy CLI nezmenene, len localSettings");
+  i18n::SetLanguage(i18n::Lang::kSlovak);
+  using V = std::vector<std::string>;
+  const proto::Json mixed = proto::Json::parse(R"J([{"type":"addRules",
+      "rules":[{"toolName":"Bash","ruleContent":"echo hello *"}],
+      "behavior":"allow","destination":"localSettings"},
+      {"type":"addDirectories","directories":["C:\\b\\perm-probe\\asis"],
+       "destination":"session"}])J");
+  CHECK_EQ(proto::ProjectPermissions(mixed), mixed);
+  CHECK_EQ(proto::ProjectScope(mixed),
+           (V{"každý príkaz, ktorý začína echo hello",
+              "prístup do priečinka C:\\b\\perm-probe\\asis (len na túto "
+              "session)"}));
+
+  // Len session (Write navrhuje acceptEdits): do projektu nie je co dat.
+  CHECK(proto::ProjectPermissions(proto::Json::parse(
+            R"J([{"type":"setMode","mode":"acceptEdits",
+                  "destination":"session"}])J"))
+            .is_null());
+  // Iny subor nez lokalne nastavenia projektu: tlacidlo by klamalo.
+  for (const char* other : {"userSettings", "projectSettings", ""}) {
+    proto::Json suggestions = mixed;
+    suggestions[1]["destination"] = other;
+    CHECK(proto::ProjectPermissions(suggestions).is_null());
+  }
+  CHECK(proto::ProjectPermissions(nullptr).is_null());
+  CHECK(proto::ProjectScope(nullptr).empty());
+}
+
 // Tvary doslova zo sondy (CLI 2.1.288 a 2.1.294, claude-gui-lkk.61 a .62).
 // Retazec s ';' prisiel ako jeden navrh s pravidlom pre kazdu cast -- dialog
 // to musi povedat, lebo povolena cast potom prejde aj sama.
@@ -5374,6 +5407,7 @@ int main(int argc, char** argv) {
   TestCodexFailedTurnError();
   TestBackgroundText();
   TestClaudeSessionPermissions();
+  TestClaudeProjectPermissions();
   TestClaudeSessionScope();
   TestCodexFixtureMulti(fixtures);
   TestCodexFixtureEdit(fixtures);

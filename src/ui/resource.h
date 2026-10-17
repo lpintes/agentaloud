@@ -68,6 +68,11 @@
 // What the session button lets through; hidden with it (claude-gui-lkk.62).
 #define IDC_PERM_SCOPE          1054
 #define IDC_PERM_SCOPE_LABEL        1063
+// Allowed past this session, in the project's settings; shown, with what it
+// lets through, only when offered (agent::Verdict::AllowInProject).
+#define IDC_PERM_PROJECT        1055
+#define IDC_PERM_PROJECT_SCOPE  1056
+#define IDC_PERM_PROJECT_SCOPE_LABEL 1064
 
 #define IDC_PERM_INPUT_LABEL        1060
 #define IDC_PERM_DESCRIPTION_LABEL  1061

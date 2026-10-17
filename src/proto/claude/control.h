@@ -319,6 +319,16 @@ Json MakeAllow(const PermissionRequest& request, const Json& updatedInput,
 // claude-gui-lkk.61).  Null when there is nothing to keep.
 Json SessionPermissions(const Json& suggestions);
 
+// The CLI's own suggestions, unchanged, when the reader asked for them to
+// stay in the project: the CLI writes the "localSettings" ones to
+// .claude/settings.local.json itself and keeps the "session" ones for the
+// session, as the terminal's "don't ask again" does (measured,
+// tools/probe_permission_session.py asis, claude-gui-lkk.29).  Null unless at
+// least one goes to localSettings -- and null too when one names any other
+// file, the user's or the shared project settings, which a button about this
+// project must not write.
+Json ProjectPermissions(const Json& suggestions);
+
 // `message` is handed to the model as the reason, so it is worth writing for
 // the model: "the user declined; ask before trying this again" gets a better
 // result than "denied".

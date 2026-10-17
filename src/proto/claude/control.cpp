@@ -305,6 +305,22 @@ Json SessionPermissions(const Json& suggestions) {
   return kept;
 }
 
+Json ProjectPermissions(const Json& suggestions) {
+  if (!suggestions.is_array()) return nullptr;
+  bool local = false;
+  for (const Json& suggestion : suggestions) {
+    if (!suggestion.is_object()) continue;
+    const std::string destination = StringField(suggestion, "destination");
+    if (destination == "localSettings") {
+      local = true;
+    } else if (destination != "session") {
+      return nullptr;
+    }
+  }
+  if (!local) return nullptr;
+  return suggestions;
+}
+
 Json MakeDeny(const PermissionRequest& request, const std::string& message,
               bool interrupt) {
   Json body{{"behavior", "deny"}, {"message", message}};

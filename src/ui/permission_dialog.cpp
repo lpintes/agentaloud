@@ -1,6 +1,7 @@
 #include "ui/permission_dialog.h"
 
 #include <string>
+#include <vector>
 
 #include "i18n/i18n.h"
 #include "model/transcript.h"
@@ -31,6 +32,12 @@ class PermissionDialog : public win::Dialog {
   bool OnCommand(int id, int notification) override;
 
  private:
+  // One "allow and stop asking" button with the field saying what it lets
+  // through, shown only when the request offers that verdict.
+  void ShowChoice(agent::Verdict verdict,
+                  const std::vector<std::string>& lines, int button,
+                  int label, int field);
+
   const agent::PermissionRequest& request_;
 };
 
@@ -60,28 +67,11 @@ bool PermissionDialog::OnInit() {
   if (arguments.empty()) arguments = i18n::Text(i18n::Str::kPermNoArguments);
   SetTextLines(IDC_PERM_INPUT, arguments);
 
-  // Hidden, not just disabled, where the backend cannot keep the answer: a
-  // disabled button is still read out, and a choice that is there but never
-  // works is worse than one that is not there.  Without it every step of
-  // computer use asked again (claude-gui-lkk.61).
-  bool session = false;
-  for (agent::Verdict offered : request_.offered) {
-    if (offered == agent::Verdict::AllowForSession) session = true;
-  }
-  // The scope goes with the button.  Where the adapter cannot say it, the
-  // field is hidden too, rather than shown empty and read as "nothing".
-  std::wstring scope;
-  for (const std::string& line : request_.sessionScope) {
-    if (!scope.empty()) scope += L'\n';
-    scope += model::Utf16FromUtf8(line);
-  }
-  if (session && !scope.empty()) {
-    SetTextLines(IDC_PERM_SCOPE, scope);
-  } else {
-    ShowWindow(Item(IDC_PERM_SCOPE_LABEL), SW_HIDE);
-    ShowWindow(Item(IDC_PERM_SCOPE), SW_HIDE);
-  }
-  if (!session) ShowWindow(Item(IDC_PERM_SESSION), SW_HIDE);
+  ShowChoice(agent::Verdict::AllowForSession, request_.sessionScope,
+             IDC_PERM_SESSION, IDC_PERM_SCOPE_LABEL, IDC_PERM_SCOPE);
+  ShowChoice(agent::Verdict::AllowInProject, request_.projectScope,
+             IDC_PERM_PROJECT, IDC_PERM_PROJECT_SCOPE_LABEL,
+             IDC_PERM_PROJECT_SCOPE);
 
   // Focus into the arguments rather than onto a button.  This is the text the
   // answer is about, and it is the one control here worth walking by line.
@@ -89,9 +79,37 @@ bool PermissionDialog::OnInit() {
   return true;
 }
 
+void PermissionDialog::ShowChoice(agent::Verdict verdict,
+                                  const std::vector<std::string>& lines,
+                                  int button, int label, int field) {
+  // Hidden, not just disabled, where the backend cannot keep the answer: a
+  // disabled button is still read out, and a choice that is there but never
+  // works is worse than one that is not there.  Without it every step of
+  // computer use asked again (claude-gui-lkk.61).
+  bool offered = false;
+  for (agent::Verdict each : request_.offered) {
+    if (each == verdict) offered = true;
+  }
+  // The scope goes with the button.  Where the adapter cannot say it, the
+  // field is hidden too, rather than shown empty and read as "nothing".
+  std::wstring scope;
+  for (const std::string& line : lines) {
+    if (!scope.empty()) scope += L'\n';
+    scope += model::Utf16FromUtf8(line);
+  }
+  if (offered && !scope.empty()) {
+    SetTextLines(field, scope);
+  } else {
+    ShowWindow(Item(label), SW_HIDE);
+    ShowWindow(Item(field), SW_HIDE);
+  }
+  if (!offered) ShowWindow(Item(button), SW_HIDE);
+}
+
 bool PermissionDialog::OnCommand(int id, int notification) {
-  if (id != IDC_PERM_SESSION || notification != BN_CLICKED) return false;
-  EndDialog(hwnd_, IDC_PERM_SESSION);
+  if (id != IDC_PERM_SESSION && id != IDC_PERM_PROJECT) return false;
+  if (notification != BN_CLICKED) return false;
+  EndDialog(hwnd_, id);
   return true;
 }
 
@@ -103,6 +121,7 @@ agent::Verdict AskPermission(HWND owner,
   switch (dialog.ShowModal(owner, IDD_PERMISSION)) {
     case IDOK: return agent::Verdict::Allow;
     case IDC_PERM_SESSION: return agent::Verdict::AllowForSession;
+    case IDC_PERM_PROJECT: return agent::Verdict::AllowInProject;
     default: return agent::Verdict::Deny;
   }
 }

@@ -118,6 +118,9 @@ struct Account {
 enum class Verdict {
   Allow,
   AllowForSession,  // only when Capabilities::allowForSession
+  // Kept in the project's settings by the CLI itself, past this session.
+  // Offered only where the CLI suggested exactly that (claude-gui-lkk.29).
+  AllowInProject,
   Deny,             // the turn goes on without the tool
   Abort,            // the turn stops; offered only by a CLI that can do it
 };
@@ -137,6 +140,9 @@ struct PermissionRequest {
   // becomes one rule per command, a file edit the acceptEdits mode for every
   // file (claude-gui-lkk.62).  Empty when not offered or not known.
   std::vector<std::string> sessionScope;
+  // What AllowInProject lets through, as sessionScope.  A line that holds
+  // for this session only says so: one answer can carry both kinds.
+  std::vector<std::string> projectScope;
   // The subagent asking, by the name its blocks go by ("Explore 2"); empty
   // for the conversation itself.  Several may wait at once, and a dialog that
   // does not say whose call it is cannot be answered (claude-gui-b8n.10).

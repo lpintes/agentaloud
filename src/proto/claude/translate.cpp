@@ -815,4 +815,19 @@ std::vector<std::string> SessionScope(const Json& suggestions) {
   return lines;
 }
 
+std::vector<std::string> ProjectScope(const Json& suggestions) {
+  std::vector<std::string> lines;
+  if (!suggestions.is_array()) return lines;
+  for (const Json& suggestion : suggestions) {
+    const bool session = suggestion.is_object() &&
+                         StringField(suggestion, "destination") == "session";
+    for (std::string& line : SessionScope(Json::array({suggestion}))) {
+      lines.push_back(session ? i18n::Utf8(i18n::Str::kScopeSessionOnly,
+                                           {std::move(line)})
+                              : std::move(line));
+    }
+  }
+  return lines;
+}
+
 }  // namespace proto

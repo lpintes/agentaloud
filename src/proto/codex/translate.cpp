@@ -764,6 +764,8 @@ bool ElicitationPermission(const Json& params, agent::PermissionRequest* out) {
 
 Json MakeElicitationAnswer(agent::Verdict verdict) {
   switch (verdict) {
+    // Not offered: "always" writes config.toml, which is not the project's.
+    case agent::Verdict::AllowInProject:
     case agent::Verdict::Allow:
       return {{"action", "accept"},
               {"content", Json::object()},

@@ -299,8 +299,11 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
     `proto::ToolCallFromInput`. Zápis do súboru začína „súbor: <cesta>"; meno
     nástroja v titulku. „Povoliť na túto session" len to, čo CLI navrhlo
     (`PermissionRequest::offered`), `destination` prepísané na `session`
-    (`proto::SessionPermissions`) — nikdy zápis na disk. Čo tlačidlo povolí,
-    povie pole pred ním (`PermissionRequest::sessionScope`, píše adaptér):
+    (`proto::SessionPermissions`) — nikdy zápis na disk. Na disk len tlačidlo
+    „Povoliť v tomto projekte": návrhy nezmenené (`proto::ProjectPermissions`)
+    a do `.claude/settings.local.json` ich zapíše CLI, nie appka; ponúkne sa,
+    len keď niektorý ide do `localSettings` a žiadny inam. Čo tlačidlo
+    povolí, povie pole pred ním (`sessionScope` / `projectScope`, píše adaptér):
     reťazec príkazov = pravidlo na každú časť. Codex: MCP = celý nástroj
     servera, úprava = len súbory patchu (cesty z itemu cez `itemId`).
     Plán (`ExitPlanMode`) má vlastný dialóg (`ui::AskPlanApproval`), panel ho

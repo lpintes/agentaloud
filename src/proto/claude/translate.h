@@ -174,6 +174,12 @@ bool ParseSignInUrl(std::string_view line, std::string* url);
 // translate is still a line about what gets allowed.
 std::vector<std::string> SessionScope(const Json& suggestions);
 
+// The same lines for "allow in this project" (ProjectPermissions), with the
+// ones the CLI keeps for the session only marked so: a redirect to a file
+// comes with a rule for the project and folder access for the session, and
+// the reader is to know which of the two outlives the session.
+std::vector<std::string> ProjectScope(const Json& suggestions);
+
 // A tool call out of its name and arguments.  The one way a call is built:
 // the transcript gets it from a tool_use block and the permission dialog from
 // a can_use_tool request, and both render what this made -- so allowing a

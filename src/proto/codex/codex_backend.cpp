@@ -40,6 +40,9 @@ const Json& Field(const Json& object, const char* name) {
 // availableDecisions does not list it.
 const char* Decision(agent::Verdict verdict) {
   switch (verdict) {
+    // Never offered here: the amendment Codex would keep is a rule for the
+    // whole account, not the project.  A plain yes, should it come anyway.
+    case agent::Verdict::AllowInProject:
     case agent::Verdict::Allow: return "accept";
     case agent::Verdict::AllowForSession: return "acceptForSession";
     case agent::Verdict::Deny: return "decline";

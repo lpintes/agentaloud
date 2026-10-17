@@ -234,6 +234,13 @@ PermissionDecision ClaudeBackend::OnPermission(
     out.offered.push_back(agent::Verdict::AllowForSession);
     out.sessionScope = SessionScope(request.suggestions);
   }
+  // "In this project" only where the CLI itself would write the project's
+  // local settings; the writing is the CLI's, not ours.
+  const Json project = ProjectPermissions(request.suggestions);
+  if (!project.is_null()) {
+    out.offered.push_back(agent::Verdict::AllowInProject);
+    out.projectScope = ProjectScope(request.suggestions);
+  }
   out.offered.push_back(agent::Verdict::Deny);
   // Approving a plan also picks the mode to go on in.  The CLI keeps a mode
   // sent with the approval over the one planning was entered from (measured,
@@ -246,9 +253,13 @@ PermissionDecision ClaudeBackend::OnPermission(
   }
   const agent::PermissionAnswer answer = callbacks_.onPermission(out);
   decision.allow = answer.verdict == agent::Verdict::Allow ||
-                   answer.verdict == agent::Verdict::AllowForSession;
+                   answer.verdict == agent::Verdict::AllowForSession ||
+                   answer.verdict == agent::Verdict::AllowInProject;
   if (answer.verdict == agent::Verdict::AllowForSession) {
     decision.updatedPermissions = kept;
+  }
+  if (answer.verdict == agent::Verdict::AllowInProject) {
+    decision.updatedPermissions = project;
   }
   if (plan && decision.allow && !answer.mode.empty()) {
     decision.updatedPermissions = Json::array(

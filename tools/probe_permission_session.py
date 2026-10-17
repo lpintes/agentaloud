@@ -132,9 +132,12 @@ SCENARIOS = {
     },
     # Navrh CLI bez prepisu destination -- len pre lokalny priecinok,
     # aby bolo vidiet, co by zapisal (localSettings v docasnom priecinku).
+    # Druhy ping overi, ze zapisane pravidlo plati hned (claude-gui-lkk.29).
     "asis": {
         "policy": "asis",
-        "prompts": [run_prompt("echo hello > hello.txt")],
+        "prompts": [run_prompt("echo hello > hello.txt"),
+                    run_prompt("ping -n 1 127.0.0.1"),
+                    run_prompt("ping -n 1 127.0.0.1")],
     },
 }
 
