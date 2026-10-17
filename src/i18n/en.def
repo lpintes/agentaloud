@@ -162,6 +162,10 @@ S(kModeSwitchFailed, L"the mode could not be switched")
 S(kSessionIdUnknown, L"the session id is not known yet, send a prompt first")
 S(kClipboardFailed, L"the clipboard could not be opened, the id was not copied")
 S(kIdCopied, L"id copied")
+S(kSaveTranscriptTitle, L"Save transcript as")
+S(kFilterTextFiles, L"Text files (*.txt)")
+S(kFilterAllFiles, L"All files (*.*)")
+S(kTranscriptSaveFailed, L"The transcript could not be saved to {0}.")
 S(kNoCommandList, L"this agent sends no list of commands")
 S(kCommandsNotYet, L"the list of commands has not arrived yet, try again in a moment")
 S(kSearchNotFound, L"not found: {0}")
@@ -230,6 +234,9 @@ S(kKeysSignIn,
   L"shows the address and the code.\n")
 S(kKeysNoSignIn,
   L"Ctrl+L — signing the agent in; this one cannot be signed in from here.\n")
+S(kKeysSave,
+  L"Ctrl+S — saves the whole transcript to a text file, the contents of "
+  L"collapsed blocks included. You name the file every time.\n")
 S(kKeysCopyId, L"Ctrl+Shift+C — copies the session id to the clipboard.")
 S(kKeysSessions,
   L"\n\n"
@@ -244,6 +251,7 @@ S(kKeysSessions,
 
 S(kMenuFile, L"&File")
 S(kMenuNewSession, L"&New session...\tCtrl+N")
+S(kMenuSaveTranscript, L"Save &transcript as...\tCtrl+S")
 S(kMenuSignIn, L"&Sign in the agent...\tCtrl+L")
 S(kMenuExit, L"E&xit\tAlt+F4")
 S(kMenuWindow, L"&Window")

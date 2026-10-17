@@ -278,6 +278,42 @@ void TestRangeMap() {
   CHECK(transcript.SetCollapsed(1, true).empty());
 }
 
+// Ctrl+S: do suboru ide cely obsah, nie to, co je vidno -- zbaleny blok je stav
+// citania.  Ulozenie pritom stav citania nesmie zmenit.
+void TestFullTextForFile() {
+  TEST("transcript: cely text na ulozenie a bajty suboru");
+  model::Transcript transcript;
+  CHECK(transcript.FullText().empty());
+
+  transcript.AppendUserPrompt(L"prvy prompt");
+  transcript.Append(proto::TranslateRecord(proto::Json::parse(R"({
+    "type": "assistant",
+    "message": {"content": [
+      {"type": "thinking", "thinking": "rozmyslam\nna dvoch riadkoch"},
+      {"type": "text", "text": "odpoved"}
+    ]}
+  })")));
+  CHECK(transcript.blocks()[1].collapsed);
+  const std::wstring visible = transcript.Text();
+
+  std::wstring expected;
+  for (size_t index = 0; index < transcript.blocks().size(); ++index) {
+    expected += transcript.ExpandedText(index);
+  }
+  const std::wstring full = transcript.FullText();
+  CHECK_EQ(full, expected);
+  CHECK(full.find(L"na dvoch riadkoch") != std::wstring::npos);
+  CHECK(visible.find(L"na dvoch riadkoch") == std::wstring::npos);
+  CHECK(full.starts_with(L"ja: prvy prompt\n"));
+  CHECK(full.ends_with(L"odpoved\n"));
+  CHECK_EQ(transcript.Text(), visible);
+  CHECK(transcript.blocks()[1].collapsed);
+
+  CHECK_EQ(model::TextFileBytes(L""), std::string("\xEF\xBB\xBF"));
+  CHECK_EQ(model::TextFileBytes(L"a\nž\n\nb"),
+           std::string("\xEF\xBB\xBF" "a\r\n\xC5\xBE\r\n\r\nb"));
+}
+
 void TestBlockAtAndNavigation() {
   TEST("transcript: BlockAt a navigacia po druhoch");
   model::Transcript transcript;
@@ -5255,6 +5291,7 @@ int main(int argc, char** argv) {
   TestUtfRoundTrip();
   TestCatalog();
   TestRangeMap();
+  TestFullTextForFile();
   TestBlockAtAndNavigation();
   TestControlCharactersNeverReachTheBuffer();
   TestErrorNavigationAndFirstLine();

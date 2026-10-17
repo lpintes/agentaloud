@@ -25,6 +25,8 @@
 #include "ui/signals.h"
 #include "ui/tasks_dialog.h"
 #include "win/clipboard.h"
+#include "win/file_dialog.h"
+#include "win/paths.h"
 
 namespace ui {
 
@@ -1729,6 +1731,31 @@ void SessionPane::CopySessionId() {
   // Short on purpose.  The id itself is 36 characters of hex and reading it
   // out is no use to anybody: the only thing done with it is pasting it.
   Announce(i18n::Text(Str::kIdCopied));
+}
+
+void SessionPane::SaveTranscript() {
+  // Said here because the focus has not moved yet; a file with nothing in it
+  // would be a dialog for nothing.
+  if (model_.blocks().empty()) {
+    Announce(i18n::Text(Str::kTranscriptEmpty));
+    return;
+  }
+  const std::wstring path = win::AskSavePath(
+      host_, i18n::Text(Str::kSaveTranscriptTitle),
+      {{i18n::Text(Str::kFilterTextFiles), L"*.txt"},
+       {i18n::Text(Str::kFilterAllFiles), L"*.*"}},
+      L"txt");
+  if (path.empty()) return;
+  // Success is not spoken: the dialog has just closed, and NVDA cancels any
+  // speech while it reads where the focus landed (invariant 6).  The reader
+  // typed the path themselves; a failure is the part they would not know,
+  // and that goes in a message box, which is read out whatever happens.
+  std::wstring error;
+  if (!win::WriteFileBytes(path, model::TextFileBytes(model_.FullText()),
+                           &error)) {
+    const std::wstring text = i18n::Format(Str::kTranscriptSaveFailed, {path});
+    MessageBoxW(host_, text.c_str(), L"" APP_NAME, MB_OK | MB_ICONERROR);
+  }
 }
 
 void SessionPane::OnOfferSignIn() {

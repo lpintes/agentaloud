@@ -65,7 +65,7 @@ CXXFLAGS := -std=c++20 -O2 $(WARN) -I. -Isrc -I$(BUILD) \
 # MessageBeep, oba jeho pouzitelne zvuky uz maju iny vyznam (invariant 11).
 # winhttp a bcrypt su aktualizacie: stiahnutie a SHA-256 (claude-gui-lkk.53).
 # uxtheme vypina temu stavoveho riadku, aby ho NVDA citala spravne (status_bar.cpp).
-LDLIBS   := -lole32 -loleacc -lshell32 -lcomctl32 -luuid -lgdi32 -lwinmm -lwinhttp -lbcrypt -luxtheme
+LDLIBS   := -lole32 -lcomdlg32 -loleacc -lshell32 -lcomctl32 -luuid -lgdi32 -lwinmm -lwinhttp -lbcrypt -luxtheme
 
 # Verzia.  Nie je napisana v ziadnom zdrojaku -- urcuje ju znacka v gite
 # (v2026.10.1, rok.mesiac.poradie), aby druha kopia nemala ako zastarat.
@@ -88,7 +88,8 @@ VERSION_H := $(BUILD)/app_version.h
 
 # Nezavisle na AgentAloud, da sa vziat do ineho projektu tak ako je.
 WIN_SRCS   := src/win/window.cpp src/win/dialog.cpp src/win/process.cpp \
-              src/win/clipboard.cpp src/win/console.cpp src/win/paths.cpp
+              src/win/clipboard.cpp src/win/console.cpp src/win/paths.cpp \
+              src/win/file_dialog.cpp
 # Jazyk vsetkeho, co citatel pocuje a vidi.  Pod vsetkymi vrstvami, lebo text
 # nie je len v ui/: zhrnutia blokov pise model/ a nazvy rezimov proto/.  Bez
 # windows.h, preto ho maju appka, spike aj testy.

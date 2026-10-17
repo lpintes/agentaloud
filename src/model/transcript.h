@@ -222,6 +222,12 @@ class Transcript {
   // where the first line ends.
   std::wstring ExpandedText(size_t index) const;
 
+  // Every block as it reads expanded, in order -- what Ctrl+S writes to a
+  // file.  Expanded because collapsing is a state of reading, not of the
+  // content: a file with a summary where the tool's output was would quietly
+  // be missing the part that was folded away.
+  std::wstring FullText() const;
+
   // Ctrl+F and F3.  Searches the blocks, not the buffer: a collapsed block
   // shows one line, and the tool output folded behind it is exactly what gets
   // searched for most.  Each block is searched as it would read expanded, so

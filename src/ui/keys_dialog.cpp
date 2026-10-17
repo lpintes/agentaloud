@@ -117,6 +117,7 @@ std::wstring KeysText(const agent::Capabilities& capabilities) {
                                                 : Str::kKeysNoCommands);
   text += i18n::Text(capabilities.signIn ? Str::kKeysSignIn
                                          : Str::kKeysNoSignIn);
+  text += i18n::Text(Str::kKeysSave);
   text += i18n::Text(Str::kKeysCopyId);
   text += i18n::Text(Str::kKeysSessions);
   return text;

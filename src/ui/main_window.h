@@ -87,6 +87,8 @@ class MainWindow : public win::Window {
   void ShowKeys();
   // Ctrl+L.  Signs in the active session's agent.
   void SignIn();
+  // Ctrl+S.  Saves the active session's transcript.
+  void SaveTranscript();
   // The session the reader is in, or null when none is open.
   SessionWindow* Active() const;
   // Numbers the sessions that share a folder, so that their titles differ.

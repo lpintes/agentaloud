@@ -164,6 +164,10 @@ S(kModeSwitchFailed, L"režim sa nepodarilo prepnúť")
 S(kSessionIdUnknown, L"id session zatiaľ nie je známe, pošlite najprv prompt")
 S(kClipboardFailed, L"schránku sa nepodarilo otvoriť, id skopírované nebolo")
 S(kIdCopied, L"id skopírované")
+S(kSaveTranscriptTitle, L"Uložiť prepis ako")
+S(kFilterTextFiles, L"Textové súbory (*.txt)")
+S(kFilterAllFiles, L"Všetky súbory (*.*)")
+S(kTranscriptSaveFailed, L"Prepis sa nepodarilo uložiť do súboru {0}.")
 S(kNoCommandList, L"tento agent zoznam príkazov neposiela")
 S(kCommandsNotYet, L"zoznam príkazov ešte neprišiel, skúste o chvíľu")
 S(kSearchNotFound, L"nenájdené: {0}")
@@ -231,6 +235,9 @@ S(kKeysSignIn,
   L"a kód.\n")
 S(kKeysNoSignIn,
   L"Ctrl+L — prihlásenie agenta; tento sa z aplikácie prihlásiť nevie.\n")
+S(kKeysSave,
+  L"Ctrl+S — uloží celý prepis do textového súboru, aj obsah zbalených "
+  L"blokov. Meno súboru zadáte zakaždým.\n")
 S(kKeysCopyId, L"Ctrl+Shift+C — skopíruje id session do schránky.")
 S(kKeysSessions,
   L"\n\n"
@@ -245,6 +252,7 @@ S(kKeysSessions,
 
 S(kMenuFile, L"&Súbor")
 S(kMenuNewSession, L"&Nová session...\tCtrl+N")
+S(kMenuSaveTranscript, L"&Uložiť prepis ako...\tCtrl+S")
 S(kMenuSignIn, L"&Prihlásiť agenta...\tCtrl+L")
 S(kMenuExit, L"S&končiť\tAlt+F4")
 S(kMenuWindow, L"&Okno")

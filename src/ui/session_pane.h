@@ -192,6 +192,9 @@ class SessionPane {
   // shows where to go and says how it ended (ui/sign_in_dialog.h).  The key
   // is the frame's, like F1, so that the menu item and the key are one.
   void SignIn();
+  // Ctrl+S and the menu: the whole transcript, every block expanded, into a
+  // text file the reader names each time.  The frame's key, like Ctrl+L.
+  void SaveTranscript();
 
   // Ctrl+Shift+<digit> marks, Ctrl+<digit> comes back.  Digit 0 is not
   // markable: it is where the reader was standing when new blocks arrived, and

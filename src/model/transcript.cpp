@@ -1063,6 +1063,14 @@ std::wstring Transcript::ExpandedText(size_t index) const {
   return Render(open);
 }
 
+std::wstring Transcript::FullText() const {
+  std::wstring text;
+  for (size_t index = 0; index < blocks_.size(); ++index) {
+    text += ExpandedText(index);
+  }
+  return text;
+}
+
 std::optional<SearchHit> Transcript::Find(const std::wstring& needle,
                                           size_t caret, bool backwards,
                                           const Fold& fold) const {

@@ -105,4 +105,14 @@ std::string Utf8FromUtf16(std::wstring_view text) {
   return out;
 }
 
+std::string TextFileBytes(std::wstring_view text) {
+  std::wstring crlf;
+  crlf.reserve(text.size() + text.size() / 32);
+  for (const wchar_t c : text) {
+    if (c == L'\n') crlf.push_back(L'\r');
+    crlf.push_back(c);
+  }
+  return "\xEF\xBB\xBF" + Utf8FromUtf16(crlf);
+}
+
 }  // namespace model

@@ -24,6 +24,7 @@ enum : UINT {
   kIdCheckUpdates,
   kIdAbout,
   kIdSignIn,
+  kIdSaveTranscript,
 };
 constexpr UINT kFirstChild = 50000;
 
@@ -35,6 +36,8 @@ HMENU BuildMenu(HMENU* windowMenu) {
   using i18n::Str;
   HMENU file = CreatePopupMenu();
   AppendMenuW(file, MF_STRING, kIdNewSession, i18n::Text(Str::kMenuNewSession));
+  AppendMenuW(file, MF_STRING, kIdSaveTranscript,
+              i18n::Text(Str::kMenuSaveTranscript));
   AppendMenuW(file, MF_STRING, kIdSignIn, i18n::Text(Str::kMenuSignIn));
   AppendMenuW(file, MF_SEPARATOR, 0, nullptr);
   AppendMenuW(file, MF_STRING, kIdExit, i18n::Text(Str::kMenuExit));
@@ -76,6 +79,7 @@ HACCEL BuildAccelerators() {
       {FVIRTKEY, VK_F1, kIdKeys},
       {FCONTROL | FVIRTKEY, 'N', kIdNewSession},
       {FCONTROL | FVIRTKEY, 'L', kIdSignIn},
+      {FCONTROL | FVIRTKEY, 'S', kIdSaveTranscript},
       {FCONTROL | FVIRTKEY, VK_TAB, kIdNextSession},
       {FCONTROL | FSHIFT | FVIRTKEY, VK_TAB, kIdPreviousSession},
       {FCONTROL | FVIRTKEY, VK_F6, kIdNextSession},
@@ -266,6 +270,15 @@ void MainWindow::SignIn() {
   active->pane()->SignIn();
 }
 
+void MainWindow::SaveTranscript() {
+  SessionWindow* active = Active();
+  if (active == nullptr) {
+    Announce(i18n::Text(i18n::Str::kSayNoSession));
+    return;
+  }
+  active->pane()->SaveTranscript();
+}
+
 void MainWindow::Reap() {
   std::erase_if(sessions_,
                 [](const auto& session) { return session->handle() == nullptr; });
@@ -349,6 +362,9 @@ LRESULT MainWindow::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
           return 0;
         case kIdSignIn:
           SignIn();
+          return 0;
+        case kIdSaveTranscript:
+          SaveTranscript();
           return 0;
         case kIdCheckUpdates:
           if (checkForUpdates_) checkForUpdates_(hwnd_);

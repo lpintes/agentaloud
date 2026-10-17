@@ -18,6 +18,14 @@ namespace model {
 std::wstring Utf16FromUtf8(std::string_view text);
 std::string Utf8FromUtf16(std::wstring_view text);
 
+// Transcript text as the bytes of a text file for Windows tools: every "\n"
+// (the only line break inside the model, invariant 4) becomes "\r\n", because
+// Notepad does not break a line on a lone "\n", and a UTF-8 byte order mark
+// goes first, because without it Windows tools read the file as ANSI and the
+// diacritics fall apart.  Done here, once, on the way out -- the same border
+// win::Dialog::SetTextLines guards for an EDIT box.
+std::string TextFileBytes(std::wstring_view text);
+
 }  // namespace model
 
 #endif
