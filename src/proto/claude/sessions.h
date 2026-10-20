@@ -91,6 +91,10 @@ std::wstring SessionFilePath(const std::wstring& projectPath,
 // this machine's 191 session files, not one record has the flag set, so the
 // line below has never yet had anything to do.
 //
+// One record of another type is let in, made into a `user` one: the
+// `queued_command` attachment of a prompt the CLI folded into a running turn,
+// which the file keeps in no other form (claude-gui-lkk.83).
+//
 // False when the file cannot be read or holds no conversation at all, which is
 // what the caller needs to know BEFORE it says out loud what it restored.
 bool ReadSessionRecords(const std::wstring& path, std::vector<Json>* out);

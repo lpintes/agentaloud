@@ -341,7 +341,8 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
     Výnimka: `/clear` vykoná CLI samo — `conversation_reset`, potom nové
     `session_id` (`Session` ho prevezme) a kontext sa vynuluje.
 18. **História z disku ide tými istými volaniami ako živý ťah**:
-    `ReadSessionRecords` (len `user`/`assistant`, bez sidechainov) →
+    `ReadSessionRecords` (len `user`/`assistant`, bez sidechainov; vstrebaný
+    prompt počas ťahu je len `attachment` `queued_command` → `user`) →
     `TranslateHistory` → `model::RestoreHistory` po jednej udalosti. `user`
     záznam nie je vždy prompt (`HumanPromptText`, overuje aj typ). Kurzor
     a `anchor_` po prehratí na konci; vkladá sa jednou úpravou.

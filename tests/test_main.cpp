@@ -3701,6 +3701,19 @@ void TestHistoryRestore() {
       "{\"type\":\"user\",\"message\":{\"content\":[{"
       "\"type\":\"tool_result\",\"tool_use_id\":\"toolu_1\","
       "\"content\":\"a.txt\"}]}}\n"
+      // Prompt poslany pocas tahu, ktory CLI vstrebalo do beziaceho tahu:
+      // na disku nema user zaznam, len tuto prilohu (claude-gui-lkk.83).
+      // Zo stdin chodi bez origin, z terminalu s origin human.
+      "{\"type\":\"attachment\",\"attachment\":{\"type\":\"queued_command\","
+      "\"prompt\":[{\"type\":\"text\",\"text\":\"a este datum\"}],"
+      "\"commandMode\":\"prompt\"}}\n"
+      // Ta ista priloha, ale hlasenie subagenta a ulohy na pozadi: ani jedno
+      // nenapisal citatel.
+      "{\"type\":\"attachment\",\"isMeta\":true,\"attachment\":{"
+      "\"type\":\"queued_command\",\"prompt\":\"sprava subagenta\","
+      "\"commandMode\":\"prompt\",\"origin\":{\"kind\":\"peer\"}}}\n"
+      "{\"type\":\"attachment\",\"attachment\":{\"type\":\"queued_command\","
+      "\"prompt\":\"<task-notification>\",\"commandMode\":\"task-notification\"}}\n"
       // Znacka CLI, nie veta pouzivatela: ma z nej byt blok Interrupted, ten
       // isty, aky pise ziva cesta pri Esc.
       "{\"type\":\"user\",\"message\":{\"content\":"
@@ -3713,13 +3726,13 @@ void TestHistoryRestore() {
 
   std::vector<proto::Json> records;
   CHECK(proto::ReadSessionRecords(file.wstring(), &records));
-  CHECK_EQ(records.size(), size_t{8});
+  CHECK_EQ(records.size(), size_t{9});
 
   model::Transcript transcript;
   const model::HistoryCounts counts =
       model::RestoreHistory(proto::TranslateHistory(records), &transcript);
-  CHECK_EQ(counts.prompts, size_t{1});
-  CHECK_EQ(counts.blocks, size_t{6});
+  CHECK_EQ(counts.prompts, size_t{2});
+  CHECK_EQ(counts.blocks, size_t{7});
 
   std::string problem;
   CHECK(transcript.CheckInvariants(&problem));
@@ -3728,7 +3741,7 @@ void TestHistoryRestore() {
   CHECK_EQ(transcript.unknownCount(), size_t{0});
 
   const std::vector<model::Block>& blocks = transcript.blocks();
-  CHECK_EQ(blocks.size(), size_t{6});
+  CHECK_EQ(blocks.size(), size_t{7});
   CHECK(blocks[0].kind == model::BlockKind::UserPrompt);
   CHECK(blocks[1].kind == model::BlockKind::Thinking);
   CHECK(blocks[2].kind == model::BlockKind::AssistantText);
@@ -3736,7 +3749,10 @@ void TestHistoryRestore() {
   // Za svojim volanim, nie na konci -- ta iste pravidlo ako naziva.
   CHECK(blocks[4].kind == model::BlockKind::ToolResult);
   CHECK_EQ(blocks[4].toolUseId, std::string("toolu_1"));
-  CHECK(blocks[5].kind == model::BlockKind::Interrupted);
+  // Tam, kde ho model dostal: za vysledkom nastroja.
+  CHECK(blocks[5].kind == model::BlockKind::UserPrompt);
+  CHECK_EQ(blocks[5].body, std::wstring(L"a este datum"));
+  CHECK(blocks[6].kind == model::BlockKind::Interrupted);
   CHECK_EQ(blocks[0].body, std::wstring(L"co robi tento subor"));
 
   // Subor bez jedineho zaznamu, z ktoreho by bol blok, nie je historia:

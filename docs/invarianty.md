@@ -966,6 +966,23 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     pri Esc, lebo odpoveď useknutá uprostred sa inak neskôr číta ako odpoveď,
     ktorá skončila sama.
 
+    A **nie každý prompt je `user` záznam.** Prompt poslaný počas ťahu, ktorý
+    CLI vstrebe do bežiaceho ťahu (invariant 1), dostane model ako
+    system-reminder pri ďalšom výsledku nástroja a na disku po ňom zostane len
+    `attachment` typu `queued_command` (`commandMode: "prompt"`) presne na tom
+    mieste, plus `queue-operation` `remove` s `reason: "absorbed_mid_turn"`
+    (claude-gui-lkk.83, `tools/probe_midturn.notes.md`). Bez neho obnovený
+    prepis ukáže odpoveď, ale nie to, na čo odpovedá. `ReadSessionRecords` ho
+    preto prepustí, prerobený na `user` záznam, a ďalej ide tými istými
+    dverami. Tú istú prílohu má aj odovzdanie subagenta (`origin.kind: "peer"`,
+    `isMeta`) a hlásenie úlohy na pozadí (`commandMode: "task-notification"`);
+    prompt zo stdin `origin` nemá vôbec, z terminálu `"human"`. Odmerané
+    20. 10. 2026 nad 641 súbormi: 52 takých promptov, ani jeden zároveň ako
+    `user` záznam. Ostatné `attachment` zostávajú vonku — nesú pamäť
+    a nastavenia stroja, nie konverzáciu. Codex túto výnimku nemá: steer je
+    v odpovedi na `thread/resume` obyčajný `userMessage` v položkách ťahu, na
+    mieste, kde ho model dostal (overené v ten istý deň).
+
     **Text sa musí prečítať tomu, komu patrí.** `assistant` záznam má text na
     tom istom mieste ako `user`, takže si typ overuje `HumanPromptText` sám.
     Kým to nerobil, každá odpoveď pristála v prepise dvakrát — raz ako

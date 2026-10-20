@@ -163,6 +163,44 @@ std::string HumanPromptText(const Json& record) {
   return text;
 }
 
+namespace {
+
+// A prompt sent during a turn that the CLI folded into that same turn is never
+// filed as a `user` record: the model got it as a system-reminder beside the
+// next tool result, and the file keeps only this attachment, at that very
+// place (claude-gui-lkk.83, tools/probe_midturn.notes.md).  Without it a
+// resumed transcript shows the answer and not what it answered.
+//
+// The same attachment also carries a subagent's hand-back (origin "peer",
+// isMeta) and background task notifications (commandMode "task-notification");
+// neither was typed by the reader.  A prompt from stdin has no origin at all,
+// one typed in the terminal has "human".  Measured over the corpus 2026-10-20:
+// 52 such prompts, not one of them also present as a `user` record.
+bool AbsorbedPrompt(const Json& record, Json* out) {
+  if (record.value("type", std::string()) != "attachment") return false;
+  if (record.value("isMeta", false)) return false;
+  const auto attachment = record.find("attachment");
+  if (attachment == record.end() || !attachment->is_object()) return false;
+  if (attachment->value("type", std::string()) != "queued_command") return false;
+  if (attachment->value("commandMode", std::string()) != "prompt") return false;
+  if (const auto origin = attachment->find("origin");
+      origin != attachment->end() &&
+      (!origin->is_object() ||
+       origin->value("kind", std::string()) != "human")) {
+    return false;
+  }
+  const auto prompt = attachment->find("prompt");
+  if (prompt == attachment->end()) return false;
+  *out = Json{{"type", "user"},
+              {"message", Json{{"role", "user"}, {"content", *prompt}}}};
+  if (const auto time = record.find("timestamp"); time != record.end()) {
+    (*out)["timestamp"] = *time;
+  }
+  return true;
+}
+
+}  // namespace
+
 bool ReadSessionRecords(const std::wstring& path, std::vector<Json>* out) {
   std::string text;
   if (!ReadWholeFile(path, &text)) return false;
@@ -174,9 +212,13 @@ bool ReadSessionRecords(const std::wstring& path, std::vector<Json>* out) {
     // being appended to by another process while we read it, so the last line
     // of it can legitimately be half written.
     if (!ParseLine(line, &record, &error)) continue;
+    if (record.value("isSidechain", false)) continue;
+    if (Json prompt; AbsorbedPrompt(record, &prompt)) {
+      out->push_back(std::move(prompt));
+      continue;
+    }
     const std::string kind = record.value("type", std::string());
     if (kind != "user" && kind != "assistant") continue;
-    if (record.value("isSidechain", false)) continue;
     out->push_back(std::move(record));
   }
   return !out->empty();
