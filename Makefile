@@ -111,7 +111,8 @@ AGENT_SRCS := src/agent/backend.cpp
 PROTO_PURE_SRCS := src/proto/jsonl.cpp src/proto/claude/events.cpp \
                    src/proto/claude/control.cpp src/proto/claude/ask.cpp \
                    src/proto/claude/sessions.cpp src/proto/claude/translate.cpp \
-                   src/proto/codex/translate.cpp src/proto/codex/threads.cpp
+                   src/proto/codex/translate.cpp src/proto/codex/threads.cpp \
+                   src/proto/codex/steers.cpp
 PROTO_SRCS := $(PROTO_PURE_SRCS) src/proto/claude/session.cpp \
               src/proto/claude/claude_backend.cpp \
               src/proto/codex/codex_backend.cpp

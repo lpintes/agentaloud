@@ -344,6 +344,35 @@ Json MakeDeny(const PermissionRequest& request, const std::string& message,
 // leaves the CLI waiting until its own timeout.
 Json MakeError(const std::string& requestId, const std::string& message);
 
+// Prompts written and not taken up yet, which is what decides whether a
+// `result` ends everything or only the turn in front of a queued prompt.
+//
+// A prompt sent mid-turn is folded into the turn at the next tool result, or,
+// while the model is only writing, queued for a turn of its own after this one
+// -- interrupted or not, the queued one is not dropped.  Nothing on the wire
+// tells the two apart except --replay-user-messages, which echoes each prompt
+// (`user`, isReplay) at the moment the CLI takes it up: before the result when
+// folded in, after it and a new system/init when queued.  So one still pending
+// at a result is waiting for the next turn (tools/probe_midturn.notes.md,
+// Claude 2.1.302).
+class PendingPrompts {
+ public:
+  // A slash command is not counted: one the CLI runs itself (/clear,
+  // /context) is never echoed, and counting it would keep the turn running
+  // for ever (measured 2026-10-20).  One the model runs costs at worst an
+  // early end of the turn it waits behind.
+  void Sent(const std::string& utf8Text);
+  // Every record; only an echo counts.
+  void Observe(const Json& record);
+  // At a result: is a prompt still waiting for a turn of its own?
+  bool waiting() const { return count_ != 0; }
+  // The process is gone, and so is everything it was going to take up.
+  void Clear() { count_ = 0; }
+
+ private:
+  size_t count_ = 0;
+};
+
 }  // namespace proto
 
 #endif

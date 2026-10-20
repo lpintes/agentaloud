@@ -45,6 +45,44 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    `turn/completed` a spotrebu tokenov zahodí. Predtým `turn/completed`
    subagenta ukončil hlavný ťah — busy zhasol a Esc už nemal čo prerušiť
    (claude-gui-b8n.2).
+
+   **Prompt sa dá poslať aj počas ťahu, a odoslaný prompt sa nikdy
+   nezahodí** — ani prerušením (claude-gui-lkk.14, kontrakt v komentári
+   `agent::Backend::SendPrompt`). Ťah preto nekončí prvým `result`, ale až
+   keď nečaká žiadny odoslaný prompt; port to povie poľom
+   `agent::TurnEnded::more` a panel pri ňom nechá `busy_` svietiť
+   (`SessionPane::OnTurnHandedOn`).
+
+   Claude (CLI 2.1.302, `tools/probe_midturn.notes.md`): prompt počas
+   nástroja vojde do bežiaceho ťahu (jeden `result`), prompt počas textu
+   čaká a dostane vlastný ťah (`system/init`, druhý `result`), a prerušenie
+   čakajúci prompt **nezahodí**. Bez `--replay-user-messages` o tom na stdout
+   nič nesvedčí; s ním príde každý prompt späť ako `user` s `isReplay: true`
+   vo chvíli, keď ho CLI prevezme — aj keď volanie API zlyhá, aj pri
+   prerušení hneď po `system/init`. Počíta to `proto::PendingPrompts` (pod
+   `mutex_` v `Session`): `result` ťah ukončí, len keď nič nečaká, alebo keď
+   sa session zastavuje. Lokálne slash príkazy (`/clear`, `/context`) ozvenu
+   **nemajú nikdy**, takže sa do počtu nerátajú — inak by ťah neskončil.
+   „[Request interrupted by user]" je `user` bez `isReplay`. Naša
+   `control_response` sa vráti ako ozvena tiež, ale id požiadaviek sú CLI,
+   naše majú prefix.
+
+   Codex 0.160 (`tools/probe_codex_midturn.notes.md`): prompt počas ťahu je
+   `turn/steer` s `expectedTurnId` a ťah zostane jeden — overené naostro
+   20. 10. 2026 aj pri steeri počas čistého textu (v zázname na disku jeden
+   `task_started` a `task_complete`). Ozvenou je položka `userMessage`
+   (`proto::codex::Steers`, párovanie podľa textu) a príde až pri ďalšom
+   volaní modelu. **Prerušenie steer zahodí** a steer tesne pri konci ťahu
+   Codex odmietne („no active turn to steer"); čo ozvenu nedostalo, pošle
+   `CodexBackend::CarryOnLocked` pri vlastnom `turn/completed` ako nový
+   `turn/start` a `TurnEnded` nesie `more`. Prompt odoslaný skôr, než je
+   známe id ťahu, čaká v `awaitingTurn_`.
+
+   Blok promptu vzniká **pri odoslaní**, nie pri ozvene. Claude posiela text
+   asistenta celý až na konci správy, takže prompt poslaný počas textu stojí
+   v prepise pred odpoveďou, ktorú prerušil. Zvážené a ponechané (20. 10.
+   2026): pri ozvene by prompt po odoslaní chvíľu nebol nikde, pri čakajúcom
+   prompte Clauda aj počas celej odpovede.
 2. **Callbacky bežia na čítacom vlákne.** `EventCallback` aj
    `PermissionCallback`. Čokoľvek, čo siahne na okno, musí ísť cez
    `PostMessage`.
@@ -100,7 +138,10 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    To isté platí pre odoslanie promptu, a platí aj vtedy, keď sa **nič
    nestalo**: Ctrl+Enter je chord a chord sa dá minúť — samotný Enter urobí
    nový riadok a nič viac. Preto hovoria všetky tri konce `Send()`: odoslanie
-   („pracujem"), bežiaci ťah aj prázdny prompt.
+   („pracujem"), odoslanie počas ťahu („odoslané, ťah ešte beží") aj prázdny
+   prompt. Ťah s promptom poslaným počas neho povie „hotovo" **raz**, na
+   úplnom konci; prerušenie, po ktorom ešte čaká prompt, povie „prerušené,
+   nasleduje ďalší prompt" (`SessionPane::OnTurnHandedOn`, invariant 1).
 
    Ťah, ktorý agent začal sám (dobehla úloha na pozadí), nemá klávesu, ktorá
    by ho ohlásila. Ohlási ho port: `agent::TurnStarted` prichádza na začiatku

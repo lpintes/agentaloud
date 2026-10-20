@@ -41,6 +41,10 @@ std::wstring BuildCommandLine(const Session::Options& options) {
   // The one switch the whole design rests on.  See control.h.
   add(L"--permission-prompt-tool");
   add(L"stdio");
+  // Echoes each prompt at the moment the CLI takes it up, which is the only
+  // way to tell a prompt sent mid-turn that was folded into the turn from one
+  // that waits for a turn of its own (PendingPrompts).
+  add(L"--replay-user-messages");
   if (!options.permissionMode.empty()) {
     add(L"--permission-mode");
     line += L' ';
@@ -237,10 +241,15 @@ void Session::OnLine(std::string_view line) {
     // would close stdin in the middle of it (invariant 1).
     std::lock_guard<std::mutex> lock(mutex_);
     turnInFlight_ = true;
+  } else if (event.kind == EventKind::User) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    pending_.Observe(event.raw);
   } else if (event.kind == EventKind::Result) {
     {
       std::lock_guard<std::mutex> lock(mutex_);
-      turnInFlight_ = false;
+      // Stop() waits for this result only; closing stdin after it leaves a
+      // queued prompt unanswered, which is what closing the window means.
+      if (!pending_.waiting() || stopping_) turnInFlight_ = false;
     }
     turnEnded_.notify_all();
   }
@@ -254,9 +263,15 @@ void Session::OnExit(const win::Process::Exit& exit) {
   {
     std::lock_guard<std::mutex> lock(mutex_);
     turnInFlight_ = false;
+    pending_.Clear();
   }
   turnEnded_.notify_all();
   if (onExit_ && !stopping_) onExit_(exit);
+}
+
+bool Session::turnInFlight() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return turnInFlight_;
 }
 
 std::string Session::sessionId() const {
@@ -294,6 +309,7 @@ bool Session::SendPrompt(const std::string& utf8Text) {
   {
     std::lock_guard<std::mutex> lock(mutex_);
     turnInFlight_ = true;
+    pending_.Sent(utf8Text);
   }
   const Json message = {
       {"type", "user"},

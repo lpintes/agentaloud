@@ -230,7 +230,12 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
    (dobehla úloha na pozadí) — `turnInFlight_` rozsvieti aj `system/init`
    / `turn/started`, nielen `SendPrompt`. Codex: stav ťahu len z vlastného
    vlákna (`own` v `CodexBackend::OnLine`), ťahy subagentov vidí len
-   translátor.
+   translátor. Prompt počas ťahu sa posiela a **nikdy sa nezahodí**, ani
+   prerušením: ťah končí, až keď nič nečaká (`TurnEnded::more`). Claude
+   cez `--replay-user-messages` (`proto::PendingPrompts`, lokálne slash
+   príkazy ozvenu nemajú a nerátajú sa), Codex `turn/steer` (`Steers`;
+   zahodený steer pošle `CarryOnLocked` ako `turn/start`). Blok promptu
+   vzniká pri odoslaní, nie pri ozvene.
 2. **Callbacky bežia na čítacom vlákne** (`EventCallback`,
    `PermissionCallback`). Na okno len cez `PostMessage`.
 3. **Kurzor v prepise sa nehýbe kvôli textu, ktorý prichádza** — zostane pri
@@ -245,7 +250,9 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
 6. **NVDA neohlási posun kurzora, ktorý nespravila sama.** Každá klávesa musí
    prehovoriť (`SessionPane::Announce`), aj keď sa nič nestalo; hovorí sa
    riadok, kde kurzor stojí. Dlhá akcia dvakrát (začiatok aj koniec —
-   „prerušujem"/„prerušené", „hotovo" cez `SignalTurnEnd`). Ťah bez promptu
+   „prerušujem"/„prerušené", „hotovo" cez `SignalTurnEnd`). Prompt počas
+   ťahu: „hotovo" raz na úplnom konci, prerušenie s čakajúcim promptom
+   „prerušené, nasleduje ďalší prompt" (`OnTurnHandedOn`). Ťah bez promptu
    ohlási `agent::TurnStarted` pri `!busy_` (`OnTurnStartedByAgent`); stavový
    riadok sa na začiatku ťahu nečistí. Ťah sa ohlasuje
    priebežne v poradí, celými blokmi (`AnnounceProgress`), text asistenta

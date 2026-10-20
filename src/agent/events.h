@@ -295,6 +295,11 @@ enum class TurnOutcome { Completed, Interrupted, Failed };
 // with this too, never with the request to interrupt (invariant 1).
 struct TurnEnded {
   TurnOutcome outcome = TurnOutcome::Completed;
+  // A prompt sent during this turn was not taken into it, and the agent goes
+  // straight on with a turn for it -- also after an interruption, which ends
+  // the turn and not the prompts sent after it.  The pane stays busy; the next
+  // TurnStarted belongs to that prompt, not to the agent.
+  bool more = false;
 };
 
 // Session totals so far.  An event of its own and not part of TurnEnded,

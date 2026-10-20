@@ -680,9 +680,13 @@ void SessionPane::OnDrain() {
         stopArmed_ = false;
         // A turn of our own is already busy_: SendText said all there is.
         if (!busy_ && !ended_) OnTurnStartedByAgent();
-      } else if (std::holds_alternative<agent::TurnEnded>(event)) {
+      } else if (const auto* ended = std::get_if<agent::TurnEnded>(&event)) {
         stopArmed_ = false;
-        OnTurnEnded();
+        if (ended->more) {
+          OnTurnHandedOn();
+        } else {
+          OnTurnEnded();
+        }
       } else if (const auto* moved =
                      std::get_if<agent::BackgroundMoved>(&event)) {
         // The second half of Ctrl+B's answer, after "presúvam".  Queued: it
@@ -804,6 +808,17 @@ void SessionPane::OnAgentTurnContent() {
   if (WantsProgressSpeech() && speech_.available()) {
     speech_.Say(i18n::Text(Str::kSayAgentStarted), false);
     spokeThisTurn_ = true;
+  }
+}
+
+void SessionPane::OnTurnHandedOn() {
+  // Not an end: the reader's next prompt runs now, so "hotovo" and its sound
+  // would be a lie, and busy_ stays.  Only an Esc gets its answer, and that
+  // answer says why the agent is still working after it.
+  if (!interrupted_) return;
+  interrupted_ = false;
+  if (InForeground() && speech_.available()) {
+    speech_.Say(i18n::Text(Str::kSayInterruptedMore), false);
   }
 }
 
@@ -1465,12 +1480,11 @@ void SessionPane::Send() {
   // send that answers with silence cannot be told from a key that half
   // arrived.  The text is left in the box in both cases; that is why the
   // wording says what is in the way rather than that something was lost.
+  //
+  // A running turn is not in the way: the agent takes the prompt into it or
+  // runs it next (claude-gui-lkk.14).
   if (ended_) {
     Announce(i18n::Text(Str::kAgentNotRunning));
-    return;
-  }
-  if (busy_) {
-    Announce(i18n::Text(Str::kTurnStillRunning));
     return;
   }
   const std::wstring text = GetText(prompt_);
@@ -1575,6 +1589,15 @@ void SessionPane::SendText(const std::wstring& text) {
   }
 
   backend_->SendPrompt(model::Utf8FromUtf16(prompt));
+  if (busy_) {
+    // The turn's own state stays: an Esc already said is still answered with
+    // "prerušené", and what was already spoken was spoken.  Only a turn the
+    // agent began by itself is no longer empty -- it now carries a prompt,
+    // and its end is heard.
+    agentTurnEmpty_ = false;
+    Announce(i18n::Text(Str::kSentDuringTurn));
+    return;
+  }
   interrupted_ = false;
   thinkingSaid_ = false;
   spokeThisTurn_ = false;

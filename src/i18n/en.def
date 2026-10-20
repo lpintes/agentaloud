@@ -131,7 +131,8 @@ S(kTranscriptEmpty, L"the transcript is empty")
 S(kBookmarkSet, L"bookmark {0}: {1}")
 S(kNothingNewSince, L"nothing new since")
 S(kBookmarkEmpty, L"bookmark {0} is empty")
-S(kTurnStillRunning, L"a turn is still running, the prompt stays in the field")
+S(kSentDuringTurn, L"sent, the turn is still running")
+S(kSayInterruptedMore, L"interrupted, the next prompt follows")
 S(kAgentNotRunning, L"the agent is no longer running, the prompt stays in the field; Ctrl+N opens a new session")
 S(kPromptEmpty, L"empty prompt")
 S(kNothingRunning, L"nothing is running")
@@ -175,8 +176,10 @@ S(kSearchWrappedBottom, L"from the bottom: {0}")
 // ui/keys_dialog
 S(kKeysSending,
   L"Sending and the turn:\n"
-  L"Ctrl+Enter — sends the prompt. Only from the Prompt field.\n"
-  L"Esc — interrupts the running turn. From either field.\n"
+  L"Ctrl+Enter — sends the prompt, also during a turn; the agent takes it "
+  L"when it can. Only from the Prompt field.\n"
+  L"Esc — interrupts the running turn; a prompt already sent is not "
+  L"dropped. From either field.\n"
   L"Tab or Shift+Tab — switches between the transcript and the prompt.\n")
 S(kKeysTasks,
   L"Ctrl+T — background tasks; the list changes as they run, Stop stops the "

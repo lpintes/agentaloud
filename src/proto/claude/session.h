@@ -85,9 +85,16 @@ class Session {
              PermissionCallback onPermission, ExitCallback onExit = nullptr);
   DWORD startError() const { return process_.startError(); }
 
-  // Queues one user turn.  Returns as soon as it is written; the turn is over
-  // when a Result event arrives.
+  // Sends one prompt, also while a turn runs: the CLI folds it into the turn
+  // at the next tool result, or runs it as a turn of its own after this one.
+  // Returns as soon as it is written; the turn is over when a Result arrives
+  // with no prompt left that the CLI has not taken up (turnInFlight()).
   bool SendPrompt(const std::string& utf8Text);
+
+  // False once a Result has ended the last turn there is.  Asked by the
+  // adapter right after a Result, on the reader thread, to tell the end of
+  // everything from the end of a turn that another one follows at once.
+  bool turnInFlight() const;
 
   // Stops the turn in flight.  False when there is no turn to stop -- Esc on a
   // session that is not working is not an error, it just has nothing to do.
@@ -188,6 +195,8 @@ class Session {
   mutable std::mutex mutex_;
   std::condition_variable turnEnded_;
   bool turnInFlight_ = false;
+  // Under mutex_: decides whether a Result ends the last turn there is.
+  PendingPrompts pending_;
   // Under mutex_: written by the reader thread, read by whoever asks.
   std::string sessionId_;
   InitializeInfo handshake_;

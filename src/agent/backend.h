@@ -303,7 +303,10 @@ class Backend {
   // After a Start that returned false; meaningless otherwise.
   virtual StartFailure startFailure() const = 0;
 
-  // Queues one turn.  The turn is over when TurnEnded arrives.
+  // Sends one prompt, also while a turn runs: the agent takes it into that
+  // turn or runs a turn for it after (TurnEnded::more).  A prompt sent is
+  // never dropped, not even by Interrupt.  All is over at a TurnEnded without
+  // `more`.
   virtual bool SendPrompt(const std::string& utf8Text) = 0;
 
   // Asks the turn in flight to stop.  False when there is none.  The turn is

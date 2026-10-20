@@ -142,6 +142,13 @@ bool ClaudeBackend::Start(const agent::StartOptions& options,
 
 void ClaudeBackend::OnRecord(const Event& event) {
   std::vector<agent::Event> batch = translator_.Translate(event.raw);
+  // Session has already decided, from the prompts it has seen echoed, whether
+  // this result ends everything or only the turn before a queued prompt's.
+  if (event.kind == EventKind::Result && session_.turnInFlight()) {
+    for (agent::Event& item : batch) {
+      if (auto* ended = std::get_if<agent::TurnEnded>(&item)) ended->more = true;
+    }
+  }
 
   // The mode, off Session rather than off the record: it arrives on four kinds
   // of record and Session has already folded in all of them, together with

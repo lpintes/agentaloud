@@ -27,9 +27,11 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "agent/backend.h"
+#include "proto/codex/steers.h"
 #include "proto/codex/translate.h"
 #include "proto/jsonl.h"
 #include "win/process.h"
@@ -93,6 +95,8 @@ class CodexBackend : public agent::Backend {
     StartThread,
     ResumeThread,
     StartTurn,
+    // turn/steer; refused when the turn it names is over or another one.
+    Steer,
     Interrupt,
     Settings,
     // Interrupting a subagent, terminate, clean: what they did arrives as
@@ -119,6 +123,15 @@ class CodexBackend : public agent::Backend {
   Json ThreadParams(const std::string& mode) const;
   bool SendSettings(const std::string& mode);  // under no lock
   void StartTurnLocked(const std::string& text);  // mutex_ held
+  // A prompt by the state of the turn: a turn of its own, a steer into the
+  // running one, or kept until the running one has an id.  mutex_ held.
+  void PromptLocked(const std::string& text);
+  void SteerLocked(const std::string& text);  // mutex_ held, turnId_ known
+  // turnId_ has just become known.  mutex_ held.
+  void SteerAwaitingLocked();
+  // At the end of a turn: starts the next for the prompts it never took up.
+  // False when there are none.  mutex_ held.
+  bool CarryOnLocked();
 
   // Reader thread.
   void OnLine(std::string_view line);
@@ -167,6 +180,12 @@ class CodexBackend : public agent::Backend {
   std::vector<std::string> stopWanted_;
   // Prompts sent before the thread existed, in order.
   std::vector<std::string> queued_;
+  // Prompts sent while a turn was asked for and had no id to steer by yet.
+  std::vector<std::string> awaitingTurn_;
+  // Steers not echoed yet, and the text of each turn/steer not answered.
+  Steers steers_;
+  // By request id: the text and the turn it was meant for.
+  std::map<long long, std::pair<std::string, std::string>> steerTexts_;
   ModeTracker mode_;
   // A mode asked for before the thread existed, set once it does.
   std::string modeAfterOpen_;

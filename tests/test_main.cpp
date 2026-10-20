@@ -54,6 +54,7 @@
 #include "proto/jsonl.h"
 #include "proto/claude/sessions.h"
 #include "proto/claude/translate.h"
+#include "proto/codex/steers.h"
 #include "proto/codex/threads.h"
 #include "proto/codex/translate.h"
 #include "arguments.h"
@@ -1831,6 +1832,87 @@ void TestPermissionModeReports() {
                              "permissionMode": "plan"})"),
       &none));
   CHECK(none.empty());
+}
+
+// Tvary zaznamov z tools/probe_midturn.notes.md a z merania 20. 10. 2026.
+void TestPendingPrompts() {
+  TEST("control: prompt pocas tahu -- result konci vsetko, len ked nic necaka");
+  const proto::Json echo = proto::Json::parse(
+      R"({"type": "user", "isReplay": true, "uuid": "u1",
+          "message": {"role": "user",
+                      "content": [{"type": "text", "text": "dva"}]}})");
+  // Ten isty tvar, ale bez isReplay: CLI ho pise po preruseni.
+  const proto::Json interrupted = proto::Json::parse(
+      R"({"type": "user", "message": {"role": "user", "content":
+          [{"type": "text", "text": "[Request interrupted by user]"}]}})");
+  const proto::Json toolResult = proto::Json::parse(
+      R"({"type": "user", "message": {"role": "user", "content":
+          [{"type": "tool_result", "tool_use_id": "t", "content": "ok"}]}})");
+
+  // Vstrebany: echo pride pred result.
+  proto::PendingPrompts absorbed;
+  absorbed.Sent("jeden");
+  absorbed.Observe(echo);
+  absorbed.Sent("dva");
+  absorbed.Observe(toolResult);
+  CHECK(absorbed.waiting());
+  absorbed.Observe(echo);
+  CHECK(!absorbed.waiting());
+
+  // Zaradeny za tah, alebo prezil prerusenie: pri result este caka.
+  proto::PendingPrompts queued;
+  queued.Sent("jeden");
+  queued.Observe(echo);
+  queued.Sent("dva");
+  queued.Observe(interrupted);
+  CHECK(queued.waiting());
+  queued.Observe(echo);
+  CHECK(!queued.waiting());
+
+  // Lokalny prikaz sa neozve nikdy -- keby sa ratal, tah by neskoncil.
+  proto::PendingPrompts local;
+  local.Sent("/clear");
+  local.Sent("  /context");
+  CHECK(!local.waiting());
+  // Echo navyse nesmie ist do minusu.
+  local.Observe(echo);
+  local.Sent("tri");
+  CHECK(local.waiting());
+  local.Clear();
+  CHECK(!local.waiting());
+}
+
+void TestCodexSteers() {
+  TEST("codex: steer bez echa sa po turn/completed posle znova");
+  // Tvar echa z tools/probe_codex_midturn.notes.md (Codex 0.160).
+  auto echo = [](const char* method, const char* text) {
+    proto::Json message = proto::Json::parse(
+        R"({"params": {"item": {"type": "userMessage", "id": "i",
+            "clientId": null, "content": [{"type": "text",
+            "text_elements": []}]}, "threadId": "t", "turnId": "T"}})");
+    message["method"] = method;
+    message["params"]["item"]["content"][0]["text"] = text;
+    return message;
+  };
+
+  proto::codex::Steers steers;
+  steers.Sent("jeden");
+  steers.Sent("dva");
+  steers.Sent("tri");
+  // item/started sa nerata, inak by sa jedno echo zaratalo dvakrat.
+  steers.Observe(echo("item/started", "dva"));
+  steers.Observe(echo("item/completed", "dva"));
+  // Prvy prompt tahu (turn/start) ma tiez echo, ale v zozname nie je.
+  steers.Observe(echo("item/completed", "nieco ine"));
+  CHECK(steers.Forget("tri"));
+  CHECK(!steers.Forget("tri"));
+  CHECK(!steers.empty());
+  const std::vector<std::string> dropped = steers.TakeDropped();
+  CHECK_EQ(dropped.size(), size_t{1});
+  CHECK_EQ(dropped[0], std::string("jeden"));
+  CHECK(steers.empty());
+  // Zamietnutie, ktore pride po turn/completed, uz nema co poslat znova.
+  CHECK(!steers.Forget("jeden"));
 }
 
 void TestPermissionModeTracker() {
@@ -5351,6 +5433,8 @@ int main(int argc, char** argv) {
   TestToneWave();
   TestUpdateRules();
   TestPermissionModeReports();
+  TestPendingPrompts();
+  TestCodexSteers();
   TestPermissionModeTracker();
   TestRefusedModeIsSkipped();
   TestAnsweringModel();

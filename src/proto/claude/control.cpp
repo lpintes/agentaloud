@@ -335,4 +335,20 @@ Json MakeError(const std::string& requestId, const std::string& message) {
                                 {"error", message}}}};
 }
 
+void PendingPrompts::Sent(const std::string& utf8Text) {
+  const size_t first = utf8Text.find_first_not_of(" \t\r\n");
+  if (first != std::string::npos && utf8Text[first] != '/') ++count_;
+}
+
+void PendingPrompts::Observe(const Json& record) {
+  // "[Request interrupted by user]" is a `user` record too, but not a replay.
+  if (count_ == 0 || !record.is_object()) return;
+  auto type = record.find("type");
+  auto replay = record.find("isReplay");
+  if (type != record.end() && *type == "user" && replay != record.end() &&
+      *replay == true) {
+    --count_;
+  }
+}
+
 }  // namespace proto

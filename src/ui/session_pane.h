@@ -107,9 +107,10 @@ class SessionPane {
   // was in the middle of the transcript: coming back from another application
   // would cost them their place in the text.
   void RestoreFocus() const;
-  // Sends what is in the prompt box and clears it.  No-op while a turn is in
-  // flight, because a second prompt would queue behind the first with nothing
-  // on screen to say so.
+  // Sends what is in the prompt box and clears it -- also while a turn is in
+  // flight.  The prompt goes into the transcript at once either way, so a
+  // prompt waiting for its turn is never text that left with nothing on
+  // screen to say so.
   void Send();
   // What Send does once it has the text -- also the way an answer chosen in
   // the dialog of a QuestionByPrompt goes out, so that it is a prompt in
@@ -240,6 +241,8 @@ class SessionPane {
   // hears that it is over -- "prerušené" if they stopped it, otherwise
   // SignalTurnEnd.
   void OnTurnEnded();
+  // TurnEnded with `more`: a prompt sent during the turn runs next.
+  void OnTurnHandedOn();
   // The CLI exited unasked.  Its block is already in the transcript; this
   // ends the turn it may have been in and says that the session is over.
   void OnSessionEnded();

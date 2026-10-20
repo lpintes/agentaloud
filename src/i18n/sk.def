@@ -133,7 +133,8 @@ S(kTranscriptEmpty, L"prepis je prázdny")
 S(kBookmarkSet, L"záložka {0}: {1}")
 S(kNothingNewSince, L"odvtedy nič nepribudlo")
 S(kBookmarkEmpty, L"záložka {0} je prázdna")
-S(kTurnStillRunning, L"ťah ešte beží, prompt zostal v poli")
+S(kSentDuringTurn, L"odoslané, ťah ešte beží")
+S(kSayInterruptedMore, L"prerušené, nasleduje ďalší prompt")
 S(kAgentNotRunning, L"agent už nebeží, prompt zostal v poli; novú session otvoríte Ctrl+N")
 S(kPromptEmpty, L"prázdny prompt")
 S(kNothingRunning, L"nič nebeží")
@@ -177,8 +178,10 @@ S(kSearchWrappedBottom, L"od konca: {0}")
 // ui/keys_dialog
 S(kKeysSending,
   L"Odosielanie a ťah:\n"
-  L"Ctrl+Enter — odošle prompt. Len z poľa Prompt.\n"
-  L"Esc — preruší bežiaci ťah. Z oboch polí.\n"
+  L"Ctrl+Enter — odošle prompt, aj počas ťahu; agent ho prevezme, keď "
+  L"bude môcť. Len z poľa Prompt.\n"
+  L"Esc — preruší bežiaci ťah; odoslaný prompt sa tým nezahodí. "
+  L"Z oboch polí.\n"
   L"Tab alebo Shift+Tab — prepne medzi prepisom a promptom.\n")
 S(kKeysTasks,
   L"Ctrl+T — úlohy na pozadí; zoznam sa za behu mení, Zastaviť zastaví "

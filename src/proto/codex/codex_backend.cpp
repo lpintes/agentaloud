@@ -300,14 +300,49 @@ void CodexBackend::StartTurnLocked(const std::string& text) {
   Send(message);
 }
 
+void CodexBackend::SteerLocked(const std::string& text) {
+  const long long id = nextId_++;
+  pending_[id] = Purpose::Steer;
+  steerTexts_[id] = {text, turnId_};
+  steers_.Sent(text);
+  // turn/start would steer too (measured), but without naming the turn it
+  // means, and a steer that names it is refused rather than taken into the
+  // next one.
+  Send({{"id", id},
+        {"method", "turn/steer"},
+        {"params",
+         {{"threadId", threadId_},
+          {"expectedTurnId", turnId_},
+          {"input", Json::array({{{"type", "text"},
+                                  {"text", text},
+                                  {"text_elements", Json::array()}}})}}}});
+}
+
+void CodexBackend::PromptLocked(const std::string& text) {
+  if (!turnInFlight_) {
+    turnInFlight_ = true;
+    StartTurnLocked(text);
+  } else if (turnId_.empty()) {
+    awaitingTurn_.push_back(text);
+  } else {
+    SteerLocked(text);
+  }
+}
+
+void CodexBackend::SteerAwaitingLocked() {
+  std::vector<std::string> awaiting;
+  awaiting.swap(awaitingTurn_);
+  for (const std::string& text : awaiting) SteerLocked(text);
+}
+
 bool CodexBackend::SendPrompt(const std::string& utf8Text) {
   std::lock_guard<std::mutex> lock(mutex_);
-  turnInFlight_ = true;
   if (threadId_.empty()) {
+    turnInFlight_ = true;
     queued_.push_back(utf8Text);
     return true;
   }
-  StartTurnLocked(utf8Text);
+  PromptLocked(utf8Text);
   return true;
 }
 
@@ -579,6 +614,9 @@ void CodexBackend::OnLine(std::string_view line) {
       turnId_ = turn;
       interrupt = interruptWanted_;
       interruptWanted_ = false;
+      // Steered before the interrupt goes out, so that it drops them and
+      // turn/completed sends them again -- in the order they were written.
+      SteerAwaitingLocked();
     }
     if (interrupt) {
       Request(Purpose::Interrupt, "turn/interrupt",
@@ -586,12 +624,45 @@ void CodexBackend::OnLine(std::string_view line) {
     }
   }
 
+  if (own) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    steers_.Observe(message);
+  }
+
   std::vector<agent::Event> batch = translator_.Translate(message);
-  if (own && method == "turn/completed") TurnOver();
+  if (own && method == "turn/completed") {
+    bool more = false;
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      more = !stopping_ && CarryOnLocked();
+    }
+    if (more) {
+      for (agent::Event& event : batch) {
+        if (auto* ended = std::get_if<agent::TurnEnded>(&event)) {
+          ended->more = true;
+        }
+      }
+    } else {
+      TurnOver();
+    }
+  }
   Emit(std::move(batch));
   for (const std::string& thread : translator_.TakeNewSubagents()) {
     Request(Purpose::ReadSubagent, "thread/read", {{"threadId", thread}});
   }
+}
+
+bool CodexBackend::CarryOnLocked() {
+  std::vector<std::string> prompts = steers_.TakeDropped();
+  prompts.insert(prompts.end(), awaitingTurn_.begin(), awaitingTurn_.end());
+  awaitingTurn_.clear();
+  if (prompts.empty()) return false;
+  // turnInFlight_ stays: the pane is told `more` and waits on.
+  turnId_.clear();
+  interruptWanted_ = false;
+  StartTurnLocked(prompts.front());
+  awaitingTurn_.assign(prompts.begin() + 1, prompts.end());
+  return true;
 }
 
 void CodexBackend::TurnOver() {
@@ -600,6 +671,8 @@ void CodexBackend::TurnOver() {
     turnInFlight_ = false;
     turnId_.clear();
     interruptWanted_ = false;
+    awaitingTurn_.clear();
+    steers_.TakeDropped();
   }
   turnEnded_.notify_all();
 }
@@ -692,22 +765,49 @@ void CodexBackend::OnResponse(const Json& message) {
       break;
     case Purpose::StartTurn: {
       if (failed) {
-        // The turn never started, so nothing else will end it.
-        TurnOver();
-        Emit({agent::TurnEnded{agent::TurnOutcome::Failed}});
+        // The turn never started, so nothing else will end it -- except for
+        // the prompts that were waiting to steer it, which get one.
+        bool more = false;
+        {
+          std::lock_guard<std::mutex> lock(mutex_);
+          more = !stopping_ && CarryOnLocked();
+        }
+        if (!more) TurnOver();
+        Emit({agent::TurnEnded{agent::TurnOutcome::Failed, more}});
         break;
       }
       const std::string turn = StringField(Field(result, "turn"), "id");
       bool interrupt = false;
       {
         std::lock_guard<std::mutex> lock(mutex_);
-        if (turnInFlight_ && turnId_.empty()) turnId_ = turn;
+        if (turnInFlight_ && turnId_.empty() && !turn.empty()) {
+          turnId_ = turn;
+          SteerAwaitingLocked();
+        }
         interrupt = interruptWanted_ && !turn.empty();
         if (interrupt) interruptWanted_ = false;
       }
       if (interrupt) {
         Request(Purpose::Interrupt, "turn/interrupt",
                 {{"threadId", conversationId()}, {"turnId", turn}});
+      }
+      break;
+    }
+    case Purpose::Steer: {
+      std::lock_guard<std::mutex> lock(mutex_);
+      auto sent = steerTexts_.find(id.get<long long>());
+      if (sent == steerTexts_.end()) break;
+      const auto [text, turn] = sent->second;
+      steerTexts_.erase(sent);
+      // Refused, and not yet carried on by turn/completed: the turn it named
+      // is over (-32600, "no active turn to steer") or another one runs.
+      if (!failed || stopping_ || !steers_.Forget(text)) break;
+      if (turnInFlight_ && turnId_ == turn) {
+        // Refused by the very turn it named, so not for being late; the
+        // turn after this one takes it.
+        awaitingTurn_.push_back(text);
+      } else {
+        PromptLocked(text);
       }
       break;
     }
@@ -805,7 +905,9 @@ void CodexBackend::OnThreadOpened(const Json& result, bool resumed) {
   if (!modeAfterOpen.empty()) SendSettings(modeAfterOpen);
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    for (const std::string& text : queued) StartTurnLocked(text);
+    // SendPrompt counted the first as a turn already; the rest steer it.
+    if (!queued.empty()) turnInFlight_ = false;
+    for (const std::string& text : queued) PromptLocked(text);
   }
   Emit({});
 }
