@@ -134,6 +134,12 @@ void FieldDialog::Fill() {
     return;
   }
   std::vector<std::wstring> labels;
+  // "No value" goes first: Home reaches it, and it is not the item a reader
+  // has to arrow back up from after passing every option.
+  if (field_.type != agent::FieldType::Choices && !field_.required) {
+    labels.push_back(i18n::Text(Str::kFormNoValue));
+    itemValues_.push_back(std::string());
+  }
   if (field_.type == agent::FieldType::Boolean) {
     labels = {i18n::Text(Str::kFormYes), i18n::Text(Str::kFormNo)};
     itemValues_ = {"true", "false"};
@@ -142,10 +148,6 @@ void FieldDialog::Fill() {
       labels.push_back(model::Utf16FromUtf8(option.label));
       itemValues_.push_back(option.value);
     }
-  }
-  if (field_.type != agent::FieldType::Choices && !field_.required) {
-    labels.push_back(i18n::Text(Str::kFormNoValue));
-    itemValues_.push_back(std::string());
   }
   const HWND list = Item(ValueId());
   for (const std::wstring& label : labels) {
@@ -170,7 +172,7 @@ void FieldDialog::Fill() {
              SendMessageW(list, LB_GETCURSEL, 0, 0) == LB_ERR) {
     // Nothing chosen is what the "no value" item says, so the reader
     // lands on it instead of on a list without a selection.
-    SendMessageW(list, LB_SETCURSEL, itemValues_.size() - 1, 0);
+    SendMessageW(list, LB_SETCURSEL, 0, 0);
   }
 }
 
