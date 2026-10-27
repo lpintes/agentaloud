@@ -4916,7 +4916,7 @@ void TestCheckFormField() {
   CHECK(ok(age, {"5"}));
   CHECK(ok(age, {"-0"}));
   CHECK_EQ(model::CheckFormField(age, {"five"}),
-           std::string("Zadajte číslo, desatinné s bodkou, napríklad 2.5."));
+           std::string("Zadajte celé číslo."));
   CHECK_EQ(model::CheckFormField(age, {"5.5"}),
            std::string("Zadajte celé číslo."));
   CHECK_EQ(model::CheckFormField(age, {"500"}),
@@ -4927,7 +4927,8 @@ void TestCheckFormField() {
   ratio.minimum = 0.5;
   CHECK(ok(ratio, {"2.25"}));
   CHECK(ok(ratio, {"1e2"}));
-  CHECK(!ok(ratio, {"2,25"}));
+  CHECK_EQ(model::CheckFormField(ratio, {"2,25"}),
+           std::string("Zadajte číslo, desatinné s bodkou, napríklad 2.5."));
   CHECK(!ok(ratio, {"inf"}));
   CHECK(!ok(ratio, {"nan"}));
   CHECK_EQ(model::CheckFormField(ratio, {"0.25"}),

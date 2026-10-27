@@ -166,6 +166,11 @@ void FieldDialog::Fill() {
   // or the first arrow key is spent putting it there in silence.
   if (field_.type == agent::FieldType::Choices) {
     SendMessageW(list, LB_SETCARETINDEX, 0, FALSE);
+  } else if (!field_.required &&
+             SendMessageW(list, LB_GETCURSEL, 0, 0) == LB_ERR) {
+    // Nothing chosen is what the "no value" item says, so the reader
+    // lands on it instead of on a list without a selection.
+    SendMessageW(list, LB_SETCURSEL, itemValues_.size() - 1, 0);
   }
 }
 

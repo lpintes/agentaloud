@@ -176,11 +176,16 @@ std::string CheckText(const agent::FormField& field, const std::string& text) {
 
 std::string CheckNumber(const agent::FormField& field,
                         const std::string& text) {
+  // An integer field asks for a whole number up front (FormFieldRules), so
+  // text that is no number at all gets that sentence too, not the one that
+  // invites a decimal point.
+  const bool integer = field.type == agent::FieldType::Integer;
   double number = 0;
   if (!ReadNumber(text, &number)) {
-    return i18n::Utf8(i18n::Str::kFormNotNumber);
+    return i18n::Utf8(integer ? i18n::Str::kFormNotInteger
+                              : i18n::Str::kFormNotNumber);
   }
-  if (field.type == agent::FieldType::Integer && !ReadInteger(text)) {
+  if (integer && !ReadInteger(text)) {
     return i18n::Utf8(i18n::Str::kFormNotInteger);
   }
   if (field.minimum && number < *field.minimum) {
