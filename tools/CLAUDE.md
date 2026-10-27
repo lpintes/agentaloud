@@ -57,7 +57,11 @@ e-mail a celý `prompt_snapshot` — 186 z 209 kB prvej verzie fixtúry, ktorá
 mala ísť do verejného repozitára. Zahadzuje ich `write_fixture` tým istým
 pravidlom ako hooky: je to vlastnosť stroja, nie formátu, a `ReadSessionRecords`
 ich aj tak neprepúšťa. Zlyhalo by to ticho — fixtúra vyzerá ako fixtúra a
-nikto ju nečíta celú.
+nikto ju nečíta celú. Od CLI 2.1.294 platí to isté pre `api-request`,
+`api-request-blob` a `api-request-shape` (záznam požiadavky na API: celý
+systémový prompt, nástroje aj obsah správ, claude-gui-lkk.84). Nový diskový
+typ, ktorý ohlási soak, treba preto pred pridaním do `kKnownDiskOnlyTypes`
+pozrieť aj z tejto strany.
 
 To isté pravidlo má **tri ďalšie vrstvy a všetky sedia v `system/init`**, ktorý
 `attachment` nie je a zahodiť sa nedá:

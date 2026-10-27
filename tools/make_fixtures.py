@@ -417,7 +417,12 @@ def write_fixture(lines, out_dir, name):
             # O formate nehovori nic, co by testy videli: ReadSessionRecords
             # prepusta len user a assistant, a to, ze typ attachment existuje,
             # je zapisane v kKnownDiskOnlyTypes.
-            if record.get("type") == "attachment":
+            # Zaznam poziadavky na API (od CLI 2.1.294) je ten isty pripad
+            # este raz: api-request-shape nesie cely systemovy prompt
+            # a nastroje, api-request-blob obsah sprav (claude-gui-lkk.84).
+            if record.get("type") in ("attachment", "api-request",
+                                      "api-request-blob",
+                                      "api-request-shape"):
                 continue
             handle.write(json.dumps(scrubber.walk(record), ensure_ascii=False,
                                     sort_keys=True) + "\n")

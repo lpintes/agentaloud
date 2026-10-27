@@ -4103,6 +4103,10 @@ void TestFixtureDisk(const std::string& dir) {
 // stoja za pozornost v kroku 7: `mode` a `permission-mode` su zmeny stavu
 // session, takze obnovenie session, ktore ich ignoruje, obnovi transkript
 // spravne, ale rezim nie.
+//
+// Trojica api-request* (od CLI 2.1.294) je zaznam poziadavky na API:
+// api-request-shape nesie cely systemovy prompt a nastroje, api-request-blob
+// obsah sprav.  Do fixtury preto nesmu (claude-gui-lkk.84).
 const char* const kKnownDiskOnlyTypes[] = {
     "attachment", "queue-operation", "atis-latch", "last-prompt",
     "summary", "file-history-snapshot", "system",
@@ -4110,6 +4114,7 @@ const char* const kKnownDiskOnlyTypes[] = {
     "artifact-comment-monitor", "bridge-session", "cost-state",
     "file-history-delta", "frame-link", "mode", "permission-mode",
     "pr-link", "custom-title", "dev-mods",
+    "api-request", "api-request-blob", "api-request-shape",
 };
 
 void SoakOverCorpus(const std::string& root) {
