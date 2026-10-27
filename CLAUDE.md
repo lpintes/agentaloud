@@ -301,6 +301,9 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
     async otázka ako správa — odpoveď ďalším promptom
     (`QuestionByPrompt`, `kMsgQuestionByPrompt`). Neznáma serverová
     požiadavka Codexu = `-32601` = zamietnutie (pozri `Unrecognised`).
+    MCP elicitácia s poľami alebo odkazom = `agent::FormRequest`
+    (`proto::ReadFormFields`); Codex hodnoty nekontroluje a poradie polí
+    stratí — kontrola je `model::CheckFormField`.
 13. **Dialóg povolenia ukazuje ten istý text ako prepis** —
     `model::RenderToolCall` nad `agent::ToolCall` z
     `proto::ToolCallFromInput`. Zápis do súboru začína „súbor: <cesta>"; meno

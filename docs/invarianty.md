@@ -546,10 +546,33 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     `mcpServer/elicitation/request` — raz od Codexu pred volaním nástroja,
     raz od samotného servera — a plugin potom modelu povedal „not approved"
     bez jediného dialógu (claude-gui-lkk.44.12). Formulár bez polí je dnes
-    dialóg povolenia (`proto::codex::ElicitationPermission`); formulár s poľami
-    a `mode: "url"` stále padajú na `-32601` (claude-gui-lkk.44.13). Kto
+    dialóg povolenia (`proto::codex::ElicitationPermission`). Kto
     hľadá, prečo Codex hlási zamietnutie, ktoré nikto nevidel, nech začne pri
     `Unrecognised` so serverovou metódou.
+
+    **Formulár s poľami a odkaz (`mode: "url"`) sú `agent::FormRequest`**
+    (claude-gui-lkk.44.13), typ portu spoločný s Claudom (44.18); schému
+    MCP číta `proto::ReadFormFields` mimo adaptéra. Odmerané sondou
+    `tools/probe_elicit_form.py` (Codex 0.160.0, 27. 10. 2026):
+
+    - Schéma príde nezmenená, ale **poradie `properties` sa stratí**, kľúče
+      sú abecedne. Poradie servera sa nedá obnoviť; dialóg ide povinné
+      najprv, potom abecedne.
+    - **Codex nekontroluje nič** — chýbajúce povinné, zlý typ, mimo rozsahu,
+      mimo zoznamu aj pole navyše dostane server 1 : 1. Kontrola je naša
+      (`model::CheckFormField`, pravidlá vopred `model::FormFieldRules`
+      tými istými vetami), číslo, ktoré sa neprečíta, ide ako reťazec.
+    - Odkaz: Codex `notifications/elicitation/complete` klientovi
+      nepreposiela, po odpovedi nepríde nič. Accept posiela `content: null`
+      (server dostane `{}`).
+    - Elicitácia nemá item v prepise; blok volania a výsledku robí adaptér
+      (`proto::FormCall` / `FormResult`), aby zostala stopa, čo sa poslalo.
+
+    Dialóg je jedno pole na dialóg (`ui::FillForm`, Späť / Ďalej / Odmietnuť,
+    Esc = zrušiť), predvyplnené `default` zo schémy; nepovinný jednoduchý
+    zoznam má na **začiatku** položku „nevyplniť" — na konci by sa k nej
+    čitateľ vracal šípkou cez všetky možnosti. Chyba je message box a fokus
+    sa vráti na hodnotu. Odkaz otvorí len `http`/`https` (`ui::OpenLink`).
 
 13. **Čo dialóg ukáže pred spustením nástroja, to prepis drží po ňom — a je to
     ten istý text.** Povolenie sa pýta na volanie, ktoré o chvíľu ukáže prepis
