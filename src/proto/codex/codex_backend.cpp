@@ -5,6 +5,7 @@
 
 #include "app_name.h"
 #include "proto/codex/threads.h"
+#include "proto/elicitation.h"
 
 namespace proto::codex {
 namespace {
@@ -991,9 +992,24 @@ void CodexBackend::OnServerRequest(const Json& message) {
       Send({{"id", id}, {"result", MakeElicitationAnswer(answer.verdict)}});
       return;
     }
+    agent::FormRequest form;
+    if (ElicitationForm(params, &form)) {
+      form.by = translator_.Author(params);
+      // No item comes for it (measured), so the transcript gets the call
+      // from here, before the dialog, as for request_user_input.  The id
+      // only has to be unique in the session; the server request's is.
+      const agent::ToolCall call =
+          proto::FormCall(form, "elicitation-" + id.dump());
+      Emit({agent::ToolCallStarted{call, form.by}});
+      agent::FormAnswer answer;
+      if (callbacks_.onForm) answer = callbacks_.onForm(form);
+      Send({{"id", id}, {"result", MakeFormAnswer(form, answer)}});
+      Emit({agent::ToolCallFinished{proto::FormResult(call.id, form, answer)}});
+      return;
+    }
   }
 
-  // Anything else -- a form with fields, a dynamic tool, a token refresh --
+  // Anything else -- openai/form, a dynamic tool, a token refresh --
   // is refused rather than left waiting: the server waits without a timeout
   // (measured), and a turn stuck on a request nobody shows is worse than one
   // told no.

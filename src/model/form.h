@@ -22,6 +22,11 @@ namespace model {
 std::string CheckFormField(const agent::FormField& field,
                            const std::vector<std::string>& values);
 
+// What the field asks of a value, told before it is typed: the same sentences
+// CheckFormField refuses with, so the reader hears a rule once and in one
+// wording.  Empty when anything goes.
+std::vector<std::string> FormFieldRules(const agent::FormField& field);
+
 }  // namespace model
 
 #endif

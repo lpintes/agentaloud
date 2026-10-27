@@ -133,7 +133,8 @@ MODEL_SRCS := src/model/utf.cpp src/model/transcript.cpp src/model/bookmarks.cpp
 
 UI_SRCS := src/ui/session_pane.cpp src/ui/session_window.cpp src/ui/main_window.cpp src/ui/speech.cpp \
            src/ui/status_bar.cpp src/ui/session_details.cpp \
-           src/ui/ask_dialog.cpp src/ui/permission_dialog.cpp \
+           src/ui/ask_dialog.cpp src/ui/form_dialog.cpp \
+           src/ui/permission_dialog.cpp \
            src/ui/command_dialog.cpp src/ui/keys_dialog.cpp \
            src/ui/new_session_dialog.cpp src/ui/dialog_texts.cpp \
            src/ui/find_dialog.cpp src/ui/about_dialog.cpp \

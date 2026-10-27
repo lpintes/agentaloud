@@ -121,6 +121,50 @@ BEGIN
     PUSHBUTTON      "&Zamietnuť", IDCANCEL, 236, 176, 56, 14
 END
 
+// A form an MCP server asks for, one field at a time (ui/form_dialog.h).  The
+// value's label is the field's title, set at run time; of the three controls
+// at the same place, the unused two are hidden and disabled.  Esc is cancel
+// with no button of its own: MCP tells "declined" from "dismissed".
+IDD_FORM_FIELD DIALOGEX 0, 0, 300, 186
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION APP_NAME " — formulár"
+FONT 9, "Segoe UI", 400, 0, 1
+BEGIN
+    LTEXT           "Ž&iadosť:", IDC_FORM_MESSAGE_LABEL, 8, 8, 284, 8
+    EDITTEXT        IDC_FORM_MESSAGE, 8, 18, 284, 60,
+                    ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL
+
+    LTEXT           "Hodnota:", IDC_FORM_VALUE_LABEL, 8, 84, 284, 8, SS_NOPREFIX
+    EDITTEXT        IDC_FORM_TEXT, 8, 94, 284, 12, ES_AUTOHSCROLL
+    LISTBOX         IDC_FORM_CHOICE, 8, 94, 284, 64,
+                    LBS_NOTIFY | LBS_HASSTRINGS | WS_BORDER | WS_VSCROLL |
+                    WS_TABSTOP
+    LISTBOX         IDC_FORM_CHOICES, 8, 94, 284, 64,
+                    LBS_NOTIFY | LBS_HASSTRINGS | LBS_MULTIPLESEL | WS_BORDER |
+                    WS_VSCROLL | WS_TABSTOP
+
+    PUSHBUTTON      "&Späť", IDC_FORM_BACK, 108, 166, 56, 14
+    DEFPUSHBUTTON   "Ď&alej", IDOK, 172, 166, 56, 14
+    PUSHBUTTON      "&Zamietnuť", IDC_FORM_DECLINE, 236, 166, 56, 14
+END
+
+// A link an MCP server asks to have opened -- signing in to its service.
+IDD_FORM_URL DIALOGEX 0, 0, 300, 132
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION APP_NAME " — odkaz"
+FONT 9, "Segoe UI", 400, 0, 1
+BEGIN
+    LTEXT           "Ž&iadosť:", IDC_FORM_MESSAGE_LABEL, 8, 8, 284, 8
+    EDITTEXT        IDC_FORM_MESSAGE, 8, 18, 284, 60,
+                    ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL
+
+    LTEXT           "O&dkaz:", IDC_FORM_LINK_LABEL, 8, 84, 284, 8
+    EDITTEXT        IDC_FORM_LINK, 8, 94, 284, 12, ES_READONLY | ES_AUTOHSCROLL
+
+    DEFPUSHBUTTON   "&Otvoriť", IDOK, 172, 112, 56, 14
+    PUSHBUTTON      "&Zamietnuť", IDC_FORM_DECLINE, 236, 112, 56, 14
+END
+
 // The permission prompt.  What it replaced was a MessageBox with the tool's
 // arguments in it as input.dump(2) -- one line of JSON with the line breaks
 // spelled "\n", which is read out as "backslash en" and cannot be walked by

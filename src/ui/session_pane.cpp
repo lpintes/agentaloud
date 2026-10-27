@@ -14,6 +14,7 @@
 #include "model/links.h"
 #include "model/utf.h"
 #include "ui/ask_dialog.h"
+#include "ui/form_dialog.h"
 #include "ui/command_dialog.h"
 #include "ui/find_dialog.h"
 #include "ui/keys_dialog.h"
@@ -54,6 +55,11 @@ struct PendingPermission {
 struct PendingQuestion {
   const agent::QuestionRequest* request;
   agent::QuestionAnswer answer;
+};
+
+struct PendingForm {
+  const agent::FormRequest* request;
+  agent::FormAnswer answer;
 };
 
 int TextLength(HWND edit) {
@@ -544,6 +550,11 @@ bool SessionPane::Start(std::unique_ptr<agent::Backend> backend,
     SendMessageW(host_, kMsgQuestion, 0, reinterpret_cast<LPARAM>(&pending));
     return pending.answer;
   };
+  callbacks.onForm = [this](const agent::FormRequest& request) {
+    PendingForm pending{&request, {}};
+    SendMessageW(host_, kMsgForm, 0, reinterpret_cast<LPARAM>(&pending));
+    return pending.answer;
+  };
 
   // What is known already goes into the bar now: the first system/init comes
   // only with the first turn, and a bar that says nothing about the mode until
@@ -982,6 +993,14 @@ LRESULT SessionPane::OnQuestion(LPARAM pointer) {
   pending->answer.declined =
       !AskQuestions(host_, pending->request->questions, pending->request->by,
                     &pending->answer.chosen);
+  signals::StopRepeating();
+  return 0;
+}
+
+LRESULT SessionPane::OnForm(LPARAM pointer) {
+  PendingForm* pending = reinterpret_cast<PendingForm*>(pointer);
+  SignalWaiting();
+  pending->answer = FillForm(host_, *pending->request);
   signals::StopRepeating();
   return 0;
 }

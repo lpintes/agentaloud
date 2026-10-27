@@ -9,6 +9,11 @@
 #   probe_elicit_form.py run   cely beh, nastroj readOnlyHint=true
 #   probe_elicit_form.py rw    cely beh, readOnlyHint=false (pyta aj Codex)
 #   probe_elicit_form.py mcp   (interne) beh falosneho MCP servera
+#   probe_elicit_form.py mcp app   server pre skusku v appke: jeden formular
+#                              (SCHEMA) a jeden odkaz, odpoved v el-mcp.log.
+#     agentaloud --backend codex <priecinok> --
+#       -c mcp_servers.fakeel.command="<python>"
+#       -c mcp_servers.fakeel.args=["<tento subor>", "mcp", "app"]
 #
 # Logy: C:/b/elicit-probe/logs/el-<rezim>.log (app-server) a
 #       C:/b/elicit-probe/logs/el-mcp.log (MCP server, pripisuje sa).
@@ -88,7 +93,7 @@ ANSWERS = dict(FORM_CASES + URL_CASES)
 
 # --- falosny MCP server -----------------------------------------------------
 
-def mcp_main(read_only):
+def mcp_main(read_only, app=False):
     os.makedirs(LOGDIR, exist_ok=True)
     log = open(MCP_LOG, "a", encoding="utf-8")
     t0 = time.time()
@@ -146,7 +151,10 @@ def mcp_main(read_only):
                 "annotations": {"readOnlyHint": read_only}}]}})
         elif method == "tools/call":
             results = []
-            for name, _ in FORM_CASES:
+            form_cases, url_cases = FORM_CASES, URL_CASES
+            if app:
+                form_cases, url_cases = [("app", None)], [("url_app", None)]
+            for name, _ in form_cases:
                 r = elicit({"mode": "form",
                             "message": f"CASE {name}: please fill the form",
                             "requestedSchema": SCHEMA})
@@ -154,7 +162,7 @@ def mcp_main(read_only):
                     return
                 results.append(f"{name}: {json.dumps(r)}")
                 w("#", f"RESULT {name}: {json.dumps(r)}")
-            for i, (name, _) in enumerate(URL_CASES):
+            for i, (name, _) in enumerate(url_cases):
                 elid = f"el-{name}"
                 r = elicit({"mode": "url",
                             "message": f"CASE {name}: open the page",
@@ -253,6 +261,7 @@ def probe_main(mode):
 if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) > 1 else "run"
     if mode == "mcp":
-        mcp_main(len(sys.argv) < 3 or sys.argv[2] != "rw")
+        sub = sys.argv[2] if len(sys.argv) > 2 else "run"
+        mcp_main(sub != "rw", app=sub == "app")
     else:
         probe_main(mode)

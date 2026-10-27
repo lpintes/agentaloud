@@ -179,6 +179,7 @@ LRESULT SessionWindow::HandleMessage(UINT message, WPARAM wParam,
 
     case kMsgPermission:
     case kMsgQuestion:
+    case kMsgForm:
       // A session behind another one asks too, and the box has to say which
       // session it is about.  It cannot, so the session comes to the front
       // first and the box goes up over it: what is behind the box is what it
@@ -186,6 +187,7 @@ LRESULT SessionWindow::HandleMessage(UINT message, WPARAM wParam,
       SendMessageW(GetParent(hwnd_), WM_MDIACTIVATE,
                    reinterpret_cast<WPARAM>(hwnd_), 0);
       if (!pane_) return 0;
+      if (message == kMsgForm) return pane_->OnForm(lParam);
       return message == kMsgPermission ? pane_->OnPermission(lParam)
                                        : pane_->OnQuestion(lParam);
 

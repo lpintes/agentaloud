@@ -236,4 +236,56 @@ std::string CheckFormField(const agent::FormField& field,
   return {};
 }
 
+std::vector<std::string> FormFieldRules(const agent::FormField& field) {
+  using i18n::Str;
+  std::vector<std::string> rules;
+  if (field.required) rules.push_back(i18n::Utf8(Str::kFormMissing));
+  switch (field.type) {
+    case agent::FieldType::Text:
+      if (field.minLength && *field.minLength > 0) {
+        rules.push_back(i18n::Utf8(Str::kFormTooShort,
+                                   {std::to_string(*field.minLength)}));
+      }
+      if (field.maxLength) {
+        rules.push_back(i18n::Utf8(Str::kFormTooLong,
+                                   {std::to_string(*field.maxLength)}));
+      }
+      if (field.format == "email") rules.push_back(i18n::Utf8(Str::kFormNotEmail));
+      if (field.format == "uri") rules.push_back(i18n::Utf8(Str::kFormNotUri));
+      if (field.format == "date") rules.push_back(i18n::Utf8(Str::kFormNotDate));
+      if (field.format == "date-time") {
+        rules.push_back(i18n::Utf8(Str::kFormNotDateTime));
+      }
+      break;
+    case agent::FieldType::Number:
+    case agent::FieldType::Integer:
+      rules.push_back(i18n::Utf8(field.type == agent::FieldType::Integer
+                                     ? Str::kFormNotInteger
+                                     : Str::kFormNotNumber));
+      if (field.minimum) {
+        rules.push_back(
+            i18n::Utf8(Str::kFormBelowMinimum, {BoundText(*field.minimum)}));
+      }
+      if (field.maximum) {
+        rules.push_back(
+            i18n::Utf8(Str::kFormAboveMaximum, {BoundText(*field.maximum)}));
+      }
+      break;
+    case agent::FieldType::Choices:
+      if (field.minItems && *field.minItems > 0) {
+        rules.push_back(i18n::Utf8(Str::kFormTooFew,
+                                   {std::to_string(*field.minItems)}));
+      }
+      if (field.maxItems) {
+        rules.push_back(i18n::Utf8(Str::kFormTooMany,
+                                   {std::to_string(*field.maxItems)}));
+      }
+      break;
+    case agent::FieldType::Boolean:
+    case agent::FieldType::Choice:
+      break;
+  }
+  return rules;
+}
+
 }  // namespace model

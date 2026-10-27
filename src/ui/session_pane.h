@@ -47,6 +47,9 @@ constexpr UINT kMsgPermission = WM_APP + 2;
 // The model is asking the reader a multiple-choice question.  Sent, for the
 // same reason as kMsgPermission.
 constexpr UINT kMsgQuestion = WM_APP + 3;
+// An MCP server is asking for a form or a link (agent::FormRequest).  Sent,
+// for the same reason as kMsgPermission.
+constexpr UINT kMsgForm = WM_APP + 8;
 // A resumed conversation's history, when the backend hands it over on its
 // reader thread.  Posted; the history waits in the pane until it is drained.
 constexpr UINT kMsgHistory = WM_APP + 4;
@@ -95,6 +98,7 @@ class SessionPane {
   void OnDrain();
   LRESULT OnPermission(LPARAM pending);
   LRESULT OnQuestion(LPARAM pending);
+  LRESULT OnForm(LPARAM pending);
   void OnHistoryPosted();
   void OnQuestionByPrompt();
   void OnOfferSignIn();

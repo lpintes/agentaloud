@@ -4960,6 +4960,17 @@ void TestCheckFormField() {
            std::string("Počet vybraných možností: najmenej 2."));
   tags.required = true;
   CHECK(!ok(tags, {}));
+
+  // Pravidla vopred su tie iste vety, ktorymi kontrola odmieta.
+  CHECK(model::FormFieldRules(size).empty());
+  CHECK(model::FormFieldRules(age) ==
+        (V{"Zadajte celé číslo.", "Najmenšia dovolená hodnota je 0.",
+           "Najväčšia dovolená hodnota je 120."}));
+  CHECK(model::FormFieldRules(name) ==
+        (V{"Pole je povinné.", "Počet znakov: najmenej 2.",
+           "Počet znakov: najviac 4."}));
+  CHECK(model::FormFieldRules(email) ==
+        (V{"Zadajte e-mailovú adresu, napríklad meno@example.com."}));
 }
 
 // acceptForSession na upravu suborov pokryje dalsie upravy prave suborov

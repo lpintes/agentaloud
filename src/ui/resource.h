@@ -21,6 +21,8 @@
 #define IDD_PLAN_APPROVAL   109
 #define IDD_SIGN_IN         110
 #define IDD_LINKS           111
+#define IDD_FORM_FIELD      112
+#define IDD_FORM_URL        113
 
 #define IDC_DETAILS_ID          1000
 #define IDC_DETAILS_MODEL       1001
@@ -147,5 +149,19 @@
 // Odkazy v bloku.  See ui/links_dialog.h.
 #define IDC_LINKS_LIST          1210
 #define IDC_LINKS_LIST_LABEL    1211
+
+// Formulár od MCP servera.  One field per dialog; of the three controls for
+// the value, the one the field needs is shown.  See ui/form_dialog.h.
+#define IDC_FORM_MESSAGE        1220
+#define IDC_FORM_TEXT           1221
+#define IDC_FORM_CHOICE         1222
+#define IDC_FORM_CHOICES        1223
+#define IDC_FORM_BACK           1224
+#define IDC_FORM_DECLINE        1225
+#define IDC_FORM_LINK           1226
+
+#define IDC_FORM_MESSAGE_LABEL  1230
+#define IDC_FORM_VALUE_LABEL    1231
+#define IDC_FORM_LINK_LABEL     1232
 
 #endif
