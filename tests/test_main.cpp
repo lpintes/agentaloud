@@ -57,6 +57,8 @@
 #include "proto/codex/steers.h"
 #include "proto/codex/threads.h"
 #include "proto/codex/translate.h"
+#include "proto/elicitation.h"
+#include "model/form.h"
 #include "arguments.h"
 #include "session_names.h"
 #include "settings.h"
@@ -4712,6 +4714,254 @@ void TestCodexElicitation() {
                R"({"action":"decline","content":null,"_meta":null})"));
 }
 
+// Schema je doslova zo sondy (tools/probe_elicit_form.py, 27. 10. 2026),
+// kluce v properties abecedne, ako ich Codex klientovi doruci.
+void TestElicitationForm() {
+  TEST("elicitacia formularom: polia, odpoved s typmi, prepis");
+  i18n::SetLanguage(i18n::Lang::kSlovak);
+  const proto::Json params = proto::Json::parse(R"({"threadId":"t",
+      "turnId":"u","serverName":"fakeel","mode":"form","_meta":null,
+      "message":"CASE valid: please fill the form",
+      "requestedSchema":{"type":"object","properties":{
+        "age":{"type":"integer","title":"Age","minimum":0,"maximum":120},
+        "color":{"type":"string","title":"Color",
+                 "enum":["red","green","blue"],"default":"green"},
+        "email":{"type":"string","title":"E-mail","format":"email"},
+        "legacy":{"type":"string","title":"Legacy","enum":["a","b"],
+                  "enumNames":["Option A","Option B"]},
+        "name":{"type":"string","title":"Name","description":"Your name",
+                "minLength":2,"maxLength":20,"default":"Jan"},
+        "ratio":{"type":"number","title":"Ratio","minimum":0.5,
+                 "maximum":9.5,"default":1.5},
+        "size":{"type":"string","title":"Size","oneOf":[
+          {"const":"s","title":"Small"},{"const":"m","title":"Medium"},
+          {"const":"l","title":"Large"}]},
+        "subscribe":{"type":"boolean","title":"Subscribe","default":true},
+        "tags":{"type":"array","title":"Tags","minItems":1,"maxItems":2,
+                "items":{"type":"string","enum":["x","y","z"]},
+                "default":["x"]}},
+      "required":["name","age","color"]}})");
+  agent::FormRequest request;
+  CHECK(proto::codex::ElicitationForm(params, &request));
+  CHECK_EQ(request.server, std::string("fakeel"));
+  CHECK_EQ(request.message, std::string("CASE valid: please fill the form"));
+  CHECK(request.url.empty());
+  // Povinne najprv, potom zvysok, oboje podla mena.
+  std::vector<std::string> names;
+  for (const agent::FormField& field : request.fields) {
+    names.push_back(field.name);
+  }
+  CHECK(names == (std::vector<std::string>{"age", "color", "name", "email",
+                                           "legacy", "ratio", "size",
+                                           "subscribe", "tags"}));
+  if (names.size() == 9) {
+    const auto& f = request.fields;
+    CHECK(f[0].type == agent::FieldType::Integer && f[0].required);
+    CHECK(f[0].minimum == 0.0 && f[0].maximum == 120.0);
+    CHECK(f[1].type == agent::FieldType::Choice && f[1].required);
+    CHECK_EQ(f[1].options.size(), size_t{3});
+    CHECK(f[1].defaults == std::vector<std::string>{"green"});
+    CHECK(f[2].type == agent::FieldType::Text);
+    CHECK(f[2].minLength == 2 && f[2].maxLength == 20);
+    CHECK_EQ(f[2].description, std::string("Your name"));
+    CHECK(f[3].type == agent::FieldType::Text && !f[3].required);
+    CHECK_EQ(f[3].format, std::string("email"));
+    CHECK_EQ(f[4].options.size(), size_t{2});
+    if (f[4].options.size() == 2) {
+      CHECK_EQ(f[4].options[1].value, std::string("b"));
+      CHECK_EQ(f[4].options[1].label, std::string("Option B"));
+    }
+    CHECK(f[5].type == agent::FieldType::Number);
+    CHECK(f[5].defaults == std::vector<std::string>{"1.5"});
+    CHECK(f[6].type == agent::FieldType::Choice);
+    if (f[6].options.size() == 3) {
+      CHECK_EQ(f[6].options[1].value, std::string("m"));
+      CHECK_EQ(f[6].options[1].label, std::string("Medium"));
+    }
+    CHECK(f[7].type == agent::FieldType::Boolean);
+    CHECK(f[7].defaults == std::vector<std::string>{"true"});
+    CHECK(f[8].type == agent::FieldType::Choices);
+    CHECK(f[8].minItems == 1 && f[8].maxItems == 2);
+    CHECK_EQ(f[8].options.size(), size_t{3});
+    CHECK(f[8].defaults == std::vector<std::string>{"x"});
+  }
+
+  // Odpoved VALID zo sondy: typy JSON podla pola; prazdne pole sa vynecha.
+  agent::FormAnswer answer;
+  answer.action = agent::FormAnswer::Action::Accept;
+  answer.values = {{"5"}, {"blue"}, {"Peter"}, {"p@example.com"}, {"b"},
+                   {"2.25"}, {}, {"false"}, {"x", "z"}};
+  CHECK_EQ(proto::codex::MakeFormAnswer(request, answer),
+           proto::Json::parse(R"({"action":"accept","content":{"age":5,
+               "color":"blue","name":"Peter","email":"p@example.com",
+               "legacy":"b","ratio":2.25,"subscribe":false,
+               "tags":["x","z"]},"_meta":null})"));
+  // Cislo, ktore sa neda precitat, ide ako text: dialog ho uz odmietol.
+  answer.values[0] = {"five"};
+  CHECK_EQ(proto::codex::MakeFormAnswer(request, answer)["content"]["age"],
+           proto::Json("five"));
+  answer.values[0] = {"5"};
+  CHECK_EQ(proto::FormResult("c", request, answer).text,
+           std::string("Age: 5\nColor: blue\nName: Peter\n"
+                       "E-mail: p@example.com\nLegacy: Option B\n"
+                       "Ratio: 2.25\nSubscribe: nie\nTags: x, z"));
+  answer.values.assign(9, {});
+  CHECK_EQ(proto::FormResult("c", request, answer).text,
+           std::string("odoslané bez hodnôt"));
+
+  agent::FormAnswer declined;
+  declined.action = agent::FormAnswer::Action::Decline;
+  CHECK_EQ(proto::codex::MakeFormAnswer(request, declined),
+           proto::Json::parse(
+               R"({"action":"decline","content":null,"_meta":null})"));
+  const agent::ToolResult no = proto::FormResult("c", request, declined);
+  CHECK(no.isError);
+  CHECK_EQ(no.text, std::string("zamietnuté"));
+  agent::FormAnswer cancelled;
+  CHECK(cancelled.action == agent::FormAnswer::Action::Cancel);
+  CHECK_EQ(proto::codex::MakeFormAnswer(request, cancelled),
+           proto::Json::parse(
+               R"({"action":"cancel","content":null,"_meta":null})"));
+
+  const agent::ToolCall call = proto::FormCall(request, "el-1");
+  CHECK_EQ(call.id, std::string("el-1"));
+  CHECK_EQ(call.name, std::string("fakeel"));
+  CHECK_EQ(call.fields.size(), size_t{10});
+
+  // Rezim url: ziadne polia, accept bez obsahu.
+  const proto::Json url = proto::Json::parse(
+      R"({"threadId":"t","turnId":"u","serverName":"fakeel","mode":"url",
+          "_meta":null,"message":"CASE accept: open the page",
+          "url":"https://example.com/auth?case=accept",
+          "elicitationId":"el-accept"})");
+  CHECK(proto::codex::ElicitationForm(url, &request));
+  CHECK_EQ(request.url, std::string("https://example.com/auth?case=accept"));
+  CHECK(request.fields.empty());
+  agent::FormAnswer opened;
+  opened.action = agent::FormAnswer::Action::Accept;
+  CHECK_EQ(proto::codex::MakeFormAnswer(request, opened),
+           proto::Json::parse(
+               R"({"action":"accept","content":null,"_meta":null})"));
+  CHECK_EQ(proto::FormResult("c", request, opened).text,
+           std::string("odkaz otvorený"));
+
+  // Ano/nie patri dialogu povolenia, openai/form nedeklarujeme.
+  proto::Json empty = params;
+  empty["requestedSchema"]["properties"] = proto::Json::object();
+  CHECK(!proto::codex::ElicitationForm(empty, &request));
+  proto::Json openai = params;
+  openai["mode"] = "openai/form";
+  CHECK(!proto::codex::ElicitationForm(openai, &request));
+}
+
+// Codex nevaliduje nic (tools/probe_elicit_form.notes.md, pripad C), takze
+// co tu prejde, dostane server.
+void TestCheckFormField() {
+  TEST("kontrola hodnoty formulara pred odoslanim");
+  i18n::SetLanguage(i18n::Lang::kSlovak);
+  using V = std::vector<std::string>;
+  const auto ok = [](const agent::FormField& f, const V& v) {
+    return model::CheckFormField(f, v).empty();
+  };
+
+  agent::FormField name;
+  name.type = agent::FieldType::Text;
+  name.minLength = 2;
+  name.maxLength = 4;
+  CHECK(ok(name, {}));
+  CHECK(ok(name, {""}));
+  name.required = true;
+  CHECK_EQ(model::CheckFormField(name, {""}), std::string("Pole je povinné."));
+  CHECK_EQ(model::CheckFormField(name, {}), std::string("Pole je povinné."));
+  CHECK_EQ(model::CheckFormField(name, {"P"}),
+           std::string("Počet znakov: najmenej 2."));
+  // Znaky, nie bajty UTF-8: "ťťťť" su styri znaky a osem bajtov.
+  CHECK(ok(name, {"ťťťť"}));
+  CHECK(!ok(name, {"ťťťťť"}));
+
+  agent::FormField email;
+  email.format = "email";
+  CHECK(ok(email, {"p@example.com"}));
+  for (const char* bad : {"p", "@example.com", "p@example", "p@ex.com.",
+                          "p q@example.com", "p@@example.com"}) {
+    CHECK(!ok(email, {bad}));
+  }
+  agent::FormField uri;
+  uri.format = "uri";
+  CHECK(ok(uri, {"https://example.com"}));
+  CHECK(ok(uri, {"mailto:a@b.c"}));
+  CHECK(!ok(uri, {"example.com"}));
+  CHECK(!ok(uri, {"https:"}));
+  CHECK(!ok(uri, {"1http://x"}));
+  agent::FormField date;
+  date.format = "date";
+  CHECK(ok(date, {"2026-10-27"}));
+  CHECK(ok(date, {"2024-02-29"}));
+  CHECK(!ok(date, {"2026-02-29"}));
+  CHECK(!ok(date, {"2026-13-01"}));
+  CHECK(!ok(date, {"27.10.2026"}));
+  CHECK(!ok(date, {"2026-10-27T10:00:00Z"}));
+  agent::FormField when;
+  when.format = "date-time";
+  CHECK(ok(when, {"2026-10-27T14:30:00Z"}));
+  CHECK(ok(when, {"2026-10-27T14:30:00.25+01:00"}));
+  CHECK(!ok(when, {"2026-10-27T14:30:00"}));
+  CHECK(!ok(when, {"2026-10-27 14:30:00Z"}));
+  CHECK(!ok(when, {"2026-10-27T24:00:00Z"}));
+
+  agent::FormField age;
+  age.type = agent::FieldType::Integer;
+  age.minimum = 0;
+  age.maximum = 120;
+  CHECK(ok(age, {"5"}));
+  CHECK(ok(age, {"-0"}));
+  CHECK_EQ(model::CheckFormField(age, {"five"}),
+           std::string("Zadajte číslo, desatinné s bodkou, napríklad 2.5."));
+  CHECK_EQ(model::CheckFormField(age, {"5.5"}),
+           std::string("Zadajte celé číslo."));
+  CHECK_EQ(model::CheckFormField(age, {"500"}),
+           std::string("Najväčšia dovolená hodnota je 120."));
+  CHECK(!ok(age, {" 5"}));
+  agent::FormField ratio;
+  ratio.type = agent::FieldType::Number;
+  ratio.minimum = 0.5;
+  CHECK(ok(ratio, {"2.25"}));
+  CHECK(ok(ratio, {"1e2"}));
+  CHECK(!ok(ratio, {"2,25"}));
+  CHECK(!ok(ratio, {"inf"}));
+  CHECK(!ok(ratio, {"nan"}));
+  CHECK_EQ(model::CheckFormField(ratio, {"0.25"}),
+           std::string("Najmenšia dovolená hodnota je 0.5."));
+
+  agent::FormField subscribe;
+  subscribe.type = agent::FieldType::Boolean;
+  CHECK(ok(subscribe, {"false"}));
+  CHECK(!ok(subscribe, {"ano"}));
+
+  agent::FormField size;
+  size.type = agent::FieldType::Choice;
+  size.options = {{"s", "Small"}, {"m", "Medium"}};
+  CHECK(ok(size, {"m"}));
+  CHECK_EQ(model::CheckFormField(size, {"Medium"}),
+           std::string("Vyberte jednu z ponúknutých možností."));
+
+  agent::FormField tags;
+  tags.type = agent::FieldType::Choices;
+  tags.options = {{"x", "x"}, {"y", "y"}, {"z", "z"}};
+  tags.minItems = 1;
+  tags.maxItems = 2;
+  CHECK(ok(tags, {}));
+  CHECK(ok(tags, {"x", "z"}));
+  CHECK_EQ(model::CheckFormField(tags, {"x", "y", "z"}),
+           std::string("Počet vybraných možností: najviac 2."));
+  CHECK(!ok(tags, {"x", "w"}));
+  tags.minItems = 2;
+  CHECK_EQ(model::CheckFormField(tags, {"x"}),
+           std::string("Počet vybraných možností: najmenej 2."));
+  tags.required = true;
+  CHECK(!ok(tags, {}));
+}
+
 // acceptForSession na upravu suborov pokryje dalsie upravy prave suborov
 // patchu, vsetkych, aj v dalsom tahu; iny subor v tom istom priecinku sa
 // pyta znova (tools/probe_codex_scope.py, rezimy file a multi, 10. 10. 2026).
@@ -5540,6 +5790,8 @@ int main(int argc, char** argv) {
   TestFixtureDisk(fixtures);
   TestCodexModes();
   TestCodexElicitation();
+  TestElicitationForm();
+  TestCheckFormField();
   TestCodexFileChangeScope();
   TestCodexReviewerDenial();
   TestClaudeBackgroundTasks();

@@ -106,9 +106,11 @@ AGENT_SRCS := src/agent/backend.cpp
 # proces, teda aj win::Process, a preto ho testy nelinkuju -- keby museli, znamenalo by to,
 # ze sa spracovanie protokolu niekde zamotalo so spustanim procesu.
 #
-# Kazde CLI ma vlastny podadresar s adapterom (proto/claude/, neskor
-# proto/codex/); spolocne je len jsonl.
-PROTO_PURE_SRCS := src/proto/jsonl.cpp src/proto/claude/events.cpp \
+# Kazde CLI ma vlastny podadresar s adapterom (proto/claude/,
+# proto/codex/); spolocne je jsonl a elicitation -- schema formulara je MCP,
+# nie CLI, a obe ju posielaju bez zmeny.
+PROTO_PURE_SRCS := src/proto/jsonl.cpp src/proto/elicitation.cpp \
+                   src/proto/claude/events.cpp \
                    src/proto/claude/control.cpp src/proto/claude/ask.cpp \
                    src/proto/claude/sessions.cpp src/proto/claude/translate.cpp \
                    src/proto/codex/translate.cpp src/proto/codex/threads.cpp \
@@ -126,7 +128,8 @@ APP_PURE_SRCS := src/arguments.cpp src/settings.cpp src/version.cpp src/update.c
 # Transkript a jeho mapa rozsahov.  Nevie o windows.h, a prave preto sa da
 # testovat bez okna -- co je vacsina toho, preco maju tie testy cenu.
 MODEL_SRCS := src/model/utf.cpp src/model/transcript.cpp src/model/bookmarks.cpp \
-              src/model/history.cpp src/model/background.cpp src/model/links.cpp
+              src/model/history.cpp src/model/background.cpp src/model/links.cpp \
+              src/model/form.cpp
 
 UI_SRCS := src/ui/session_pane.cpp src/ui/session_window.cpp src/ui/main_window.cpp src/ui/speech.cpp \
            src/ui/status_bar.cpp src/ui/session_details.cpp \

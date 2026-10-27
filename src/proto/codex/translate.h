@@ -181,6 +181,16 @@ agent::ToolResult QuestionResult(const std::string& callId,
 bool ElicitationPermission(const Json& params, agent::PermissionRequest* out);
 Json MakeElicitationAnswer(agent::Verdict verdict);
 
+// The request as a form, when it has fields or a link: what
+// ElicitationPermission said false to.  False for "openai/form", whose schema
+// is not MCP's -- it comes only to a client that declared it, and we do not.
+// The schema itself is read by proto::ReadFormFields.
+bool ElicitationForm(const Json& params, agent::FormRequest* out);
+// The answer.  No item comes for an elicitation (measured), so the transcript
+// gets proto::FormCall and proto::FormResult from the adapter.
+Json MakeFormAnswer(const agent::FormRequest& request,
+                    const agent::FormAnswer& answer);
+
 // What "acceptForSession" on a file change item allows, as lines for the
 // dialog (agent::PermissionRequest::sessionScope).  Empty when it is not known.
 std::vector<std::string> FileChangeScope(const Json& item);

@@ -19,6 +19,7 @@
 // all.  A factory in agent/ would have the port depend on its adapters.
 
 #include <functional>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -111,7 +112,7 @@ struct Account {
 
 // ---- Requests that wait for a person ----------------------------------------
 //
-// Both are CALLED ON THE READER THREAD and block it until answered (invariant
+// All are CALLED ON THE READER THREAD and block it until answered (invariant
 // 2).  The adapter turns the answer into whatever its wire wants -- Claude's
 // updatedInput keyed by question text, Codex's answers keyed by id.
 
@@ -182,6 +183,77 @@ struct QuestionAnswer {
   // Parallel to QuestionRequest::questions.  An empty entry leaves that
   // question unanswered.
   std::vector<std::vector<std::string>> chosen;
+};
+
+// A form an MCP server asks the reader to fill in -- MCP elicitation, which
+// Codex passes on unchanged and Claude would too (claude-gui-lkk.44.18).  A
+// form with no fields is a yes or a no and goes as a PermissionRequest; this
+// is the rest: fields, or a link to open.
+//
+// Values travel as text, one entry per value, because the port has no JSON:
+// the adapter turns them back into the type the field says.  Neither CLI
+// checks a value against the schema (tools/probe_elicit_form.notes.md), so
+// the dialog does, with model::CheckFormField.
+
+enum class FieldType {
+  Text,
+  Number,
+  Integer,
+  Boolean,  // values "true" and "false"
+  Choice,   // one of `options`
+  Choices,  // any of `options`, within minItems..maxItems
+};
+
+struct FormOption {
+  std::string value;  // what the answer carries
+  std::string label;  // what the reader sees; `value` when the schema has none
+};
+
+struct FormField {
+  std::string name;   // the key in the answer
+  std::string title;  // the label; empty means `name`
+  std::string description;
+  FieldType type = FieldType::Text;
+  bool required = false;
+  // The schema's default as values, offered prefilled.  Empty when none.
+  std::vector<std::string> defaults;
+  // Text: lengths in characters, and "email", "uri", "date" or "date-time".
+  std::optional<long long> minLength;
+  std::optional<long long> maxLength;
+  std::string format;
+  // Number and Integer.
+  std::optional<double> minimum;
+  std::optional<double> maximum;
+  // Choice and Choices.
+  std::vector<FormOption> options;
+  std::optional<long long> minItems;
+  std::optional<long long> maxItems;
+};
+
+struct FormRequest {
+  std::string server;   // the MCP server asking
+  std::string message;  // the server's own words, in its language
+  // Set for a link to open instead of fields: signing in to the server's
+  // service, say.  The answer then says only whether it was opened; nothing
+  // reports back when the reader is done on the page (measured).
+  std::string url;
+  // Required first, the rest after, each part by name: the server's own
+  // order is lost on the way (measured), and the alphabet is at least an
+  // order the reader can predict.
+  std::vector<FormField> fields;
+  std::string by;  // as PermissionRequest::by
+};
+
+struct FormAnswer {
+  enum class Action {
+    Accept,   // filled in, or the link opened
+    Decline,  // the reader said no
+    Cancel,   // the reader closed it without saying
+  };
+  Action action = Action::Cancel;
+  // Parallel to FormRequest::fields, with Accept.  An empty entry leaves the
+  // field out of the answer.
+  std::vector<std::vector<std::string>> values;
 };
 
 // ---- Starting ---------------------------------------------------------------
@@ -274,6 +346,7 @@ class Backend {
     std::function<void(std::vector<Event>)> onHistory;
     std::function<PermissionAnswer(const PermissionRequest&)> onPermission;
     std::function<QuestionAnswer(const QuestionRequest&)> onQuestion;
+    std::function<FormAnswer(const FormRequest&)> onForm;
   };
 
   virtual ~Backend() = default;

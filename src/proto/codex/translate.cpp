@@ -4,6 +4,7 @@
 #include <set>
 
 #include "i18n/i18n.h"
+#include "proto/elicitation.h"
 
 namespace proto::codex {
 
@@ -779,6 +780,43 @@ Json MakeElicitationAnswer(agent::Verdict verdict) {
       return {{"action", "cancel"}, {"content", nullptr}, {"_meta", nullptr}};
   }
   return {{"action", "decline"}, {"content", nullptr}, {"_meta", nullptr}};
+}
+
+bool ElicitationForm(const Json& params, agent::FormRequest* out) {
+  const std::string mode = StringField(params, "mode");
+  agent::FormRequest request;
+  request.server = StringField(params, "serverName");
+  request.message = StringField(params, "message");
+  if (mode == "url") {
+    request.url = StringField(params, "url");
+    if (request.url.empty()) return false;
+  } else if (mode == "form") {
+    request.fields = ReadFormFields(Field(params, "requestedSchema"));
+    if (request.fields.empty()) return false;
+  } else {
+    return false;
+  }
+  *out = std::move(request);
+  return true;
+}
+
+Json MakeFormAnswer(const agent::FormRequest& request,
+                    const agent::FormAnswer& answer) {
+  switch (answer.action) {
+    case agent::FormAnswer::Action::Accept:
+      // A link opened answers with no content; Codex turns the null into {}
+      // for the server (measured).
+      return {{"action", "accept"},
+              {"content", request.url.empty()
+                              ? FormContent(request.fields, answer.values)
+                              : Json()},
+              {"_meta", nullptr}};
+    case agent::FormAnswer::Action::Decline:
+      return {{"action", "decline"}, {"content", nullptr}, {"_meta", nullptr}};
+    case agent::FormAnswer::Action::Cancel:
+      break;
+  }
+  return {{"action", "cancel"}, {"content", nullptr}, {"_meta", nullptr}};
 }
 
 void Translator::ReportModel(const std::string& model,
