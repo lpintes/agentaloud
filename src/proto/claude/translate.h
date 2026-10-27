@@ -165,6 +165,12 @@ agent::Capabilities ClaudeCapabilities();
 // it, which are for a person and may change.
 bool ParseSignInUrl(std::string_view line, std::string* url);
 
+// Why can_use_tool was asked, as a sentence for the reader
+// (agent::PermissionRequest::reason), from `decision_reason_type` and
+// `blocked_path`.  Empty when the CLI gave neither.
+std::string ReasonSentence(const std::string& type,
+                           const std::string& blockedPath);
+
 // The CLI's permission_suggestions as lines for the reader: what "allow for
 // this session" lets through (agent::PermissionRequest::sessionScope).  One
 // line per rule, directory or mode, because one suggestion can carry several

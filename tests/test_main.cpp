@@ -4517,6 +4517,43 @@ void TestClaudeSessionPermissions() {
   CHECK(proto::SessionPermissions(request.suggestions).is_null());
 }
 
+// Tvar doslova zo sondy bash (claude-gui-lkk.61, zmerane pri lkk.38):
+// presmerovanie do suboru nesie blocked_path a ziadny decision_reason_type,
+// takze pole Dovod by bez cesty bolo "neuvedeny".
+void TestClaudeReasonBlockedPath() {
+  TEST("claude dovod povolenia: blocked_path bez typu je veta s cestou");
+  i18n::SetLanguage(i18n::Lang::kSlovak);
+  const proto::Json record = proto::Json::parse(R"J(
+    {"type":"control_request","request_id":"r1","request":{
+      "subtype":"can_use_tool","tool_name":"Bash","display_name":"Bash",
+      "input":{"command":"echo hello > hello.txt"},
+      "description":"Create a file with content",
+      "permission_suggestions":[{"type":"addRules",
+        "rules":[{"toolName":"Bash","ruleContent":"echo hello *"}],
+        "behavior":"allow","destination":"localSettings"},
+        {"type":"addDirectories","directories":["C:\\b\\perm-probe\\bash"],
+        "destination":"session"}],
+      "blocked_path":"C:\\b\\perm-probe\\bash\\hello.txt",
+      "tool_use_id":"t1"}})J");
+  proto::PermissionRequest request;
+  CHECK(proto::ParsePermissionRequest(record, &request));
+  CHECK_EQ(request.blockedPath, std::string("C:\\b\\perm-probe\\bash\\hello.txt"));
+  CHECK(request.decisionReasonType.empty());
+  CHECK_EQ(proto::ReasonSentence(request.decisionReasonType,
+                                 request.blockedPath),
+           std::string("zápis, ktorý vyžaduje schválenie: "
+                       "C:\\b\\perm-probe\\bash\\hello.txt"));
+  // S typom ide cesta za nasu vetu; bez oboch zostane prazdno a dialog
+  // povie "neuvedeny".
+  CHECK_EQ(proto::ReasonSentence("rule", "C:\\a.txt"),
+           std::string("pravidlo v nastaveniach alebo hook (rule); "
+                       "zápis, ktorý vyžaduje schválenie: C:\\a.txt"));
+  CHECK_EQ(proto::ReasonSentence("other", ""),
+           std::string("volanie vyžaduje schválenie (other)"));
+  CHECK(proto::ReasonSentence("", "").empty());
+  CHECK_EQ(proto::ReasonSentence("novy", ""), std::string("novy"));
+}
+
 // Tvar doslova zo sondy asis (17. 10. 2026, claude-gui-lkk.29): navrhy
 // poslane nezmenene, CLI samo zapisalo addRules do .claude/settings.local.json,
 // addDirectories so session nie.  Appka nic nezapisuje, len neprepise destination.
@@ -5512,6 +5549,7 @@ int main(int argc, char** argv) {
   TestCodexFailedTurnError();
   TestBackgroundText();
   TestClaudeSessionPermissions();
+  TestClaudeReasonBlockedPath();
   TestClaudeProjectPermissions();
   TestClaudeSessionScope();
   TestCodexFixtureMulti(fixtures);

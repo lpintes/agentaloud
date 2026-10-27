@@ -59,6 +59,9 @@ struct PermissionRequest {
   // hook.  Worth showing -- "you asked to be asked about commits" is a better
   // prompt than a bare command line.
   std::string decisionReasonType;
+  // The file a Bash redirect writes to, when that is what asked (measured,
+  // claude-gui-lkk.38).  Then decisionReasonType is missing.
+  std::string blockedPath;
   // True when the tool's whole job is to put something to a person --
   // AskUserQuestion is the one that matters here.  It says a human is wanted;
   // it does NOT say what the input looks like, so nothing may branch on it to

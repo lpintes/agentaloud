@@ -778,6 +778,36 @@ std::string RuleLine(const Json& rule) {
 
 }  // namespace
 
+// The wire's words are for a program: "rule" alone in a dialog says nothing
+// about which rule or whose.
+//
+// All values below were measured, not read -- "rule" in tools/spike_control.py
+// (a git commit against an ask rule), "subcommandResults" during the probes
+// on claude-gui-lkk.25, and "other" on a Bash command with no rule at all
+// (claude-gui-lkk.61).  Anything else is passed through as it came: an unknown
+// word is still more than no word, and inventing a translation for it would be
+// the one failure the dialog cannot afford.
+//
+// `decision_reason` is not read: it came only with "other", always as "This
+// command requires approval", in English (claude-gui-lkk.38).
+// `blocked_path` came on a redirect to a file, with no type at all -- the
+// field said "not given" there, although the CLI had named the file.  It
+// is not said to be outside the allowed folders, though the suggestions offer
+// that folder: in the probe the file was in the project's own folder.
+std::string ReasonSentence(const std::string& type,
+                           const std::string& blockedPath) {
+  using i18n::Str;
+  std::string sentence = type;
+  if (type == "rule") sentence = i18n::Utf8(Str::kReasonRule);
+  if (type == "subcommandResults") {
+    sentence = i18n::Utf8(Str::kReasonSubcommands);
+  }
+  if (type == "other") sentence = i18n::Utf8(Str::kReasonOther);
+  if (blockedPath.empty()) return sentence;
+  const std::string path = i18n::Utf8(Str::kReasonBlockedPath, {blockedPath});
+  return sentence.empty() ? path : sentence + "; " + path;
+}
+
 std::vector<std::string> SessionScope(const Json& suggestions) {
   using i18n::Str;
   std::vector<std::string> lines;
