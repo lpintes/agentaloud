@@ -200,6 +200,12 @@ class SessionPane {
   // Ctrl+S and the menu: the whole transcript, every block expanded, into a
   // text file the reader names each time.  The frame's key, like Ctrl+L.
   void SaveTranscript();
+  // F5 and the menu: the model of the running session, out of the CLI's own
+  // catalog (ui/model_dialog.h).  The frame's key, like Ctrl+L.  Nothing is
+  // said once it is chosen: the dialog closing is a focus change, and the
+  // status bar goes on naming the model that answers (invariant 21), so the
+  // change shows there with the first answer.
+  void ChooseModel();
 
   // Ctrl+Shift+<digit> marks, Ctrl+<digit> comes back.  Digit 0 is not
   // markable: it is where the reader was standing when new blocks arrived, and
@@ -358,6 +364,10 @@ class SessionPane {
   std::vector<agent::Event> history_;
 
   bool busy_ = false;
+  // The id F5 sent last, highlighted the next time.  The answering model
+  // (details_.model) is a resolved name the catalog may not list -- "sonnet"
+  // answers as claude-sonnet-5-5 -- so it is only the fallback.
+  std::string chosenModel_;
   // The CLI's process is gone and nothing sent will be heard.  For good:
   // a session is not restarted in place.
   bool ended_ = false;

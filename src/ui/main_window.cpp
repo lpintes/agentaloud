@@ -25,6 +25,7 @@ enum : UINT {
   kIdAbout,
   kIdSignIn,
   kIdSaveTranscript,
+  kIdChooseModel,
 };
 constexpr UINT kFirstChild = 50000;
 
@@ -39,6 +40,7 @@ HMENU BuildMenu(HMENU* windowMenu) {
   AppendMenuW(file, MF_STRING, kIdSaveTranscript,
               i18n::Text(Str::kMenuSaveTranscript));
   AppendMenuW(file, MF_STRING, kIdSignIn, i18n::Text(Str::kMenuSignIn));
+  AppendMenuW(file, MF_STRING, kIdChooseModel, i18n::Text(Str::kMenuModel));
   AppendMenuW(file, MF_SEPARATOR, 0, nullptr);
   AppendMenuW(file, MF_STRING, kIdExit, i18n::Text(Str::kMenuExit));
 
@@ -77,6 +79,7 @@ HMENU BuildMenu(HMENU* windowMenu) {
 HACCEL BuildAccelerators() {
   ACCEL table[] = {
       {FVIRTKEY, VK_F1, kIdKeys},
+      {FVIRTKEY, VK_F5, kIdChooseModel},
       {FCONTROL | FVIRTKEY, 'N', kIdNewSession},
       {FCONTROL | FVIRTKEY, 'L', kIdSignIn},
       {FCONTROL | FVIRTKEY, 'S', kIdSaveTranscript},
@@ -279,6 +282,15 @@ void MainWindow::SaveTranscript() {
   active->pane()->SaveTranscript();
 }
 
+void MainWindow::ChooseModel() {
+  SessionWindow* active = Active();
+  if (active == nullptr) {
+    Announce(i18n::Text(i18n::Str::kSayNoSession));
+    return;
+  }
+  active->pane()->ChooseModel();
+}
+
 void MainWindow::Reap() {
   std::erase_if(sessions_,
                 [](const auto& session) { return session->handle() == nullptr; });
@@ -365,6 +377,9 @@ LRESULT MainWindow::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
           return 0;
         case kIdSaveTranscript:
           SaveTranscript();
+          return 0;
+        case kIdChooseModel:
+          ChooseModel();
           return 0;
         case kIdCheckUpdates:
           if (checkForUpdates_) checkForUpdates_(hwnd_);

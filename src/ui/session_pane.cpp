@@ -19,6 +19,7 @@
 #include "ui/find_dialog.h"
 #include "ui/keys_dialog.h"
 #include "ui/links_dialog.h"
+#include "ui/model_dialog.h"
 #include "ui/permission_dialog.h"
 #include "ui/plan_dialog.h"
 #include "ui/resource.h"
@@ -1959,6 +1960,30 @@ void SessionPane::ShowCommands() {
   // command just inserted in it.  The argument hint is the part that is lost,
   // and it was on screen in the dialog a second ago, in the list line and in
   // the description box both.
+}
+
+void SessionPane::ChooseModel() {
+  const agent::Capabilities& capabilities = backend_->capabilities();
+  if (!capabilities.switchModel) {
+    Announce(i18n::Text(Str::kNoModelSwitch));
+    return;
+  }
+  // Like the commands of F4, the catalog comes with or after the handshake,
+  // and an empty dialog would say "this agent has no models", which is false.
+  const std::vector<agent::ModelChoice> catalog = backend_->modelCatalog();
+  if (catalog.empty()) {
+    Announce(i18n::Text(Str::kModelsNotYet));
+    return;
+  }
+  ModelPick pick;
+  pick.catalog = &catalog;
+  pick.current =
+      chosenModel_.empty() ? model::Utf8FromUtf16(details_.model) : chosenModel_;
+  pick.nextTurnOnly = busy_ && !capabilities.switchModelInTurn;
+  pick.set = [this](const std::string& id) { return backend_->SetModel(id); };
+  pick.announce = [this](const std::wstring& text) { Announce(text); };
+  const std::string chosen = PickModel(host_, pick);
+  if (!chosen.empty()) chosenModel_ = chosen;
 }
 
 std::optional<model::SearchHit> SessionPane::FindText(const std::wstring& text,
