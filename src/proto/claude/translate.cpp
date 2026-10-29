@@ -727,6 +727,9 @@ agent::Capabilities ClaudeCapabilities() {
   capabilities.stopTask = true;
   capabilities.backgroundNow = true;
   capabilities.signIn = true;
+  // set_model reaches the next API call of the turn in flight (MakeSetModel).
+  capabilities.switchModel = true;
+  capabilities.switchModelInTurn = true;
   // The aliases --help names, plus opusplan.  Aliases rather than ids
   // because they follow the newest model on their own; the list that is
   // true for the account comes only with the initialize answer, which is

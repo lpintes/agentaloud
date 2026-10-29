@@ -45,6 +45,18 @@ struct SlashCommand {
   std::vector<std::string> aliases;
 };
 
+// One entry of the handshake's `models` -- what set_model takes.  Measured on
+// 2.1.304 (tools/probe_set_model.py, 2026-10-29): 13 entries, the first
+// {value: "default", displayName: "Default (recommended)"}, the rest aliases
+// and full ids.  resolvedModel and the effort fields are not taken: the first
+// says what an alias means today, which the status bar learns from the answer
+// anyway (invariant 21), and effort is claude-gui-lkk.87.
+struct ModelEntry {
+  std::string value;  // "sonnet", "claude-opus-4-6", "default"
+  std::string displayName;
+  std::string description;
+};
+
 // The CLI asking to run a tool.  Field names are the wire's, not ours.
 struct PermissionRequest {
   std::string requestId;   // the CLI's UUID; an answer must echo it exactly
@@ -118,6 +130,9 @@ struct InitializeInfo {
   // What may be typed with a leading slash.  Empty until the handshake is
   // answered, which is not immediate -- see the note on Session::handshake().
   std::vector<SlashCommand> commands;
+  // The catalogue described above, in the CLI's order.  A catalogue, not the
+  // model this session runs.
+  std::vector<ModelEntry> models;
 };
 
 // False when the record is not a successful control_response, or carries none
@@ -203,6 +218,21 @@ Json MakeSetPermissionMode(const std::string& requestId,
 // with {} -- and the caller then keeps the mode it asked for.
 bool ParseSetPermissionModeResponse(const Json& record, std::string* requestId,
                                     std::string* mode);
+
+// F5: the model of every API call from now on, the one in flight's turn
+// included (tools/probe_set_model.py, 2.1.304, 2026-10-29).  The answer is a
+// bare success, or an error with error_code "catalog_unknown" for a word not
+// in the handshake's `models` -- nothing worth waiting for, so fire and forget.
+// "default" goes as null, the form measured to reset; the CLI then runs
+// `/model default` itself.
+//
+// After the first turn each change is echoed as a `user` record, isReplay,
+// whose text is "<local-command-stdout>Set model to ...", with or without
+// --replay-user-messages; PendingPrompts must not take it for a prompt.  On
+// disk it is a local /model command, three `user` records HumanPromptText
+// already refuses.  No system/status follows, and --resume takes the model of
+// the last turn, so a change with no turn after it is lost.
+Json MakeSetModel(const std::string& requestId, const std::string& model);
 
 // The next mode in the Shift+Tab cycle, in the terminal's order:
 //   default -> acceptEdits -> plan -> auto -> default

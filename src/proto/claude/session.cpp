@@ -363,6 +363,11 @@ bool Session::SetPermissionMode(const std::string& mode) {
   return SendJson(MakeSetPermissionMode(requestId, mode));
 }
 
+bool Session::SetModel(const std::string& model) {
+  return SendJson(
+      MakeSetModel("model-" + std::to_string(nextRequestId_++), model));
+}
+
 bool Session::WaitForTurn(unsigned milliseconds) {
   std::unique_lock<std::mutex> lock(mutex_);
   return turnEnded_.wait_for(lock, std::chrono::milliseconds(milliseconds),

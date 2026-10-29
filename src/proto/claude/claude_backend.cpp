@@ -288,6 +288,10 @@ bool ClaudeBackend::SetMode(const std::string& id) {
   return session_.SetPermissionMode(id);
 }
 
+bool ClaudeBackend::SetModel(const std::string& id) {
+  return session_.SetModel(id);
+}
+
 bool ClaudeBackend::StartSignIn() {
   std::unique_ptr<win::Process> previous;
   std::unique_ptr<win::Process> process = std::make_unique<win::Process>();
@@ -425,6 +429,16 @@ std::vector<agent::SlashCommand> ClaudeBackend::commands() const {
   for (const SlashCommand& command : session_.handshake().commands) {
     out.push_back({command.name, command.description, command.argumentHint,
                    command.aliases});
+  }
+  return out;
+}
+
+std::vector<agent::ModelChoice> ClaudeBackend::modelCatalog() const {
+  std::vector<agent::ModelChoice> out;
+  for (const ModelEntry& model : session_.handshake().models) {
+    out.push_back({model.value,
+                   model.displayName.empty() ? model.value : model.displayName,
+                   model.description});
   }
   return out;
 }

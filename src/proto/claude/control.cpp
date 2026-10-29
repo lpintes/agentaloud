@@ -89,6 +89,19 @@ bool ParseInitializeResponse(const Json& record, InitializeInfo* out) {
       info.commands.push_back(std::move(command));
     }
   }
+  // Nameless the same way: without a value there is nothing to send.
+  auto models = inner->find("models");
+  if (models != inner->end() && models->is_array()) {
+    for (const Json& entry : *models) {
+      if (!entry.is_object()) continue;
+      ModelEntry model;
+      model.value = StringField(entry, "value");
+      if (model.value.empty()) continue;
+      model.displayName = StringField(entry, "displayName");
+      model.description = StringField(entry, "description");
+      info.models.push_back(std::move(model));
+    }
+  }
   *out = info;
   return true;
 }
@@ -106,6 +119,14 @@ Json MakeSetPermissionMode(const std::string& requestId,
               {"request_id", requestId},
               {"request", Json{{"subtype", "set_permission_mode"},
                                {"mode", mode}}}};
+}
+
+Json MakeSetModel(const std::string& requestId, const std::string& model) {
+  return Json{{"type", "control_request"},
+              {"request_id", requestId},
+              {"request", Json{{"subtype", "set_model"},
+                               {"model", model == "default" ? Json()
+                                                            : Json(model)}}}};
 }
 
 bool ParseSetPermissionModeResponse(const Json& record, std::string* requestId,
@@ -346,10 +367,21 @@ void PendingPrompts::Observe(const Json& record) {
   if (count_ == 0 || !record.is_object()) return;
   auto type = record.find("type");
   auto replay = record.find("isReplay");
-  if (type != record.end() && *type == "user" && replay != record.end() &&
-      *replay == true) {
-    --count_;
+  if (type == record.end() || *type != "user" || replay == record.end() ||
+      *replay != true) {
+    return;
   }
+  // The echo of a set_model is a replay too, and no prompt of ours.
+  // Counting it would end the turn with the prompt still waiting behind it.
+  auto message = record.find("message");
+  if (message != record.end() && message->is_object()) {
+    auto content = message->find("content");
+    if (content != message->end() && content->is_string() &&
+        content->get<std::string>().rfind("<local-command-stdout>", 0) == 0) {
+      return;
+    }
+  }
+  --count_;
 }
 
 }  // namespace proto

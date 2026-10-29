@@ -1139,6 +1139,39 @@ void TestInitializeResponseParsing() {
   CHECK_EQ(withList.commands[1].aliases[0], std::string("tdd"));
   // Odpoved bez prikazov je stale platna odpoved, presne ako odpoved bez uctu.
   CHECK(info.commands.empty());
+  CHECK(info.models.empty());
+
+  // Katalog modelov pre F5: value je to, co ide do set_model. Tvar z
+  // tools/probe_set_model.py (2.1.304, 2026-10-29).
+  const proto::Json modelsAnswer = proto::Json::parse(R"json({
+    "type": "control_response",
+    "response": {
+      "subtype": "success",
+      "request_id": "init-4",
+      "response": {
+        "current_permission_mode": "default",
+        "models": [
+          {"value": "default", "resolvedModel": "claude-opus-5-5",
+           "displayName": "Default (recommended)",
+           "description": "Opus 5.5 for complex work",
+           "supportsEffort": true},
+          {"value": "haiku", "resolvedModel": "claude-haiku-5-5"},
+          {"displayName": "Bez value sa poslat neda"},
+          7
+        ]
+      }
+    }
+  })json");
+  proto::InitializeInfo withModels;
+  CHECK(proto::ParseInitializeResponse(modelsAnswer, &withModels));
+  CHECK_EQ(withModels.models.size(), size_t{2});
+  CHECK_EQ(withModels.models[0].value, std::string("default"));
+  CHECK_EQ(withModels.models[0].displayName,
+           std::string("Default (recommended)"));
+  CHECK_EQ(withModels.models[0].description,
+           std::string("Opus 5.5 for complex work"));
+  CHECK_EQ(withModels.models[1].value, std::string("haiku"));
+  CHECK_EQ(withModels.models[1].displayName, std::string());
 
   // Odpoved na nieco ine, chybova odpoved a zaznam bez modu nie su chyba, len
   // sa z nich rezim dozvediet neda.
@@ -1721,6 +1754,22 @@ void TestPermissionModeSwitch() {
     CHECK(!proto::codex::CodexCapabilities().backgroundNow);
   }
 
+  // set_model: slovo z katalogu ide tak, ako je; "default" ako null, co je
+  // tvar odmerany na navrat k predvolenemu (probe_set_model, beh 1 a 2).
+  const proto::Json setModel = proto::MakeSetModel("model-4", "haiku");
+  CHECK_EQ(setModel.value("type", std::string()),
+           std::string("control_request"));
+  CHECK_EQ(setModel.value("request_id", std::string()), std::string("model-4"));
+  CHECK_EQ(setModel["request"].value("subtype", std::string()),
+           std::string("set_model"));
+  CHECK_EQ(setModel["request"].value("model", std::string()),
+           std::string("haiku"));
+  const proto::Json setDefault = proto::MakeSetModel("model-5", "default");
+  CHECK(setDefault["request"].contains("model"));
+  CHECK(setDefault["request"]["model"].is_null());
+  CHECK(proto::ClaudeCapabilities().switchModel);
+  CHECK(proto::ClaudeCapabilities().switchModelInTurn);
+
   // Poziadavka: subtype set_permission_mode a holy mod.
   const proto::Json request = proto::MakeSetPermissionMode("mode-3", "plan");
   CHECK_EQ(request.value("type", std::string()), std::string("control_request"));
@@ -1882,6 +1931,19 @@ void TestPendingPrompts() {
   CHECK(local.waiting());
   local.Clear();
   CHECK(!local.waiting());
+
+  // Ozvena set_model je tiez isReplay, ale prompt to nie je: keby sa ratala,
+  // result by ukoncil tah s promptom, ktory este caka. Tvar z
+  // tools/probe_set_model.notes.md (2.1.304, beh 2).
+  proto::PendingPrompts model;
+  model.Sent("jeden");
+  model.Observe(proto::Json::parse(
+      R"({"type": "user", "isReplay": true, "parent_tool_use_id": null,
+          "message": {"role": "user", "content":
+          "<local-command-stdout>Set model to `haiku (claude-haiku-5-5)`</local-command-stdout>"}})"));
+  CHECK(model.waiting());
+  model.Observe(echo);
+  CHECK(!model.waiting());
 }
 
 void TestCodexSteers() {
@@ -3692,6 +3754,17 @@ void TestHistoryRestore() {
       // Vypis slash prikazu: otvara sa znackou, teda tiez nie prompt.
       "{\"type\":\"user\",\"message\":{\"content\":[{\"type\":\"text\","
       "\"text\":\"<command-name>/bd</command-name>\"}]}}\n"
+      // set_model z F5 je na disku lokalny /model, tri `user` zaznamy
+      // (tools/probe_set_model.notes.md); ziadny z nich nie je prompt.
+      "{\"type\":\"user\",\"message\":{\"content\":"
+      "\"<local-command-caveat>The command below was run directly in "
+      "Claude Code</local-command-caveat>\"}}\n"
+      "{\"type\":\"user\",\"message\":{\"content\":"
+      "\"<command-name>/model</command-name>\\n"
+      "            <command-args>haiku</command-args>\"}}\n"
+      "{\"type\":\"user\",\"message\":{\"content\":"
+      "\"<local-command-stdout>Set model to `haiku (claude-haiku-5-5)`"
+      "</local-command-stdout>\"}}\n"
       "{\"type\":\"user\",\"message\":{\"content\":\"co robi tento subor\"}}\n"
       "{\"type\":\"assistant\",\"message\":{\"content\":[{"
       "\"type\":\"thinking\",\"thinking\":\"treba sa pozriet\"}]}}\n"
@@ -3728,7 +3801,7 @@ void TestHistoryRestore() {
 
   std::vector<proto::Json> records;
   CHECK(proto::ReadSessionRecords(file.wstring(), &records));
-  CHECK_EQ(records.size(), size_t{9});
+  CHECK_EQ(records.size(), size_t{12});
 
   model::Transcript transcript;
   const model::HistoryCounts counts =

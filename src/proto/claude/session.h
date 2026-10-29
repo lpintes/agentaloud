@@ -120,6 +120,10 @@ class Session {
   // the CLI stated when the refusal arrives.
   bool SetPermissionMode(const std::string& mode);
 
+  // F5 (MakeSetModel).  Fire and forget; false only when the request could
+  // not be written.
+  bool SetModel(const std::string& model);
+
   // Blocks until the turn in flight ends.  Returns false on timeout, which
   // leaves the session usable -- the caller may want to wait again.
   bool WaitForTurn(unsigned milliseconds);
