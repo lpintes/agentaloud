@@ -220,6 +220,11 @@ bool ParseSignInStart(const Json& result, agent::SignInPrompt* prompt,
 std::string ReplacementModel(const Json& modelListResult,
                              const std::string& current);
 
+// The answer to model/list as the catalog F5 offers, in Codex's order and
+// without the models it marks hidden.  `model` is what thread/settings/update
+// takes; `id` has always been the same string, but is not what it asks for.
+std::vector<agent::ModelChoice> ModelCatalog(const Json& modelListResult);
+
 // ---- The stream -----------------------------------------------------------
 
 // The live stream, message by message.  A class, because a call is complete

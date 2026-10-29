@@ -69,7 +69,11 @@ class CodexBackend : public agent::Backend {
   // turn, and a command is left running by the model, not by us.
   bool Background() override { return false; }
   bool SetMode(const std::string& id) override;
-  bool SetModel(const std::string&) override { return false; }
+  // thread/settings/update with the model alone, so that the mode stays.
+  // Not validated by Codex: a model it does not know fails the next turn
+  // with 400, which is why F5 offers only the catalog.  Before the thread
+  // exists, the first turn/start carries it, which keeps it as well.
+  bool SetModel(const std::string& id) override;
   // The device code flow, in this same process: the page and the code come
   // back as text and the server finishes on its own when the reader is done
   // on the page.  Nothing to hand back, so SubmitSignInCode is false.
@@ -85,7 +89,7 @@ class CodexBackend : public agent::Backend {
   std::vector<std::string> refusedModes() const override { return {}; }
   agent::Account account() const override;
   std::vector<agent::SlashCommand> commands() const override { return {}; }
-  std::vector<agent::ModelChoice> modelCatalog() const override { return {}; }
+  std::vector<agent::ModelChoice> modelCatalog() const override;
   bool ready() const override;
 
  private:
@@ -115,6 +119,12 @@ class CodexBackend : public agent::Backend {
     // model/list after a sign-in: whether the thread's model is still one
     // the account may use.
     ListModels,
+    // model/list at the start, for the catalog alone.  Not ListModels: the
+    // thread is not open yet, and its model must not be replaced.
+    ReadModelCatalog,
+    // thread/settings/update from SetModel.  Not Settings, whose answer
+    // the mode tracker weighs.
+    SetModel,
   };
 
   bool Request(Purpose purpose, const char* method, Json params);
@@ -196,6 +206,8 @@ class CodexBackend : public agent::Backend {
   // A model for the next turn/start, which keeps it for the turns after it
   // too; empty when the thread's own will do.
   std::string turnModel_;
+  // From model/list, at the start and again after a sign-in.
+  std::vector<agent::ModelChoice> catalog_;
   agent::Account account_;
   // From StartSignIn until account/login/completed, or a refused start.
   bool signingIn_ = false;

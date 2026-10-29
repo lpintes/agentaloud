@@ -448,6 +448,32 @@ bool CodexBackend::SetMode(const std::string& id) {
   return SendSettings(id);
 }
 
+bool CodexBackend::SetModel(const std::string& id) {
+  if (id.empty()) return false;
+  std::string thread;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    // Now rather than with thread/settings/updated: a mode change sent
+    // before it would name the old model in its collaboration mode and put
+    // it back.
+    model_ = id;
+    if (threadId_.empty()) {
+      turnModel_ = id;
+      return true;
+    }
+    // A replacement waiting for the next turn/start would undo the choice.
+    turnModel_.clear();
+    thread = threadId_;
+  }
+  return Request(Purpose::SetModel, "thread/settings/update",
+                 {{"threadId", thread}, {"model", id}});
+}
+
+std::vector<agent::ModelChoice> CodexBackend::modelCatalog() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return catalog_;
+}
+
 bool CodexBackend::StartSignIn() {
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -724,6 +750,7 @@ void CodexBackend::OnResponse(const Json& message) {
       // succeeds (tools/probe_noauth.notes.md), and the session is there to
       // sign in from.
       Request(Purpose::ReadAccount, "account/read", {{"refreshToken", false}});
+      Request(Purpose::ReadModelCatalog, "model/list", Json::object());
       using Resume = agent::StartOptions::Resume;
       if (options_.resume == Resume::ById && !options_.resumeId.empty()) {
         Json params = ThreadParams(options_.mode);
@@ -860,16 +887,27 @@ void CodexBackend::OnResponse(const Json& message) {
       std::string model;
       {
         std::lock_guard<std::mutex> lock(mutex_);
+        catalog_ = ModelCatalog(result);
         model = ReplacementModel(result, model_);
         if (!model.empty()) model_ = turnModel_ = model;
       }
       if (model.empty()) break;
-      // Codex says nothing of a model changed by turn/start, so this is the
-      // only word of it the status bar gets (invariant 21).
+      // Codex does report it, but only once the next turn/start carries it;
+      // the status bar is told now (invariant 21), and the translator, so
+      // that thread/settings/updated does not say it a second time.
       translator_.SeedModel(model);
       Emit({agent::ModelChanged{model}});
       break;
     }
+    case Purpose::ReadModelCatalog: {
+      if (failed) break;
+      std::lock_guard<std::mutex> lock(mutex_);
+      catalog_ = ModelCatalog(result);
+      break;
+    }
+    // Refused, the thread keeps the model it had; the status bar never
+    // stopped naming it.
+    case Purpose::SetModel:
     case Purpose::CancelSignIn:
     case Purpose::Interrupt:
     case Purpose::StopTask:

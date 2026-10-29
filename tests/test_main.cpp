@@ -5728,6 +5728,33 @@ void TestCodexFixtureNoAuth(const std::string& dir) {
   CHECK_EQ(proto::codex::ReplacementModel(proto::Json::object(), "x"),
            std::string());
 
+  // Katalog pre F5: poradie Codexu, bez skrytych, meno z displayName.
+  // SetModel berie pole model, nie id.
+  const auto catalog = proto::codex::ModelCatalog(proto::Json::parse(
+      R"({"data": [{"id": "a", "model": "gpt-6-luna",
+                    "displayName": "GPT-6-Luna",
+                    "description": "Fast and affordable model.",
+                    "hidden": false, "isDefault": true},
+                   {"id": "x", "model": "gpt-old", "displayName": "Old",
+                    "hidden": true},
+                   {"id": "b", "model": "gpt-5.6-terra"},
+                   {"id": "c"}],
+          "nextCursor": null})"));
+  CHECK_EQ(catalog.size(), size_t{2});
+  if (catalog.size() == 2) {
+    CHECK_EQ(catalog[0].id, std::string("gpt-6-luna"));
+    CHECK_EQ(catalog[0].name, std::string("GPT-6-Luna"));
+    CHECK_EQ(catalog[0].description,
+             std::string("Fast and affordable model."));
+    CHECK_EQ(catalog[1].id, std::string("gpt-5.6-terra"));
+    CHECK_EQ(catalog[1].name, std::string("gpt-5.6-terra"));
+    CHECK(catalog[1].description.empty());
+  }
+  CHECK(proto::codex::ModelCatalog(proto::Json::object()).empty());
+  const agent::Capabilities codex = proto::codex::CodexCapabilities();
+  CHECK(codex.switchModel);
+  CHECK(!codex.switchModelInTurn);
+
   // Prihlaseny ucet ma requiresOpenaiAuth tiez true; rozhoduje account.
   CHECK(!proto::codex::NeedsSignIn(proto::Json::parse(
       R"({"account": {"type": "chatgpt", "email": "x@example.invalid"},

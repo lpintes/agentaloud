@@ -354,6 +354,10 @@ agent::Capabilities CodexCapabilities() {
   capabilities.allowForSession = true;
   capabilities.stopTask = true;
   capabilities.signIn = true;
+  // thread/settings/update; a turn already running keeps its model to the
+  // end (tools/probe_codex_model.notes.md, midturn).
+  capabilities.switchModel = true;
+  capabilities.switchModelInTurn = false;
   // None: Codex says which models there are only through model/list, which
   // needs app-server running.  A name written here from memory would go
   // stale with the next release, silently.
@@ -707,6 +711,22 @@ std::string ReplacementModel(const Json& modelListResult,
     if (isDefault.is_boolean() && isDefault.get<bool>()) fallback = model;
   }
   return fallback;
+}
+
+std::vector<agent::ModelChoice> ModelCatalog(const Json& modelListResult) {
+  std::vector<agent::ModelChoice> out;
+  const Json& data = Field(modelListResult, "data");
+  if (!data.is_array()) return out;
+  for (const Json& entry : data) {
+    const Json& hidden = Field(entry, "hidden");
+    if (hidden.is_boolean() && hidden.get<bool>()) continue;
+    const std::string model = StringField(entry, "model");
+    if (model.empty()) continue;
+    const std::string name = StringField(entry, "displayName");
+    out.push_back({model, name.empty() ? model : name,
+                   StringField(entry, "description")});
+  }
+  return out;
 }
 
 bool ElicitationPermission(const Json& params, agent::PermissionRequest* out) {
