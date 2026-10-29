@@ -69,6 +69,7 @@ class CodexBackend : public agent::Backend {
   // turn, and a command is left running by the model, not by us.
   bool Background() override { return false; }
   bool SetMode(const std::string& id) override;
+  bool SetModel(const std::string&) override { return false; }
   // The device code flow, in this same process: the page and the code come
   // back as text and the server finishes on its own when the reader is done
   // on the page.  Nothing to hand back, so SubmitSignInCode is false.
@@ -84,6 +85,7 @@ class CodexBackend : public agent::Backend {
   std::vector<std::string> refusedModes() const override { return {}; }
   agent::Account account() const override;
   std::vector<agent::SlashCommand> commands() const override { return {}; }
+  std::vector<agent::ModelChoice> modelCatalog() const override { return {}; }
   bool ready() const override;
 
  private:

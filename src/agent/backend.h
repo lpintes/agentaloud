@@ -76,6 +76,13 @@ struct Capabilities {
   // an alias the CLI adds tomorrow must not be refused today.  Empty when the
   // adapter knows none without asking a running process.
   std::vector<std::string> models;
+  // The model of a running session can be changed: SetModel, F5
+  // (claude-gui-lkk.86).
+  bool switchModel = false;
+  // ...and the change reaches the turn in flight, from its next request to
+  // the model on.  False: it waits for the next turn (Codex, measured), and
+  // the reader is told so, because the two CLIs differ exactly here.
+  bool switchModelInTurn = false;
   // Where the CLI keeps its sign-in and settings, for the sentences that say
   // why it will not answer (claude-gui-lkk.73).  Per backend, not per CLI:
   // the adapter fills it in from its Program when it is made.
@@ -100,6 +107,15 @@ struct SlashCommand {
   std::string description;
   std::string argumentHint;
   std::vector<std::string> aliases;
+};
+
+// One entry of the catalog a running CLI offers for SetModel.  The words are
+// the CLI's own, in English: a model's name is not translated, and the
+// description is short enough to read as it is.
+struct ModelChoice {
+  std::string id;           // what SetModel takes: "sonnet", "gpt-6-luna"
+  std::string name;         // "Sonnet 5.5"; `id` when the CLI gives none
+  std::string description;  // "Most efficient for simpler tasks"; may be empty
 };
 
 struct Account {
@@ -411,6 +427,13 @@ class Backend {
   // ModeChanged back to the mode the CLI is really in.
   virtual bool SetMode(const std::string& id) = 0;
 
+  // Only with Capabilities::switchModel; false without it.  `id` is a
+  // ModelChoice::id.  Fire and forget, and nothing reports back: the status
+  // bar goes on naming the model that answers (invariant 21), so the change
+  // shows there with the first answer it reaches.  Not saved anywhere
+  // (invariant 22).
+  virtual bool SetModel(const std::string& id) = 0;
+
   // ---- Signing in.  Only with Capabilities::signIn; false without it.
   // Where to go arrives as SignInPrompt and the outcome as SignInFinished,
   // both through onEvents.  One sign-in at a time: StartSignIn while one is
@@ -443,6 +466,9 @@ class Backend {
   // Both empty until Ready.
   virtual Account account() const = 0;
   virtual std::vector<SlashCommand> commands() const = 0;
+  // What SetModel takes, in the CLI's own order.  Empty until the CLI has
+  // said, which may be after Ready; F5 then says "not yet", as F4 does.
+  virtual std::vector<ModelChoice> modelCatalog() const = 0;
   virtual bool ready() const = 0;
 };
 
