@@ -14,6 +14,7 @@
 #                                  vypise id na resume
 #   probe_codex_model.py resume <threadId>   novy proces, thread/resume
 #   probe_codex_model.py effort    zmena modelu s/bez effort, neplatny effort
+#   probe_codex_model.py effortreset  effort null a zmena rezimu s effortom
 #
 # Ktory model tah naozaj pouzil, hovori rollout na disku (`turn_context`
 # s polom model pre kazdy tah); cestu dava thread.path.  Log v
@@ -249,6 +250,30 @@ def mode_effort(c):
     show_rollout(path)
 
 
+def collaboration(model, effort):
+    return {"mode": "default",
+            "settings": {"model": model, "reasoning_effort": effort,
+                         "developer_instructions": None}}
+
+
+def mode_effortreset(c):
+    """Da sa effort vratit na predvoleny, a zhodi ho zmena rezimu?"""
+    tid, path = start_thread(c)
+    settings(c, tid, effort="low")
+    turn(c, tid)
+    settings(c, tid, effort=None)
+    turn(c, tid)
+    settings(c, tid, effort="high")
+    settings(c, tid, collaborationMode=collaboration(MODEL_A, None))
+    turn(c, tid)
+    settings(c, tid, effort="low")
+    settings(c, tid, collaborationMode=collaboration(MODEL_A, "low"))
+    turn(c, tid)
+    settings(c, tid, collaborationMode=collaboration(MODEL_A, "medium"))
+    turn(c, tid)
+    show_rollout(path)
+
+
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "list"
     os.makedirs(WORKDIR, exist_ok=True)
@@ -274,6 +299,8 @@ def main():
         mode_resume(c, sys.argv[2])
     elif mode == "effort":
         mode_effort(c)
+    elif mode == "effortreset":
+        mode_effortreset(c)
     c.close()
 
 

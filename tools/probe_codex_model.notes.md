@@ -141,6 +141,19 @@ turn/start, the turn failed with
 (400, `turn/completed` status failed).  Fresh thread reports
 `"reasoningEffort": null` (model default).
 
+### Back to the default, and mode changes (`effortreset`, 2026-10-30)
+
+`thread/settings/update {"effort": null}` answers `{}` and **does nothing**: no
+notification, and the next turn_context still says `low`.  The way back is
+the collaboration mode: `collaborationMode.settings.reasoning_effort: null`
+gives `thread/settings/updated` with `"effort": null` and the next turn has no
+effort.
+
+The same field means every mode change sets the effort: sent with `null` after
+`effort: "high"`, the next turn has none; sent with `"low"` it stays low; sent
+with `"medium"` it becomes medium.  A mode change therefore has to name the
+effort in force or it resets it.
+
 ## 6. Notifications
 
 `thread/settings/updated` (full `threadSettings`) after every
