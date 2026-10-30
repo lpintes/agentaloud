@@ -97,6 +97,13 @@ struct ModeSettings {
 };
 bool SettingsForMode(const std::string& mode, ModeSettings* out);
 
+// thread/settings/update's collaborationMode.  It sets the effort as well as
+// the mode, so every sender has to name the effort in force or reset it; empty
+// is null, the default of the model, and the only way back to it: "effort": null
+// on its own does nothing (tools/probe_codex_model.notes.md, effortreset).
+Json CollaborationMode(const std::string& collaboration,
+                       const std::string& model, const std::string& effort);
+
 // Which mode the session is in, as far as anyone can say.  The same problem
 // as Claude's PermissionModeTracker, in a smaller shape: Shift+Tab moves the
 // mode ahead at once, so that a second fast press cycles from the new value,

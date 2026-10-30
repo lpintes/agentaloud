@@ -74,7 +74,10 @@ class CodexBackend : public agent::Backend {
   // with 400, which is why F5 offers only the catalog.  Before the thread
   // exists, the first turn/start carries it, which keeps it as well.
   bool SetModel(const std::string& id) override;
-  bool SetEffort(const std::string&) override { return false; }
+  // thread/settings/update again, from the next turn on, and not validated
+  // either.  A stage goes as effort; the default only as a collaboration mode
+  // naming the mode the thread is in.  Before the thread exists, as SetModel.
+  bool SetEffort(const std::string& level) override;
   // The device code flow, in this same process: the page and the code come
   // back as text and the server finishes on its own when the reader is done
   // on the page.  Nothing to hand back, so SubmitSignInCode is false.
@@ -91,7 +94,7 @@ class CodexBackend : public agent::Backend {
   agent::Account account() const override;
   std::vector<agent::SlashCommand> commands() const override { return {}; }
   std::vector<agent::ModelChoice> modelCatalog() const override;
-  std::string effort() const override { return {}; }
+  std::string effort() const override;
   bool ready() const override;
 
  private:
@@ -124,9 +127,10 @@ class CodexBackend : public agent::Backend {
     // model/list at the start, for the catalog alone.  Not ListModels: the
     // thread is not open yet, and its model must not be replaced.
     ReadModelCatalog,
-    // thread/settings/update from SetModel.  Not Settings, whose answer
-    // the mode tracker weighs.
+    // thread/settings/update from SetModel and SetEffort.  Not Settings, whose
+    // answer the mode tracker weighs.
     SetModel,
+    SetEffort,
   };
 
   bool Request(Purpose purpose, const char* method, Json params);
@@ -208,6 +212,11 @@ class CodexBackend : public agent::Backend {
   // A model for the next turn/start, which keeps it for the turns after it
   // too; empty when the thread's own will do.
   std::string turnModel_;
+  // The thread's effort, which a collaboration mode has to name or it resets
+  // it.  Empty: the default of the model.
+  std::string effort_;
+  // As turnModel_.
+  std::string turnEffort_;
   // From model/list, at the start and again after a sign-in.
   std::vector<agent::ModelChoice> catalog_;
   agent::Account account_;

@@ -358,6 +358,9 @@ agent::Capabilities CodexCapabilities() {
   // end (tools/probe_codex_model.notes.md, midturn).
   capabilities.switchModel = true;
   capabilities.switchModelInTurn = false;
+  // The same call and the same limit (effortreset, midturn).
+  capabilities.switchEffort = true;
+  capabilities.switchEffortInTurn = false;
   // None: Codex says which models there are only through model/list, which
   // needs app-server running.  A name written here from memory would go
   // stale with the next release, silently.
@@ -723,10 +726,27 @@ std::vector<agent::ModelChoice> ModelCatalog(const Json& modelListResult) {
     const std::string model = StringField(entry, "model");
     if (model.empty()) continue;
     const std::string name = StringField(entry, "displayName");
+    std::vector<std::string> efforts;
+    const Json& supported = Field(entry, "supportedReasoningEfforts");
+    if (supported.is_array()) {
+      for (const Json& effort : supported) {
+        std::string level = StringField(effort, "reasoningEffort");
+        if (!level.empty()) efforts.push_back(std::move(level));
+      }
+    }
     out.push_back({model, name.empty() ? model : name,
-                   StringField(entry, "description"), {}, {}});
+                   StringField(entry, "description"), {}, std::move(efforts)});
   }
   return out;
+}
+
+Json CollaborationMode(const std::string& collaboration,
+                       const std::string& model, const std::string& effort) {
+  return {{"mode", collaboration},
+          {"settings",
+           {{"model", model},
+            {"reasoning_effort", effort.empty() ? Json(nullptr) : Json(effort)},
+            {"developer_instructions", nullptr}}}};
 }
 
 bool ElicitationPermission(const Json& params, agent::PermissionRequest* out) {

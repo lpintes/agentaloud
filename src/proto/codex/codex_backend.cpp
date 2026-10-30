@@ -255,10 +255,12 @@ bool CodexBackend::SendSettings(const std::string& mode) {
   if (!SettingsForMode(mode, &settings)) return false;
   std::string thread;
   std::string model;
+  std::string effort;
   {
     std::lock_guard<std::mutex> lock(mutex_);
     thread = threadId_;
     model = model_;
+    effort = effort_;
   }
   Json params = {{"threadId", thread}};
   if (settings.permissions) {
@@ -269,14 +271,10 @@ bool CodexBackend::SendSettings(const std::string& mode) {
     params["approvalsReviewer"] = settings.reviewer;
   }
   // Every preset says plan or not: leaving plan is part of moving to any of
-  // them.  The collaboration mode has to name a model; the thread's own is
-  // the one that is not a change.
-  params["collaborationMode"] = {
-      {"mode", settings.collaboration},
-      {"settings",
-       {{"model", model},
-        {"reasoning_effort", nullptr},
-        {"developer_instructions", nullptr}}}};
+  // them.  The collaboration mode has to name a model and an effort; the
+  // thread's own are the ones that are not a change.
+  params["collaborationMode"] =
+      CollaborationMode(settings.collaboration, model, effort);
   return Request(Purpose::Settings, "thread/settings/update",
                  std::move(params));
 }
@@ -295,6 +293,10 @@ void CodexBackend::StartTurnLocked(const std::string& text) {
   if (!turnModel_.empty()) {
     message["params"]["model"] = turnModel_;
     turnModel_.clear();
+  }
+  if (!turnEffort_.empty()) {
+    message["params"]["effort"] = turnEffort_;
+    turnEffort_.clear();
   }
   // Written under mutex_ so that two prompts keep their order; the write
   // lock is always taken after this one, never before, so it cannot deadlock.
@@ -469,6 +471,38 @@ bool CodexBackend::SetModel(const std::string& id) {
                  {{"threadId", thread}, {"model", id}});
 }
 
+bool CodexBackend::SetEffort(const std::string& level) {
+  Json params;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    // Now, for the same reason as the model in SetModel.
+    effort_ = level;
+    turnEffort_.clear();
+    if (threadId_.empty()) {
+      turnEffort_ = level;
+      return true;
+    }
+    params = {{"threadId", threadId_}};
+    if (!level.empty()) {
+      params["effort"] = level;
+    } else {
+      // Not a preset (custom) is not plan either.
+      ModeSettings settings;
+      params["collaborationMode"] = CollaborationMode(
+          SettingsForMode(mode_.current(), &settings) ? settings.collaboration
+                                                      : "default",
+          model_, level);
+    }
+  }
+  return Request(Purpose::SetEffort, "thread/settings/update",
+                 std::move(params));
+}
+
+std::string CodexBackend::effort() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return effort_;
+}
+
 std::vector<agent::ModelChoice> CodexBackend::modelCatalog() const {
   std::lock_guard<std::mutex> lock(mutex_);
   return catalog_;
@@ -614,6 +648,10 @@ void CodexBackend::OnLine(std::string_view line) {
     if (const std::string model = StringField(settings, "model");
         !model.empty()) {
       model_ = model;
+    }
+    // Unlike the model, null is an answer: the default of the model.
+    if (settings.contains("effort")) {
+      effort_ = StringField(settings, "effort");
     }
   } else if (method == "account/updated") {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -908,6 +946,7 @@ void CodexBackend::OnResponse(const Json& message) {
     // Refused, the thread keeps the model it had; the status bar never
     // stopped naming it.
     case Purpose::SetModel:
+    case Purpose::SetEffort:
     case Purpose::CancelSignIn:
     case Purpose::Interrupt:
     case Purpose::StopTask:
@@ -930,6 +969,8 @@ void CodexBackend::OnThreadOpened(const Json& result, bool resumed) {
     std::lock_guard<std::mutex> lock(mutex_);
     threadId_ = StringField(thread, "id");
     if (!model.empty()) model_ = model;
+    // What SetEffort took meanwhile is still on its way to the first turn.
+    if (turnEffort_.empty()) effort_ = StringField(result, "reasoningEffort");
     mode_.Reported(ModeFromSettings(
         Field(result, "approvalPolicy"), Field(result, "sandbox"),
         StringField(result, "approvalsReviewer"),

@@ -5777,7 +5777,11 @@ void TestCodexFixtureNoAuth(const std::string& dir) {
       R"({"data": [{"id": "a", "model": "gpt-6-luna",
                     "displayName": "GPT-6-Luna",
                     "description": "Fast and affordable model.",
-                    "hidden": false, "isDefault": true},
+                    "hidden": false, "isDefault": true,
+                    "supportedReasoningEfforts": [
+                      {"reasoningEffort": "low", "description": "Fast"},
+                      {"reasoningEffort": "max", "description": "Hard"}],
+                    "defaultReasoningEffort": "low"},
                    {"id": "x", "model": "gpt-old", "displayName": "Old",
                     "hidden": true},
                    {"id": "b", "model": "gpt-5.6-terra"},
@@ -5792,11 +5796,34 @@ void TestCodexFixtureNoAuth(const std::string& dir) {
     CHECK_EQ(catalog[1].id, std::string("gpt-5.6-terra"));
     CHECK_EQ(catalog[1].name, std::string("gpt-5.6-terra"));
     CHECK(catalog[1].description.empty());
+    // Stupne effortu v poradi Codexu; model bez nich ich nema.
+    CHECK_EQ(catalog[0].efforts.size(), size_t{2});
+    if (catalog[0].efforts.size() == 2) {
+      CHECK_EQ(catalog[0].efforts[0], std::string("low"));
+      CHECK_EQ(catalog[0].efforts[1], std::string("max"));
+    }
+    CHECK(catalog[1].efforts.empty());
   }
   CHECK(proto::codex::ModelCatalog(proto::Json::object()).empty());
   const agent::Capabilities codex = proto::codex::CodexCapabilities();
   CHECK(codex.switchModel);
   CHECK(!codex.switchModelInTurn);
+  CHECK(codex.switchEffort);
+  CHECK(!codex.switchEffortInTurn);
+
+  // Rezim nesie aj effort: kazda zmena ho musi pomenovat, prazdny je null
+  // a jedina cesta spat k predvolenemu (probe_codex_model, effortreset).
+  const proto::Json collaboration =
+      proto::codex::CollaborationMode("plan", "gpt-6-luna", "high");
+  CHECK_EQ(collaboration.value("mode", std::string()), std::string("plan"));
+  CHECK_EQ(collaboration["settings"].value("model", std::string()),
+           std::string("gpt-6-luna"));
+  CHECK_EQ(collaboration["settings"].value("reasoning_effort", std::string()),
+           std::string("high"));
+  const proto::Json noEffort =
+      proto::codex::CollaborationMode("default", "gpt-6-luna", "");
+  CHECK(noEffort["settings"].contains("reasoning_effort"));
+  CHECK(noEffort["settings"]["reasoning_effort"].is_null());
 
   // Prihlaseny ucet ma requiresOpenaiAuth tiez true; rozhoduje account.
   CHECK(!proto::codex::NeedsSignIn(proto::Json::parse(
