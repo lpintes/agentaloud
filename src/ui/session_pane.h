@@ -274,10 +274,12 @@ class SessionPane {
   // The resumed conversation, into the transcript as one edit, with the caret
   // put at its end.
   void RestoreHistory(const std::vector<agent::Event>& events);
-  // Rewrites the bar's model field from details_.model and
-  // details_.permissionMode.  Shared by everything that moves either, so they
-  // never format it differently.
+  // Rewrites the bar's model field from details_.model, the backend's effort
+  // and details_.permissionMode.  Shared by everything that moves any of them,
+  // so they never format it differently.
   void RefreshModelField();
+  // The stage the bar names, to notice when the backend's has moved.
+  std::string effortShown_;
   void ShowRateLimit(const agent::RateLimitChanged& limit);
   // Puts the caret at the start of a block and says which line that is.
   void GoToBlock(size_t index);

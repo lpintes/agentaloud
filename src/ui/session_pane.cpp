@@ -791,6 +791,9 @@ void SessionPane::OnDrain() {
     }
   }
   if (mode) FollowPermissionMode(*mode);
+  // No event of its own: the port only answers what the stage is now, and
+  // Codex also moves it from its thread settings.
+  if (backend_->effort() != effortShown_) RefreshModelField();
 
   if (model_.blocks().size() != blocksBefore) bookmarks_.Set(0, reading);
 }
@@ -1400,15 +1403,19 @@ void SessionPane::FollowPermissionMode(const std::string& reported) {
 }
 
 void SessionPane::RefreshModelField() {
-  // Model and permission mode in one field.  The design said "model and
-  // effort", but system/init carries no effort -- and the permission mode is
-  // the more useful of the two anyway: it decides whether anything will be put
-  // to you at all.
+  // Model, effort and permission mode in one field.
   // Every field says what it is.  Read out one after another they are four
   // bare values otherwise, and "claude-opus-5, pokus, 5 h 83 %" is a riddle.
   // A part that is not known yet is left out rather than said empty.
   std::wstring facts;
   if (!details_.model.empty()) facts = i18n::Format(Str::kStatusModel, {details_.model});
+  // The stage chosen, not the one in force: Claude cuts it to what the model
+  // takes and does not say.  The default is left off like the ordinary mode.
+  effortShown_ = backend_->effort();
+  if (!effortShown_.empty()) {
+    if (!facts.empty()) facts += L", ";
+    facts += i18n::Format(Str::kStatusEffort, {model::Utf16FromUtf8(effortShown_)});
+  }
   const std::wstring& mode = details_.permissionMode;
   // The ordinary mode is left off: it is the state a reader assumes, and
   // naming it every time would crowd the field that has to be read in one
@@ -1991,6 +1998,8 @@ void SessionPane::ChooseModel() {
   pick.announce = [this](const std::wstring& text) { Announce(text); };
   const std::string chosen = PickModel(host_, pick);
   if (!chosen.empty()) chosenModel_ = chosen;
+  // Claude's answer to the change is no batch at all.
+  RefreshModelField();
 }
 
 std::optional<model::SearchHit> SessionPane::FindText(const std::wstring& text,

@@ -123,6 +123,7 @@ S(kSayRangeMismatchStuck, L"Prepis nesedí s modelom ani po prekreslení. Navig�
 S(kStatusProject, L"projekt {0}")
 S(kSessionOrdinal, L"{0} ({1})")
 S(kStatusModel, L"model {0}")
+S(kStatusEffort, L"effort {0}")
 S(kModeNamed, L"režim {0}")
 S(kStatusLimit, L"limit {0}")
 S(kLimitExhausted, L"limit vyčerpaný")
