@@ -196,7 +196,7 @@ S(kModelListLabelNextTurn, L"&Models ({0}), the change applies from the next tur
 S(kEffortNotSent, L"the effort could not be changed, the agent is not running")
 S(kEffortListLabel, L"&Effort ({0}):")
 S(kEffortListLabelNextTurn, L"&Effort ({0}), the change applies from the next turn:")
-S(kEffortNone, L"Effort: this model has none")
+S(kEffortNone, L"&Effort: this model has none")
 S(kEffortDefault, L"Default")
 S(kSearchNotFound, L"not found: {0}")
 S(kSearchWrappedTop, L"from the top: {0}")

@@ -104,21 +104,19 @@ class ModelDialog : public win::Dialog {
     SendMessageW(list, LB_RESETCONTENT, 0, 0);
     const std::vector<std::string>& efforts =
         (*pick_.catalog)[static_cast<size_t>(shownModel_)].efforts;
+    // Never disabled, even with nothing to choose: Tab skips a disabled list
+    // without a word, and its label is the only place that says why.
     const bool any = pick_.setEffort && !efforts.empty();
-    EnableWindow(list, any);
-    if (!any) {
-      SetText(IDC_MODELS_EFFORT_LABEL, i18n::Text(i18n::Str::kEffortNone));
-      return;
-    }
     SetText(IDC_MODELS_EFFORT_LABEL,
-            i18n::Format(pick_.effortNextTurnOnly
-                             ? i18n::Str::kEffortListLabelNextTurn
-                             : i18n::Str::kEffortListLabel,
-                         {std::to_wstring(efforts.size() + 1)}));
+            any ? i18n::Format(pick_.effortNextTurnOnly
+                                   ? i18n::Str::kEffortListLabelNextTurn
+                                   : i18n::Str::kEffortListLabel,
+                               {std::to_wstring(efforts.size() + 1)})
+                : i18n::Text(i18n::Str::kEffortNone));
     const std::wstring first = i18n::Text(i18n::Str::kEffortDefault);
     SendMessageW(list, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(first.c_str()));
     int selected = 0;
-    for (size_t i = 0; i < efforts.size(); ++i) {
+    for (size_t i = 0; any && i < efforts.size(); ++i) {
       const std::wstring row = model::Utf16FromUtf8(efforts[i]);
       SendMessageW(list, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(row.c_str()));
       if (efforts[i] == stage) selected = static_cast<int>(i) + 1;

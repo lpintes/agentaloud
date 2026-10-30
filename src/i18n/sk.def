@@ -198,7 +198,7 @@ S(kModelListLabelNextTurn, L"&Modely ({0}), zmena platí až od ďalšieho ťahu
 S(kEffortNotSent, L"effort sa nepodarilo zmeniť, agent nebeží")
 S(kEffortListLabel, L"&Effort ({0}):")
 S(kEffortListLabelNextTurn, L"&Effort ({0}), zmena platí až od ďalšieho ťahu:")
-S(kEffortNone, L"Effort: tento model ho nemá")
+S(kEffortNone, L"&Effort: tento model ho nemá")
 S(kEffortDefault, L"Predvolený")
 S(kSearchNotFound, L"nenájdené: {0}")
 S(kSearchWrappedTop, L"od začiatku: {0}")
