@@ -115,8 +115,9 @@ std::wstring KeysText(const agent::Capabilities& capabilities) {
   // this list does not exist (invariant 19), and F4 still answers.
   text += i18n::Text(capabilities.slashCommands ? Str::kKeysCommands
                                                 : Str::kKeysNoCommands);
-  text += i18n::Text(capabilities.switchModel ? Str::kKeysModel
-                                              : Str::kKeysNoModel);
+  text += i18n::Text(!capabilities.switchModel  ? Str::kKeysNoModel
+                     : capabilities.switchEffort ? Str::kKeysModelEffort
+                                                 : Str::kKeysModel);
   text += i18n::Text(capabilities.signIn ? Str::kKeysSignIn
                                          : Str::kKeysNoSignIn);
   text += i18n::Text(Str::kKeysSave);

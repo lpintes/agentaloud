@@ -154,6 +154,8 @@
 // Zmena modelu (F5).  See ui/model_dialog.h.
 #define IDC_MODELS_LIST         1240
 #define IDC_MODELS_LIST_LABEL   1241
+#define IDC_MODELS_EFFORT       1242
+#define IDC_MODELS_EFFORT_LABEL 1243
 
 // Formulár od MCP servera.  One field per dialog; of the three controls for
 // the value, the one the field needs is shown.  See ui/form_dialog.h.

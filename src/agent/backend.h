@@ -134,6 +134,13 @@ struct ModelChoice {
 const ModelChoice* FindModel(const std::vector<ModelChoice>& catalog,
                              const std::string& model);
 
+// What `stage`, chosen on a model with the stages `from`, becomes on a model
+// with the stages `to`: itself, or the nearest lower one `to` has, which is
+// how Claude cuts it down too.  Empty, the model's default, when there is none.
+std::string NearestEffort(const std::vector<std::string>& from,
+                          const std::vector<std::string>& to,
+                          const std::string& stage);
+
 struct Account {
   std::string email;
   std::string plan;  // "Claude Pro", "free"

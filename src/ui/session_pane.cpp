@@ -1979,8 +1979,15 @@ void SessionPane::ChooseModel() {
   pick.catalog = &catalog;
   pick.current =
       chosenModel_.empty() ? model::Utf8FromUtf16(details_.model) : chosenModel_;
+  pick.effort = backend_->effort();
   pick.nextTurnOnly = busy_ && !capabilities.switchModelInTurn;
+  pick.effortNextTurnOnly = busy_ && !capabilities.switchEffortInTurn;
   pick.set = [this](const std::string& id) { return backend_->SetModel(id); };
+  if (capabilities.switchEffort) {
+    pick.setEffort = [this](const std::string& level) {
+      return backend_->SetEffort(level);
+    };
+  }
   pick.announce = [this](const std::wstring& text) { Announce(text); };
   const std::string chosen = PickModel(host_, pick);
   if (!chosen.empty()) chosenModel_ = chosen;

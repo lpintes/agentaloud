@@ -200,8 +200,8 @@ class SessionPane {
   // Ctrl+S and the menu: the whole transcript, every block expanded, into a
   // text file the reader names each time.  The frame's key, like Ctrl+L.
   void SaveTranscript();
-  // F5 and the menu: the model of the running session, out of the CLI's own
-  // catalog (ui/model_dialog.h).  The frame's key, like Ctrl+L.  Nothing is
+  // F5 and the menu: the model and effort of the running session, out of the
+  // CLI's own catalog (ui/model_dialog.h).  The frame's key, like Ctrl+L.  Nothing is
   // said once it is chosen: the dialog closing is a focus change, and the
   // status bar goes on naming the model that answers (invariant 21), so the
   // change shows there with the first answer.

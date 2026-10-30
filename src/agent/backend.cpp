@@ -88,6 +88,21 @@ const ModelChoice* FindModel(const std::vector<ModelChoice>& catalog,
   return nullptr;
 }
 
+std::string NearestEffort(const std::vector<std::string>& from,
+                          const std::vector<std::string>& to,
+                          const std::string& stage) {
+  const auto has = [&to](const std::string& candidate) {
+    return std::find(to.begin(), to.end(), candidate) != to.end();
+  };
+  if (has(stage)) return stage;
+  auto at = std::find(from.begin(), from.end(), stage);
+  while (at != from.begin() && at != from.end()) {
+    --at;
+    if (has(*at)) return *at;
+  }
+  return {};
+}
+
 long long ResetToSay(const RateLimitChanged& limit) {
   const LimitWindow* shortest = nullptr;
   const LimitWindow* spent = nullptr;  // the longest exhausted window

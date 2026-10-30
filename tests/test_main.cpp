@@ -1235,6 +1235,17 @@ void TestPortModeCycleMatchesClaude() {
   CHECK(agent::FindModel(catalog, "gpt-6-luna") == &catalog[1]);
   CHECK(agent::FindModel(catalog, "") == nullptr);
   CHECK(agent::FindModel(catalog, "vymysleny") == nullptr);
+  // Stupen, ktory novy model nema, klesne na najblizsi nizsi, nie na predvoleny.
+  const std::vector<std::string> wide = {"low", "medium", "high", "xhigh", "max"};
+  const std::vector<std::string> narrow = {"low", "high"};
+  const std::vector<std::string> top = {"max"};
+  CHECK_EQ(agent::NearestEffort(wide, narrow, "high"), std::string("high"));
+  CHECK_EQ(agent::NearestEffort(wide, narrow, "xhigh"), std::string("high"));
+  CHECK_EQ(agent::NearestEffort(wide, narrow, "medium"), std::string("low"));
+  CHECK_EQ(agent::NearestEffort(wide, top, "low"), std::string());
+  CHECK_EQ(agent::NearestEffort(wide, {}, "high"), std::string());
+  CHECK_EQ(agent::NearestEffort(wide, narrow, ""), std::string());
+  CHECK_EQ(agent::NearestEffort(wide, narrow, "vymysleny"), std::string());
   // Agent bez rezimov nema kam cyklovat.
   CHECK_EQ(agent::NextMode(agent::Capabilities(), "default"), std::string());
 }

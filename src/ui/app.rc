@@ -435,16 +435,21 @@ END
 // the CLI's description in it, so the list needs no box beside it.  The
 // label is rewritten with the count and, for an agent that applies the change
 // only from the next turn, with that -- the label is what NVDA reads on the
-// way into the list, and after the dialog closes nothing can be said.
-IDD_MODELS DIALOGEX 0, 0, 300, 140
+// way into the list, and after the dialog closes nothing can be said.  The
+// effort list holds the stages of the model highlighted in the first one.
+IDD_MODELS DIALOGEX 0, 0, 300, 200
 STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION APP_NAME " — model"
+CAPTION APP_NAME " — model a effort"
 FONT 9, "Segoe UI", 400, 0, 1
 BEGIN
     LTEXT           "&Modely:", IDC_MODELS_LIST_LABEL, 8, 8, 284, 8
-    LISTBOX         IDC_MODELS_LIST, 8, 18, 284, 96,
+    LISTBOX         IDC_MODELS_LIST, 8, 18, 284, 88,
                     LBS_NOINTEGRALHEIGHT | LBS_NOTIFY | WS_VSCROLL | WS_TABSTOP
 
-    DEFPUSHBUTTON   "&Vybrať", IDOK, 176, 120, 56, 14
-    PUSHBUTTON      "&Zrušiť", IDCANCEL, 236, 120, 56, 14
+    LTEXT           "&Effort:", IDC_MODELS_EFFORT_LABEL, 8, 112, 284, 8
+    LISTBOX         IDC_MODELS_EFFORT, 8, 122, 284, 54,
+                    LBS_NOINTEGRALHEIGHT | LBS_NOTIFY | WS_VSCROLL | WS_TABSTOP
+
+    DEFPUSHBUTTON   "&Vybrať", IDOK, 176, 180, 56, 14
+    PUSHBUTTON      "&Zrušiť", IDCANCEL, 236, 180, 56, 14
 END

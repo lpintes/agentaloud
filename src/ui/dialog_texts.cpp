@@ -95,6 +95,7 @@ const std::vector<Template>& Templates() {
       {IDD_MODELS,
        Str::kDlgModelCaption,
        {{IDC_MODELS_LIST_LABEL, Str::kDlgModelList},
+        {IDC_MODELS_EFFORT_LABEL, Str::kDlgEffortList},
         {IDOK, Str::kDlgModelChoose},
         {IDCANCEL, Str::kDlgCmdCancel}}},
       {IDD_PLAN_APPROVAL,
