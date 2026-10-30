@@ -83,6 +83,11 @@ struct Capabilities {
   // the model on.  False: it waits for the next turn (Codex, measured), and
   // the reader is told so, because the two CLIs differ exactly here.
   bool switchModelInTurn = false;
+  // The reasoning effort of a running session can be changed: SetEffort, in
+  // the same dialog as the model (claude-gui-lkk.87).
+  bool switchEffort = false;
+  // ...and the change reaches the turn in flight, as switchModelInTurn.
+  bool switchEffortInTurn = false;
   // Where the CLI keeps its sign-in and settings, for the sentences that say
   // why it will not answer (claude-gui-lkk.73).  Per backend, not per CLI:
   // the adapter fills it in from its Program when it is made.
@@ -116,7 +121,18 @@ struct ModelChoice {
   std::string id;           // what SetModel takes: "sonnet", "gpt-6-luna"
   std::string name;         // "Sonnet 5.5"; `id` when the CLI gives none
   std::string description;  // "Most efficient for simpler tasks"; may be empty
+  // The full id an alias stands for, which is what a session reports as its
+  // model.  Empty when the CLI gives none.
+  std::string resolved;
+  // What SetEffort takes on this model, lowest first, in the CLI's own words:
+  // the stages differ from model to model.  Empty: this model has no effort.
+  std::vector<std::string> efforts;
 };
+
+// The entry `model` names, by its id or by the full id it resolves to, or
+// nullptr.
+const ModelChoice* FindModel(const std::vector<ModelChoice>& catalog,
+                             const std::string& model);
 
 struct Account {
   std::string email;
@@ -434,6 +450,13 @@ class Backend {
   // (invariant 22).
   virtual bool SetModel(const std::string& id) = 0;
 
+  // Only with Capabilities::switchEffort; false without it.  `level` is one of
+  // ModelChoice::efforts, or empty for the default of the model.  Fire and
+  // forget, and offer only what the catalog lists: Claude answers success to a
+  // stage it does not know and ignores it (tools/probe_claude_effort.notes.md).
+  // Not saved anywhere (invariant 22).
+  virtual bool SetEffort(const std::string& level) = 0;
+
   // ---- Signing in.  Only with Capabilities::signIn; false without it.
   // Where to go arrives as SignInPrompt and the outcome as SignInFinished,
   // both through onEvents.  One sign-in at a time: StartSignIn while one is
@@ -469,6 +492,8 @@ class Backend {
   // What SetModel takes, in the CLI's own order.  Empty until the CLI has
   // said, which may be after Ready; F5 then says "not yet", as F4 does.
   virtual std::vector<ModelChoice> modelCatalog() const = 0;
+  // The stage last set or last reported; empty for the model's default.
+  virtual std::string effort() const = 0;
   virtual bool ready() const = 0;
 };
 

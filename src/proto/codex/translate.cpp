@@ -724,7 +724,7 @@ std::vector<agent::ModelChoice> ModelCatalog(const Json& modelListResult) {
     if (model.empty()) continue;
     const std::string name = StringField(entry, "displayName");
     out.push_back({model, name.empty() ? model : name,
-                   StringField(entry, "description")});
+                   StringField(entry, "description"), {}, {}});
   }
   return out;
 }

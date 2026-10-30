@@ -1214,6 +1214,17 @@ void TestPortModeCycleMatchesClaude() {
   const agent::Mode* manual = agent::FindMode(claude, "manual");
   CHECK(manual != nullptr && manual->ordinary && !manual->inCycle);
   CHECK(agent::FindMode(claude, "vymysleny") == nullptr);
+  // Session hlasi plne id, katalog Claudu ma alias; najst sa musi oboma.
+  // Model bez plneho id sa prazdnym retazcom nesmie trafit.
+  std::vector<agent::ModelChoice> catalog(2);
+  catalog[0].id = "opus";
+  catalog[0].resolved = "claude-opus-5-5";
+  catalog[1].id = "gpt-6-luna";
+  CHECK(agent::FindModel(catalog, "opus") == &catalog[0]);
+  CHECK(agent::FindModel(catalog, "claude-opus-5-5") == &catalog[0]);
+  CHECK(agent::FindModel(catalog, "gpt-6-luna") == &catalog[1]);
+  CHECK(agent::FindModel(catalog, "") == nullptr);
+  CHECK(agent::FindModel(catalog, "vymysleny") == nullptr);
   // Agent bez rezimov nema kam cyklovat.
   CHECK_EQ(agent::NextMode(agent::Capabilities(), "default"), std::string());
 }

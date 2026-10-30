@@ -438,7 +438,7 @@ std::vector<agent::ModelChoice> ClaudeBackend::modelCatalog() const {
   for (const ModelEntry& model : session_.handshake().models) {
     out.push_back({model.value,
                    model.displayName.empty() ? model.value : model.displayName,
-                   model.description});
+                   model.description, {}, {}});
   }
   return out;
 }

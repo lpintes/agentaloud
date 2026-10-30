@@ -46,6 +46,7 @@ class ClaudeBackend : public agent::Backend {
   bool Background() override;
   bool SetMode(const std::string& id) override;
   bool SetModel(const std::string& id) override;
+  bool SetEffort(const std::string&) override { return false; }
   // `claude auth login`, a process of its own beside the session's: unlike
   // Codex, Claude's stream has no request for it (claude-gui-lkk.71.4).
   bool StartSignIn() override;
@@ -59,6 +60,7 @@ class ClaudeBackend : public agent::Backend {
   agent::Account account() const override;
   std::vector<agent::SlashCommand> commands() const override;
   std::vector<agent::ModelChoice> modelCatalog() const override;
+  std::string effort() const override { return {}; }
   bool ready() const override;
 
  private:

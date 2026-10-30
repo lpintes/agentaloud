@@ -79,6 +79,15 @@ const Mode* FindMode(const Capabilities& capabilities, const std::string& id) {
   return nullptr;
 }
 
+const ModelChoice* FindModel(const std::vector<ModelChoice>& catalog,
+                             const std::string& model) {
+  if (model.empty()) return nullptr;
+  for (const ModelChoice& choice : catalog) {
+    if (choice.id == model || choice.resolved == model) return &choice;
+  }
+  return nullptr;
+}
+
 long long ResetToSay(const RateLimitChanged& limit) {
   const LimitWindow* shortest = nullptr;
   const LimitWindow* spent = nullptr;  // the longest exhausted window
