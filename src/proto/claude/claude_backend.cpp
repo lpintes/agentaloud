@@ -292,6 +292,10 @@ bool ClaudeBackend::SetModel(const std::string& id) {
   return session_.SetModel(id);
 }
 
+bool ClaudeBackend::SetEffort(const std::string& level) {
+  return session_.SetEffort(level);
+}
+
 bool ClaudeBackend::StartSignIn() {
   std::unique_ptr<win::Process> previous;
   std::unique_ptr<win::Process> process = std::make_unique<win::Process>();
@@ -438,10 +442,13 @@ std::vector<agent::ModelChoice> ClaudeBackend::modelCatalog() const {
   for (const ModelEntry& model : session_.handshake().models) {
     out.push_back({model.value,
                    model.displayName.empty() ? model.value : model.displayName,
-                   model.description, {}, {}});
+                   model.description, model.resolvedModel,
+                   model.supportedEffortLevels});
   }
   return out;
 }
+
+std::string ClaudeBackend::effort() const { return session_.effort(); }
 
 bool ClaudeBackend::ready() const {
   return !session_.handshake().requestId.empty();

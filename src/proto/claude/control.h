@@ -48,13 +48,15 @@ struct SlashCommand {
 // One entry of the handshake's `models` -- what set_model takes.  Measured on
 // 2.1.304 (tools/probe_set_model.py, 2026-10-29): 13 entries, the first
 // {value: "default", displayName: "Default (recommended)"}, the rest aliases
-// and full ids.  resolvedModel and the effort fields are not taken: the first
-// says what an alias means today, which the status bar learns from the answer
-// anyway (invariant 21), and effort is claude-gui-lkk.87.
+// and full ids.  The effort fields are absent on a model without effort (haiku
+// 4.5); no field names the default stage (tools/probe_claude_effort.notes.md).
 struct ModelEntry {
   std::string value;  // "sonnet", "claude-opus-4-6", "default"
   std::string displayName;
   std::string description;
+  std::string resolvedModel;  // what an alias means today: "claude-opus-5-5"
+  // Lowest first, as the CLI lists them: "low" ... "max".
+  std::vector<std::string> supportedEffortLevels;
 };
 
 // The CLI asking to run a tool.  Field names are the wire's, not ours.
@@ -233,6 +235,18 @@ bool ParseSetPermissionModeResponse(const Json& record, std::string* requestId,
 // already refuses.  No system/status follows, and --resume takes the model of
 // the last turn, so a change with no turn after it is lost.
 Json MakeSetModel(const std::string& requestId, const std::string& model);
+
+// The reasoning effort from the next API call on, the turn in flight included;
+// empty goes as null, back to the model's default.  There is no set_effort:
+// /effort and the SDK both go through apply_flag_settings.  The answer is a bare
+// success even for a stage the CLI ignores, and nothing else follows.  --resume
+// does not remember the stage; set_model keeps it and the CLI clamps it to what
+// the new model has (tools/probe_claude_effort.notes.md, 2.1.304, 2026-10-30).
+Json MakeSetEffort(const std::string& requestId, const std::string& level);
+
+// The stage --effort starts the session with, or empty.  The last one wins, as
+// in ResumedConversation.
+std::string StartupEffort(const std::vector<std::wstring>& extraArgs);
 
 // The next mode in the Shift+Tab cycle, in the terminal's order:
 //   default -> acceptEdits -> plan -> auto -> default

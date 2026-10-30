@@ -730,6 +730,9 @@ agent::Capabilities ClaudeCapabilities() {
   // set_model reaches the next API call of the turn in flight (MakeSetModel).
   capabilities.switchModel = true;
   capabilities.switchModelInTurn = true;
+  // As set_model: the request after the next tool result carries it.
+  capabilities.switchEffort = true;
+  capabilities.switchEffortInTurn = true;
   // The aliases --help names, plus opusplan.  Aliases rather than ids
   // because they follow the newest model on their own; the list that is
   // true for the account comes only with the initialize answer, which is

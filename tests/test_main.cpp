@@ -1154,7 +1154,8 @@ void TestInitializeResponseParsing() {
           {"value": "default", "resolvedModel": "claude-opus-5-5",
            "displayName": "Default (recommended)",
            "description": "Opus 5.5 for complex work",
-           "supportsEffort": true},
+           "supportsEffort": true,
+           "supportedEffortLevels": ["low", "medium", "high", "xhigh", "max"]},
           {"value": "haiku", "resolvedModel": "claude-haiku-5-5"},
           {"displayName": "Bez value sa poslat neda"},
           7
@@ -1172,6 +1173,15 @@ void TestInitializeResponseParsing() {
            std::string("Opus 5.5 for complex work"));
   CHECK_EQ(withModels.models[1].value, std::string("haiku"));
   CHECK_EQ(withModels.models[1].displayName, std::string());
+  // Stupne effortu v poradi CLI; model bez nich (haiku 4.5) ich nema vobec.
+  CHECK_EQ(withModels.models[0].resolvedModel, std::string("claude-opus-5-5"));
+  CHECK_EQ(withModels.models[0].supportedEffortLevels.size(), size_t{5});
+  CHECK_EQ(withModels.models[0].supportedEffortLevels.front(),
+           std::string("low"));
+  CHECK_EQ(withModels.models[0].supportedEffortLevels.back(),
+           std::string("max"));
+  CHECK_EQ(withModels.models[1].resolvedModel, std::string("claude-haiku-5-5"));
+  CHECK(withModels.models[1].supportedEffortLevels.empty());
 
   // Odpoved na nieco ine, chybova odpoved a zaznam bez modu nie su chyba, len
   // sa z nich rezim dozvediet neda.
@@ -1780,6 +1790,28 @@ void TestPermissionModeSwitch() {
   CHECK(setDefault["request"]["model"].is_null());
   CHECK(proto::ClaudeCapabilities().switchModel);
   CHECK(proto::ClaudeCapabilities().switchModelInTurn);
+
+  // Effort: set_effort neexistuje, ide cez apply_flag_settings; prazdny ako
+  // null je navrat k predvolenemu (probe_claude_effort).
+  const proto::Json setEffort = proto::MakeSetEffort("effort-6", "xhigh");
+  CHECK_EQ(setEffort.value("type", std::string()),
+           std::string("control_request"));
+  CHECK_EQ(setEffort.value("request_id", std::string()),
+           std::string("effort-6"));
+  CHECK_EQ(setEffort["request"].value("subtype", std::string()),
+           std::string("apply_flag_settings"));
+  CHECK_EQ(setEffort["request"]["settings"].value("effortLevel", std::string()),
+           std::string("xhigh"));
+  const proto::Json clearEffort = proto::MakeSetEffort("effort-7", "");
+  CHECK(clearEffort["request"]["settings"].contains("effortLevel"));
+  CHECK(clearEffort["request"]["settings"]["effortLevel"].is_null());
+  CHECK(proto::ClaudeCapabilities().switchEffort);
+  CHECK(proto::ClaudeCapabilities().switchEffortInTurn);
+  // Stupen z prikazoveho riadka: posledny vyhrava, bez hodnoty nie je.
+  CHECK_EQ(proto::StartupEffort({}), std::string());
+  CHECK_EQ(proto::StartupEffort({L"--effort"}), std::string());
+  CHECK_EQ(proto::StartupEffort({L"--effort", L"low", L"--effort", L"high"}),
+           std::string("high"));
 
   // Poziadavka: subtype set_permission_mode a holy mod.
   const proto::Json request = proto::MakeSetPermissionMode("mode-3", "plan");

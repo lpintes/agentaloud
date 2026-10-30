@@ -132,6 +132,7 @@ bool Session::Start(const Options& options, EventCallback onEvent,
   // conversation is someone else's to name -- a resumed one keeps its own id,
   // and that one does arrive on the stream.
   sessionId_.assign(effective.sessionId.begin(), effective.sessionId.end());
+  effort_ = StartupEffort(options.extraArgs);
   // The mode asked for on the command line is the mode the CLI starts in; see
   // PermissionModeTracker for why it is worth knowing before the handshake.
   // The handshake overwrites it with the CLI's own word, so a mode the CLI
@@ -366,6 +367,21 @@ bool Session::SetPermissionMode(const std::string& mode) {
 bool Session::SetModel(const std::string& model) {
   return SendJson(
       MakeSetModel("model-" + std::to_string(nextRequestId_++), model));
+}
+
+bool Session::SetEffort(const std::string& level) {
+  const bool sent = SendJson(
+      MakeSetEffort("effort-" + std::to_string(nextRequestId_++), level));
+  if (sent) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    effort_ = level;
+  }
+  return sent;
+}
+
+std::string Session::effort() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return effort_;
 }
 
 bool Session::WaitForTurn(unsigned milliseconds) {

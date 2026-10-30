@@ -124,6 +124,10 @@ class Session {
   // not be written.
   bool SetModel(const std::string& model);
 
+  // MakeSetEffort; empty is the model's default.  The answer says nothing, so
+  // effort() is what was last sent.
+  bool SetEffort(const std::string& level);
+
   // Blocks until the turn in flight ends.  Returns false on timeout, which
   // leaves the session usable -- the caller may want to wait again.
   bool WaitForTurn(unsigned milliseconds);
@@ -172,6 +176,10 @@ class Session {
   std::vector<std::string> refusedModes() const;
   // Where approving ExitPlanMode goes by itself (PermissionModeTracker).
   std::string modeBeforePlan() const;
+  // The stage last sent, or the one --effort started with; empty is the
+  // model's default.  The CLI reports it nowhere on its own, and clamps it to
+  // the model per request, so this is the choice, not what a request carried.
+  std::string effort() const;
 
  private:
   void OnBytes(std::string_view bytes);
@@ -204,6 +212,7 @@ class Session {
   // Under mutex_: written by the reader thread, read by whoever asks.
   std::string sessionId_;
   InitializeInfo handshake_;
+  std::string effort_;
   // The commands in the newest list of background tasks: what StopAllTasks
   // has to stop one by one, because the interrupt leaves them running.
   std::vector<std::string> shellTasks_;

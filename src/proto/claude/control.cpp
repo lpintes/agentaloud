@@ -99,6 +99,15 @@ bool ParseInitializeResponse(const Json& record, InitializeInfo* out) {
       if (model.value.empty()) continue;
       model.displayName = StringField(entry, "displayName");
       model.description = StringField(entry, "description");
+      model.resolvedModel = StringField(entry, "resolvedModel");
+      auto levels = entry.find("supportedEffortLevels");
+      if (levels != entry.end() && levels->is_array()) {
+        for (const Json& level : *levels) {
+          if (level.is_string()) {
+            model.supportedEffortLevels.push_back(level.get<std::string>());
+          }
+        }
+      }
       info.models.push_back(std::move(model));
     }
   }
@@ -127,6 +136,28 @@ Json MakeSetModel(const std::string& requestId, const std::string& model) {
               {"request", Json{{"subtype", "set_model"},
                                {"model", model == "default" ? Json()
                                                             : Json(model)}}}};
+}
+
+Json MakeSetEffort(const std::string& requestId, const std::string& level) {
+  return Json{{"type", "control_request"},
+              {"request_id", requestId},
+              {"request",
+               Json{{"subtype", "apply_flag_settings"},
+                    {"settings", Json{{"effortLevel", level.empty()
+                                                          ? Json()
+                                                          : Json(level)}}}}}};
+}
+
+std::string StartupEffort(const std::vector<std::wstring>& extraArgs) {
+  std::string level;
+  for (size_t i = 0; i + 1 < extraArgs.size(); ++i) {
+    if (extraArgs[i] == L"--effort") {
+      // The stages are ASCII words; anything else the CLI itself refuses.
+      level.clear();
+      for (wchar_t c : extraArgs[i + 1]) level += static_cast<char>(c);
+    }
+  }
+  return level;
 }
 
 bool ParseSetPermissionModeResponse(const Json& record, std::string* requestId,
