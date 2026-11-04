@@ -60,6 +60,7 @@
 #include "proto/elicitation.h"
 #include "model/form.h"
 #include "arguments.h"
+#include "recent_folders.h"
 #include "session_names.h"
 #include "settings.h"
 #include "tone.h"
@@ -1266,6 +1267,42 @@ void TestSessionOrdinals() {
   CHECK(app::SessionOrdinals(W{L"a", L"a"}) == (I{1, 2}));
   // Zostala jedna: cislo zmizne.
   CHECK(app::SessionOrdinals(W{L"b", L"a"}) == (I{0, 0}));
+}
+
+// Zoznam naposledy pouzitych priecinkov (claude-gui-lkk.89): jeden riadok na
+// priecinok, pod agentom, ktory v nom robil naposledy, najnovsi prvy.
+void TestMergeRecentFolders() {
+  TEST("nedavne priecinky: zlucenie zo vsetkych agentov");
+  CHECK(app::MergeRecentFolders({}).empty());
+
+  const auto merged = app::MergeRecentFolders({
+      {L"C:\\A", L"C:\\a", 100, 0},
+      {L"C:\\B", L"C:\\b", 300, 0},
+      // Ten isty priecinok od druheho agenta, novsi a inak napisany: vyhra
+      // jeho pravopis aj agent.
+      {L"C:\\A", L"c:/a", 200, 1},
+      // Starsi zaznam priecinka B od druheho agenta nic nezmeni.
+      {L"C:\\B", L"C:/B", 50, 1},
+  });
+  CHECK_EQ(merged.size(), size_t{2});
+  CHECK(merged[0].path == L"C:\\b");
+  CHECK_EQ(merged[0].lastActive, 300LL);
+  CHECK_EQ(merged[0].backend, 0);
+  CHECK(merged[1].path == L"c:/a");
+  CHECK_EQ(merged[1].lastActive, 200LL);
+  CHECK_EQ(merged[1].backend, 1);
+
+  // Rovnaky cas: zostane prvy hlaseny, aj medzi priecinkami aj v ramci
+  // jedneho, aby sa zoznam medzi dvoma otvoreniami dialogu nepreskladal.
+  const auto ties = app::MergeRecentFolders({
+      {L"X", L"x", 7, 0},
+      {L"Y", L"y", 7, 0},
+      {L"X", L"X", 7, 1},
+  });
+  CHECK_EQ(ties.size(), size_t{2});
+  CHECK(ties[0].path == L"x");
+  CHECK_EQ(ties[0].backend, 0);
+  CHECK(ties[1].path == L"y");
 }
 
 // Prikazovy riadok (invariant 16 a claude-gui-lkk.44.7).  Kazde z tychto
@@ -6034,6 +6071,7 @@ int main(int argc, char** argv) {
   TestPortModeCycleMatchesClaude();
   TestArguments();
   TestSessionOrdinals();
+  TestMergeRecentFolders();
   TestSettings();
   TestSettingsWrite();
   TestToneWave();
