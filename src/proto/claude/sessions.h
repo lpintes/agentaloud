@@ -146,6 +146,17 @@ bool ProjectConversations(const std::wstring& projectPath,
                           std::vector<agent::Conversation>* out,
                           const std::wstring& configDir = {});
 
+// Every folder with a conversation in it, with the time of its newest one:
+// ClaudeBackend::ListProjects.  One entry per directory under projects/, in
+// no particular order; true with an empty list when there is none, false
+// only when the home is unknown.
+//
+// Two folders whose paths make the same directory name (they differ only in
+// a character that becomes a dash) come out as one, under whichever of them
+// was used last.  Rare enough to live with, and the CLI itself confuses them.
+bool ProjectFolders(std::vector<agent::Project>* out,
+                    const std::wstring& configDir = {});
+
 // An ISO 8601 UTC stamp as seconds since 1970, or 0 when it cannot be read.
 long long UnixSeconds(const std::string& isoStamp);
 

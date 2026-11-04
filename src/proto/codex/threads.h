@@ -19,7 +19,8 @@
 namespace proto::codex {
 
 // The params of thread/list for one page of `cwd`'s threads, most recently
-// active first.  An empty cursor is the first page.
+// active first.  An empty cursor is the first page; an empty cwd is every
+// folder's threads (the filter is optional in the schema).
 Json ThreadListParams(const std::string& cwdUtf8, const std::string& cursor,
                       int limit);
 
@@ -28,6 +29,18 @@ Json ThreadListParams(const std::string& cwdUtf8, const std::string& cursor,
 // is nothing to resume it by.
 std::string AppendThreadPage(const Json& result,
                              std::vector<agent::Conversation>* out);
+
+// The same page read for the folders: one entry per thread, its cwd and
+// updatedAt.  A thread without a cwd is skipped.  Returns the next cursor.
+std::string AppendThreadFolders(const Json& result,
+                                std::vector<agent::Project>* out);
+
+// One entry per folder, the newest thread's time.  Folders are told apart by
+// the text Codex stored, exactly: the cwd is stored as the client wrote it,
+// so one folder can come in two spellings here, and making those one is the
+// caller's, who merges the lists of every agent anyway.
+std::vector<agent::Project> FoldersOfThreads(
+    std::vector<agent::Project> threads);
 
 }  // namespace proto::codex
 

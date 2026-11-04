@@ -18,6 +18,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <string>
 
@@ -87,6 +88,33 @@ int ListBoth(const std::wstring& folder) {
   return failed;
 }
 
+// The `projects` errand (claude-gui-lkk.89): agent::Backend::ListProjects of
+// both adapters, the same way.  The folder argument is not used.
+int ProjectsOfBoth() {
+  proto::ClaudeBackend claude;
+  proto::codex::CodexBackend codex;
+  agent::Backend* const backends[] = {&claude, &codex};
+  const char* const names[] = {"claude", "codex"};
+  int failed = 0;
+  for (int i = 0; i < 2; ++i) {
+    std::vector<agent::Project> list;
+    const ULONGLONG begun = GetTickCount64();
+    const bool ok = backends[i]->ListProjects(&list);
+    const ULONGLONG spent = GetTickCount64() - begun;
+    std::sort(list.begin(), list.end(),
+              [](const agent::Project& a, const agent::Project& b) {
+                return a.lastActive > b.lastActive;
+              });
+    std::printf("%s: %s, %zu priecinkov, %llu ms\n", names[i],
+                ok ? "ok" : "ZLYHALO", list.size(), spent);
+    if (!ok) ++failed;
+    for (size_t j = 0; j < list.size() && j < 8; ++j) {
+      std::printf("  %lld  %ls\n", list[j].lastActive, list[j].path.c_str());
+    }
+  }
+  return failed;
+}
+
 }  // namespace
 
 int wmain(int argc, wchar_t** argv) {
@@ -94,11 +122,12 @@ int wmain(int argc, wchar_t** argv) {
   if (argc < 2) {
     std::printf(
         "pouzitie: spike_console <pracovny-adresar> "
-        "[allow|deny|interrupt|list]\n");
+        "[allow|deny|interrupt|list|projects]\n");
     return 2;
   }
   const std::wstring mode = argc < 3 ? L"allow" : argv[2];
   if (mode == L"list") return ListBoth(argv[1]);
+  if (mode == L"projects") return ProjectsOfBoth();
   const bool interrupt = mode == L"interrupt";
   // The interrupt errand has to let the tool start before it can stop it.
   const bool allow = interrupt || mode != L"deny";

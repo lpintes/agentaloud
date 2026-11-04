@@ -7,36 +7,13 @@
 #include "app_name.h"
 #include "i18n/i18n.h"
 #include "model/background.h"
+#include "win/paths.h"
 
 namespace ui {
 namespace {
 
 // The two properties Annotate puts on the child's client area.
 const MSAAPROPID kAnnotated[] = {PROPID_ACC_ROLE, PROPID_ACC_NAME};
-
-// The last component of the path: the same name the status bar gives the
-// project.  The whole path is in the frame's title, read on request.
-std::wstring FolderName(std::wstring path) {
-  while (!path.empty() && (path.back() == L'\\' || path.back() == L'/')) {
-    path.pop_back();
-  }
-  const size_t slash = path.find_last_of(L"\\/");
-  return slash == std::wstring::npos ? path : path.substr(slash + 1);
-}
-
-// The same folder however it was typed: Windows paths ignore case and take
-// either slash, and two sessions in one checkout must count as one folder
-// even when one came from the command line and the other from the dialog.
-std::wstring FolderKey(std::wstring path) {
-  for (auto& c : path) {
-    if (c == L'/') c = L'\\';
-  }
-  while (!path.empty() && path.back() == L'\\') path.pop_back();
-  if (!path.empty()) {
-    CharUpperBuffW(path.data(), static_cast<DWORD>(path.size()));
-  }
-  return path;
-}
 
 IAccPropServices* PropServices() {
   IAccPropServices* services = nullptr;
@@ -100,8 +77,8 @@ bool SessionWindow::Open(HWND mdiClient, HINSTANCE instance, StatusBar* bar,
                           WS_CAPTION | WS_THICKFRAME | WS_VISIBLE)) {
     return false;
   }
-  folder_ = FolderName(options.projectDir);
-  folderKey_ = FolderKey(options.projectDir);
+  folder_ = win::FolderName(options.projectDir);
+  folderKey_ = win::FolderKey(options.projectDir);
   project_ = options.projectDir;
   Annotate(folder_);
   pane_ = std::make_unique<SessionPane>();

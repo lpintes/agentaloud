@@ -356,6 +356,18 @@ struct Conversation {
   long long lastActive = 0;
 };
 
+// A folder the agent has worked in, and when last: one line of the list of
+// recent folders the New session dialog offers (claude-gui-lkk.89).  Taken
+// from the CLI's own record of its conversations, so a project opened in a
+// terminal is on it as well as one opened here.
+struct Project {
+  // As the CLI stored it, which is not one spelling: case and slashes are
+  // whatever the client that started the conversation wrote.  Whoever merges
+  // lists compares them by win::FolderKey.
+  std::wstring path;
+  long long lastActive = 0;  // as Conversation::lastActive
+};
+
 // Why Start returned false.  Only a process that could not be started at all
 // ends up here: one that starts and then refuses its arguments makes Start
 // succeed, and says why itself, off stderr, in SessionEnded (invariant 25).
@@ -410,6 +422,14 @@ class Backend {
   // list that could not be had.
   virtual bool ListConversations(const std::wstring& projectDir,
                                  std::vector<Conversation>* out) = 0;
+
+  // Every folder this agent has a conversation in, one entry per folder as
+  // the CLI spells it, with the time of its newest conversation.  In no
+  // particular order: the caller merges the lists of all agents and sorts
+  // once.  The same contract as ListConversations otherwise -- asked of a
+  // backend never started, BLOCKS, not on a window's thread, false when no
+  // list could be had.
+  virtual bool ListProjects(std::vector<Project>* out) = 0;
 
   virtual bool Start(const StartOptions& options, Callbacks callbacks) = 0;
   // After a Start that returned false; meaningless otherwise.

@@ -1,6 +1,8 @@
 #include "proto/claude/sessions.h"
 
 #include <algorithm>
+#include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <ctime>
 #include <filesystem>
@@ -115,8 +117,11 @@ std::wstring ProjectKey(const std::wstring& projectPath) {
   return key;
 }
 
-std::wstring ProjectSessionDir(const std::wstring& projectPath,
-                              const std::wstring& configDir) {
+namespace {
+
+// <home>/projects, where the CLI files every project's sessions.  Empty when
+// the home is unknown.
+std::wstring ProjectsDir(const std::wstring& configDir) {
   std::wstring home;
   if (!configDir.empty()) {
     home = configDir;
@@ -130,7 +135,16 @@ std::wstring ProjectSessionDir(const std::wstring& projectPath,
   } else {
     return {};
   }
-  return home + L"\\projects\\" + ProjectKey(projectPath);
+  return home + L"\\projects";
+}
+
+}  // namespace
+
+std::wstring ProjectSessionDir(const std::wstring& projectPath,
+                              const std::wstring& configDir) {
+  const std::wstring projects = ProjectsDir(configDir);
+  if (projects.empty()) return {};
+  return projects + L"\\" + ProjectKey(projectPath);
 }
 
 std::wstring SessionFilePath(const std::wstring& projectPath,
@@ -317,6 +331,133 @@ bool ProjectConversations(const std::wstring& projectPath,
     conversation.firstPrompt = std::move(session.firstPrompt);
     conversation.lastActive = UnixSeconds(session.lastStamp);
     out->push_back(std::move(conversation));
+  }
+  return true;
+}
+
+namespace {
+
+// The last `size` bytes of the file, or the whole of it when it is no longer;
+// `whole` says which.
+bool ReadFileTail(const std::filesystem::path& path, std::uintmax_t size,
+                  std::string* out, bool* whole) {
+  std::ifstream file(path, std::ios::binary | std::ios::ate);
+  if (!file) return false;
+  const std::streamoff length = file.tellg();
+  if (length < 0) return false;
+  const std::streamoff start =
+      static_cast<std::uintmax_t>(length) > size
+          ? length - static_cast<std::streamoff>(size)
+          : 0;
+  *whole = start == 0;
+  out->resize(static_cast<size_t>(length - start));
+  file.seekg(start);
+  file.read(out->data(), length - start);
+  out->resize(static_cast<size_t>(file.gcount()));
+  return true;
+}
+
+// Where and when the conversation in this file was last spoken in: the newest
+// user or assistant record, each of which carries both `cwd` and `timestamp`.
+// False for a file that has no such record -- not a conversation.
+//
+// From the tail, unlike ReadSessionSummary, because this runs over every
+// session the machine has (677 MB in 810 files here, 2026-11-04) and not one
+// project's.  The danger ReadWholeFile names is real -- one tool result can be
+// bigger than any window -- so a window that holds no complete record of the
+// kind is not an answer: it grows until it does, or until it is the file.
+bool LastSpoken(const std::filesystem::path& path, std::string* cwd,
+                std::string* stamp) {
+  std::uintmax_t window = 64 * 1024;
+  std::string text;
+  Json record;
+  std::string error;
+  for (;;) {
+    bool whole = false;
+    if (!ReadFileTail(path, window, &text, &whole)) return false;
+    std::vector<std::string_view> lines = SplitLines(text);
+    // The first line of a window that starts mid-file is a piece of one.
+    if (!whole && !lines.empty()) lines.erase(lines.begin());
+    for (size_t i = lines.size(); i-- > 0;) {
+      if (!ParseLine(lines[i], &record, &error)) continue;
+      const std::string kind = record.value("type", std::string());
+      if (kind != "user" && kind != "assistant") continue;
+      *cwd = record.value("cwd", std::string());
+      *stamp = record.value("timestamp", std::string());
+      if (!cwd->empty() && !stamp->empty()) return true;
+    }
+    if (whole) return false;
+    window *= 4;
+  }
+}
+
+long long UnixSecondsOf(std::filesystem::file_time_type time) {
+  return std::chrono::duration_cast<std::chrono::seconds>(
+             std::chrono::file_clock::to_sys(time).time_since_epoch())
+      .count();
+}
+
+}  // namespace
+
+bool ProjectFolders(std::vector<agent::Project>* out,
+                    const std::wstring& configDir) {
+  namespace fs = std::filesystem;
+  out->clear();
+  const std::wstring projects = ProjectsDir(configDir);
+  if (projects.empty()) return false;
+
+  struct Candidate {
+    fs::path file;
+    long long modified;
+    size_t folder;
+  };
+  std::vector<Candidate> candidates;
+  size_t folders = 0;
+  std::error_code code;
+  fs::directory_iterator top(fs::path(projects), code);
+  if (code) return true;  // no directory means no project yet
+  for (const fs::directory_entry& folder : top) {
+    std::error_code inner;
+    if (!folder.is_directory(inner)) continue;
+    // Top level only: a session's own subdirectory holds its subagents'
+    // conversations and tool results, not conversations of the project.
+    for (const fs::directory_entry& entry :
+         fs::directory_iterator(folder.path(), inner)) {
+      if (entry.path().extension() != L".jsonl") continue;
+      const fs::file_time_type modified = entry.last_write_time(inner);
+      if (inner) continue;
+      candidates.push_back({entry.path(), UnixSecondsOf(modified), folders});
+    }
+    ++folders;
+  }
+
+  // A record is never written after its file was last modified, so once a
+  // folder has an answer newer than a file's mtime, nothing in that file can
+  // beat it.  Newest mtime first, then, and nearly every folder is decided by
+  // its first file.  The second of slack is for the stamp's milliseconds.
+  std::sort(candidates.begin(), candidates.end(),
+            [](const Candidate& a, const Candidate& b) {
+              return a.modified > b.modified;
+            });
+  std::vector<long long> newest(folders, 0);
+  std::vector<std::string> where(folders);
+  for (const Candidate& candidate : candidates) {
+    if (newest[candidate.folder] > candidate.modified + 1) continue;
+    std::string cwd, stamp;
+    if (!LastSpoken(candidate.file, &cwd, &stamp)) continue;
+    const long long when = UnixSeconds(stamp);
+    if (when > newest[candidate.folder]) {
+      newest[candidate.folder] = when;
+      where[candidate.folder] = std::move(cwd);
+    }
+  }
+  // The folder as the records name it, not as the directory does: the
+  // directory name is the path with every non-alphanumeric made a dash, and
+  // that cannot be undone.
+  for (size_t i = 0; i < folders; ++i) {
+    if (newest[i] == 0) continue;
+    const std::u8string utf8(where[i].begin(), where[i].end());
+    out->push_back({fs::path(utf8).wstring(), newest[i]});
   }
   return true;
 }

@@ -23,6 +23,7 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -49,6 +50,8 @@ class CodexBackend : public agent::Backend {
   // thread/list in a short `codex app-server` of its own (proto/codex/threads.h).
   bool ListConversations(const std::wstring& projectDir,
                          std::vector<agent::Conversation>* out) override;
+  // The same, over every folder's threads.
+  bool ListProjects(std::vector<agent::Project>* out) override;
   bool Start(const agent::StartOptions& options, Callbacks callbacks) override;
   agent::StartFailure startFailure() const override {
     return {ProgramName(), process_.startError(), !program_.path.empty()};
@@ -164,6 +167,12 @@ class CodexBackend : public agent::Backend {
     return program_.path.empty() ? L"codex" : program_.path;
   }
   std::wstring AppServerLine() const;
+  // thread/list, in a short `codex app-server` of its own, page after page:
+  // onPage takes each result and returns the cursor of the page it wants
+  // next, empty to stop.  Empty `cwd` is every folder's threads.  It is called
+  // on the reader thread, and not after this has returned.
+  bool ListThreads(const std::string& cwd,
+                   const std::function<std::string(const Json& result)>& onPage);
 
   // Constant after construction, so any thread reads it.
   const agent::Program program_;

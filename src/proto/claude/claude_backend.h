@@ -33,6 +33,7 @@ class ClaudeBackend : public agent::Backend {
   // Off the disk, without starting the CLI (proto/claude/sessions.h).
   bool ListConversations(const std::wstring& projectDir,
                          std::vector<agent::Conversation>* out) override;
+  bool ListProjects(std::vector<agent::Project>* out) override;
   // A conversation named by --resume in extraArgs is read off disk and handed
   // to onHistory before the process starts, on the calling thread.
   bool Start(const agent::StartOptions& options, Callbacks callbacks) override;

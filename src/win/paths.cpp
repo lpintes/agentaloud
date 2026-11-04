@@ -28,6 +28,25 @@ std::wstring RoamingAppData() {
   return result;
 }
 
+std::wstring FolderName(std::wstring path) {
+  while (!path.empty() && (path.back() == L'\\' || path.back() == L'/')) {
+    path.pop_back();
+  }
+  const size_t slash = path.find_last_of(L"\\/");
+  return slash == std::wstring::npos ? path : path.substr(slash + 1);
+}
+
+std::wstring FolderKey(std::wstring path) {
+  for (auto& c : path) {
+    if (c == L'/') c = L'\\';
+  }
+  while (!path.empty() && path.back() == L'\\') path.pop_back();
+  if (!path.empty()) {
+    CharUpperBuffW(path.data(), static_cast<DWORD>(path.size()));
+  }
+  return path;
+}
+
 bool ReadFileBytes(const std::wstring& path, std::string* out) {
   FILE* file = _wfopen(path.c_str(), L"rb");
   if (!file) return false;

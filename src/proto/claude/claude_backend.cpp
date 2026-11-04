@@ -38,6 +38,10 @@ bool ClaudeBackend::ListConversations(const std::wstring& projectDir,
   return ProjectConversations(projectDir, out, ConfigDir());
 }
 
+bool ClaudeBackend::ListProjects(std::vector<agent::Project>* out) {
+  return ProjectFolders(out, ConfigDir());
+}
+
 bool ClaudeBackend::Start(const agent::StartOptions& options,
                           Callbacks callbacks) {
   callbacks_ = std::move(callbacks);

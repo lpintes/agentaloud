@@ -3713,6 +3713,78 @@ void TestProjectConversations() {
   _wputenv_s(L"CLAUDE_CONFIG_DIR", L"");
 }
 
+void TestClaudeProjectFolders() {
+  TEST("sessions: priecinky so zaznamom, cas najnovsieho rozhovoru");
+  namespace fs = std::filesystem;
+  const fs::path root = fs::temp_directory_path() / "agentaloud-folders-test";
+  std::error_code code;
+  fs::remove_all(root, code);
+  const fs::path projects = root / "projects";
+  // Meno adresara schvalne nesedi s cwd: cesta sa z neho neda vratit, berie
+  // sa zo zaznamov.
+  const fs::path first = projects / "C--demo-prvy";
+  const fs::path second = projects / "C--demo-Prie-inok";
+  const fs::path silent = projects / "C--demo-ticho";
+  fs::create_directories(first / "sub", code);
+  fs::create_directories(second, code);
+  fs::create_directories(silent, code);
+  CHECK(!code);
+
+  const auto at = [](int day) {
+    return std::chrono::file_clock::from_sys(
+        std::chrono::sys_days(std::chrono::year(2026) / 9 / day));
+  };
+  const auto user = [](const std::string& cwd, const std::string& stamp,
+                       const std::string& text) {
+    return "{\"type\":\"user\",\"cwd\":\"" + cwd + "\",\"timestamp\":\"" +
+           stamp + "\",\"message\":{\"content\":\"" + text + "\"}}\n";
+  };
+  // Najnovsi mtime, ale stary rozhovor: zapisany neskor (zatvoreny, prepisany).
+  WriteFile(first / "x.jsonl",
+            user("C:\\\\demo\\\\PRVY", "2026-09-01T10:00:00.000Z", "stary") +
+                "{\"type\":\"last-prompt\"}\n");
+  fs::last_write_time(first / "x.jsonl", at(5));
+  // Starsi mtime, ale novsi rozhovor -- predvyber podla mtime ho nesmie
+  // preskocit, lebo jeho mtime je novsi nez cas z x.  Posledny zaznam je
+  // vacsi nez prve okno citania od konca, takze sa okno musi zvacsit.
+  WriteFile(first / "y.jsonl",
+            user("C:\\\\demo\\\\prvy", "2026-09-02T10:00:00.000Z", "skor") +
+                user("C:\\\\demo\\\\prvy", "2026-09-03T10:00:00.000Z",
+                     std::string(200000, 'a')));
+  fs::last_write_time(first / "y.jsonl", at(4));
+  // Starsi nez cas z y: nesmie nic zmenit, ani keby sa precital.
+  WriteFile(first / "z.jsonl",
+            user("C:\\\\demo\\\\zly", "2026-08-01T10:00:00.000Z", "davno"));
+  fs::last_write_time(first / "z.jsonl", at(1) - std::chrono::hours(24 * 20));
+  // Rozhovory subagentov a vystupy nastrojov v podadresari sa neratu.
+  WriteFile(first / "sub" / "w.jsonl",
+            user("C:\\\\demo\\\\sub", "2026-09-09T10:00:00.000Z", "sub"));
+  WriteFile(second / "a.jsonl",
+            user("C:\\\\demo\\\\Prie\xC4\x8Dinok", "2026-09-02T08:00:00.000Z",
+                 "ahoj"));
+  // Ziadny zaznam user ani assistant: priecinok bez rozhovoru.
+  WriteFile(silent / "b.jsonl", "{\"type\":\"summary\"}\n");
+
+  std::vector<agent::Project> list;
+  CHECK(proto::ProjectFolders(&list, root.wstring()));
+  std::sort(list.begin(), list.end(),
+            [](const agent::Project& a, const agent::Project& b) {
+              return a.lastActive > b.lastActive;
+            });
+  CHECK_EQ(list.size(), size_t(2));
+  if (list.size() == 2) {
+    CHECK_EQ(list[0].path, std::wstring(L"C:\\demo\\prvy"));
+    CHECK_EQ(list[0].lastActive, 1788429600LL);  // 2026-09-03T10:00:00Z
+    CHECK_EQ(list[1].path, std::wstring(L"C:\\demo\\Prie\u010Dinok"));
+  }
+
+  // Domov bez projects/ nie je chyba, len nic.
+  CHECK(proto::ProjectFolders(&list, (root / "nikde").wstring()));
+  CHECK(list.empty());
+
+  fs::remove_all(root, code);
+}
+
 void TestCodexThreadPage() {
   TEST("codex: stranka thread/list ako zoznam rozhovorov");
   // Tvar podla tools/probe_codex_list.notes.md, hodnoty vymyslene.
@@ -3749,6 +3821,39 @@ void TestCodexThreadPage() {
   CHECK_EQ(proto::codex::ThreadListParams("C:\\demo", "k", 50)
                .value("cursor", ""),
            std::string("k"));
+  // Bez cwd vsetky priecinky: filter v schema je volitelny, prazdny retazec
+  // by bol filter na priecinok "".
+  CHECK(!proto::codex::ThreadListParams("", "", 50).contains("cwd"));
+  CHECK_EQ(params.value("cwd", ""), std::string("C:\\demo"));
+}
+
+void TestCodexThreadFolders() {
+  TEST("codex: priecinky zo stranky thread/list, najnovsie vlakno");
+  const proto::Json page = proto::Json::parse(R"({
+    "data": [
+      {"id": "a", "cwd": "C:\\demo", "updatedAt": 1788000000},
+      {"id": "b", "cwd": "C:\\Prie\u010dinok", "updatedAt": 1788429600},
+      {"id": "c", "cwd": "C:\\demo", "updatedAt": 1788100000},
+      {"id": "d", "cwd": null, "updatedAt": 1788900000},
+      {"id": "e", "updatedAt": 1788900000}
+    ],
+    "nextCursor": "dalsia"})");
+  std::vector<agent::Project> threads;
+  CHECK_EQ(proto::codex::AppendThreadFolders(page, &threads),
+           std::string("dalsia"));
+  CHECK_EQ(threads.size(), size_t(3));
+  std::vector<agent::Project> folders =
+      proto::codex::FoldersOfThreads(std::move(threads));
+  std::sort(folders.begin(), folders.end(),
+            [](const agent::Project& a, const agent::Project& b) {
+              return a.path < b.path;
+            });
+  CHECK_EQ(folders.size(), size_t(2));
+  if (folders.size() == 2) {
+    CHECK_EQ(folders[0].path, std::wstring(L"C:\\Prie\u010Dinok"));
+    CHECK_EQ(folders[1].path, std::wstring(L"C:\\demo"));
+    CHECK_EQ(folders[1].lastActive, 1788100000LL);
+  }
 }
 
 void TestSessionSummaryFindsTheHumanPrompt() {
@@ -5969,7 +6074,9 @@ int main(int argc, char** argv) {
   TestQuestionsReadAsText();
   TestSessionPickIgnoresMtime();
   TestProjectConversations();
+  TestClaudeProjectFolders();
   TestCodexThreadPage();
+  TestCodexThreadFolders();
   TestSessionSummaryFindsTheHumanPrompt();
   TestHistoryRestore();
   TestSessionFilePath();

@@ -16,6 +16,17 @@ std::wstring ExecutableDirectory();
 // whatever started this process.  Empty when the shell will not say.
 std::wstring RoamingAppData();
 
+// The last component of the path, trailing separators ignored: the name a
+// project goes by in titles, the status bar and the list of recent folders.
+std::wstring FolderName(std::wstring path);
+
+// The same folder however it was typed: Windows paths ignore case and take
+// either slash, and two spellings of one checkout must count as one folder --
+// one session from the command line and one from the dialog, or a Claude
+// conversation and a Codex thread whose CLIs stored the path differently.
+// For comparing only; never shown and never opened.
+std::wstring FolderKey(std::wstring path);
+
 // The whole file as bytes.  False when it cannot be opened, which includes
 // when it does not exist -- the caller decides whether that is a problem.
 bool ReadFileBytes(const std::wstring& path, std::string* out);

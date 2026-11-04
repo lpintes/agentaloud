@@ -73,21 +73,47 @@ std::wstring CodexBackend::AppServerLine() const {
 bool CodexBackend::ListConversations(const std::wstring& projectDir,
                                      std::vector<agent::Conversation>* out) {
   out->clear();
+  // A list longer than this is not read by anybody; the oldest wait.
+  constexpr size_t kMost = 300;
+  std::vector<agent::Conversation> found;
+  const bool success =
+      ListThreads(Utf8(projectDir), [&](const Json& result) {
+        const std::string cursor = AppendThreadPage(result, &found);
+        return found.size() >= kMost ? std::string() : cursor;
+      });
+  if (success) {
+    if (found.size() > kMost) found.resize(kMost);
+    *out = std::move(found);
+  }
+  return success;
+}
+
+bool CodexBackend::ListProjects(std::vector<agent::Project>* out) {
+  out->clear();
+  // Every thread, and not a page more than needed: a folder is on the list
+  // whether it had one conversation or a hundred.
+  std::vector<agent::Project> threads;
+  const bool success = ListThreads({}, [&](const Json& result) {
+    return AppendThreadFolders(result, &threads);
+  });
+  if (success) *out = FoldersOfThreads(std::move(threads));
+  return success;
+}
+
+bool CodexBackend::ListThreads(
+    const std::string& cwd,
+    const std::function<std::string(const Json& result)>& onPage) {
   // A process of its own and not this backend's: the list is wanted before
   // there is a session, and a backend that answered it would have to be
   // started for nothing.  Initialize, thread/list a page at a time, close
   // stdin -- half a second, nearly all of it Codex starting up.
   constexpr int kPage = 100;
-  // A list longer than this is not read by anybody; the oldest wait.
-  constexpr size_t kMost = 300;
   constexpr long long kInitialize = 1;
-  const std::string cwd = Utf8(projectDir);
 
   std::mutex mutex;
   std::condition_variable changed;
   bool done = false;
   bool ok = false;
-  std::vector<agent::Conversation> found;
   long long nextId = kInitialize + 1;
   // Declared before the process, so that the process -- whose reader thread
   // calls into all of the above -- is gone before any of it is.
@@ -127,9 +153,8 @@ bool CodexBackend::ListConversations(const std::wstring& projectDir,
       if (!requestPage({})) finish(false);
       return;
     }
-    const std::string cursor =
-        AppendThreadPage(Field(message, "result"), &found);
-    if (cursor.empty() || found.size() >= kMost) {
+    const std::string cursor = onPage(Field(message, "result"));
+    if (cursor.empty()) {
       finish(true);
     } else if (!requestPage(cursor)) {
       finish(false);
@@ -156,16 +181,12 @@ bool CodexBackend::ListConversations(const std::wstring& projectDir,
     // Generous against the half second measured: the first start after a
     // reboot reads codex.exe off a cold disk.
     changed.wait_for(lock, std::chrono::seconds(15), [&] { return done; });
-    // After a timeout `found` is not touched: a late page may still be
-    // appending to it, until the process is gone.
+    // After a timeout what onPage fills is not the caller's yet: a late page
+    // may still be appending to it, until the process is gone.
     success = done && ok;
   }
   process.CloseInput();
   if (!process.Wait(2000)) process.Terminate();
-  if (success) {
-    if (found.size() > kMost) found.resize(kMost);
-    *out = std::move(found);
-  }
   return success;
 }
 
