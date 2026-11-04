@@ -8,6 +8,7 @@
 #include "model/utf.h"
 #include "ui/dialog_texts.h"
 #include "ui/resource.h"
+#include "win/paths.h"
 
 namespace ui {
 namespace {
@@ -15,6 +16,8 @@ namespace {
 // A list of conversations has arrived from the worker thread; lParam is a
 // Listed the dialog takes over.
 constexpr UINT kMsgListed = WM_APP + 1;
+// The recent folders have arrived; lParam is a FoldersListed, likewise.
+constexpr UINT kMsgFolders = WM_APP + 2;
 
 // A first prompt can be a page long.  The row is for telling conversations
 // apart, and the screen reader reads all of it before the next arrow key
@@ -91,6 +94,10 @@ struct NewSessionDialog::Listed {
   std::vector<agent::Conversation> conversations;
 };
 
+struct NewSessionDialog::FoldersListed {
+  std::vector<app::RecentFolder> folders;
+};
+
 NewSessionDialog::NewSessionDialog(NewSession* session)
     : session_(session), shared_(std::make_shared<Shared>()) {}
 
@@ -118,6 +125,7 @@ bool NewSessionDialog::OnInit() {
   SendMessageW(backends, CB_SETCURSEL, selected, 0);
   ShowModels(selected);
   SetText(IDC_NEW_PROJECT, session_->project);
+  ListFolders();
   ListConversations();
   if (session_->focusConversations) {
     SendMessageW(hwnd_, WM_NEXTDLGCTL,
@@ -143,6 +151,83 @@ void NewSessionDialog::ShowModels(int backend) {
                  reinterpret_cast<LPARAM>(wide.c_str()));
   }
   SetText(IDC_NEW_MODEL, entry.model);
+}
+
+// Once per dialog: unlike the conversations, the list does not depend on
+// any field.  Claude's half is a few hundred files' tails, Codex's a process
+// that takes seconds on a cold start.
+void NewSessionDialog::ListFolders() {
+  const HWND list = Item(IDC_NEW_RECENT);
+  if (!session_->folders) return;
+  AddRow(list, i18n::Text(i18n::Str::kNewRecentListing));
+  SendMessageW(list, LB_SETCURSEL, 0, 0);
+  std::thread([shared = shared_, lister = session_->folders] {
+    auto listed = std::make_unique<FoldersListed>();
+    listed->folders = lister();
+    std::lock_guard<std::mutex> guard(shared->lock);
+    if (shared->dialog &&
+        PostMessageW(shared->dialog, kMsgFolders, 0,
+                     reinterpret_cast<LPARAM>(listed.get()))) {
+      (void)listed.release();  // the dialog owns it now
+    }
+  }).detach();
+}
+
+// The folder in the field is selected if the list has it, so the reader
+// arriving in the list starts where the dialog was preset, not at the top;
+// LB_SETCURSEL notifies nobody, so a filled-in field stays as it was.
+void NewSessionDialog::ShowFolders(std::vector<app::RecentFolder> folders) {
+  folders_.clear();
+  for (app::RecentFolder& folder : folders) {
+    if (folder.backend >= 0 &&
+        folder.backend < static_cast<int>(session_->backends.size())) {
+      folders_.push_back(std::move(folder));
+    }
+  }
+  const HWND list = Item(IDC_NEW_RECENT);
+  const std::wstring current =
+      win::FolderKey(Expanded(Trimmed(GetText(IDC_NEW_PROJECT))));
+  int selected = -1;
+  SendMessageW(list, WM_SETREDRAW, FALSE, 0);
+  SendMessageW(list, LB_RESETCONTENT, 0, 0);
+  for (size_t i = 0; i < folders_.size(); ++i) {
+    const app::RecentFolder& folder = folders_[i];
+    AddRow(list, i18n::Format(i18n::Str::kNewRecentRow,
+                              {win::FolderName(folder.path),
+                               session_->backends[folder.backend].agentName,
+                               folder.path}));
+    if (selected < 0 && win::FolderKey(folder.path) == current) {
+      selected = static_cast<int>(i);
+    }
+  }
+  if (folders_.empty()) AddRow(list, i18n::Text(i18n::Str::kNewRecentNone));
+  // Never no selection: NVDA says "not selected" only after the row, and the
+  // reader, already on the next arrow key, hears the first row twice.
+  // An empty field takes the first row, so what is selected is what starts.
+  const bool none = selected < 0;
+  if (none) selected = 0;
+  SendMessageW(list, LB_SETCURSEL, selected, 0);
+  SendMessageW(list, WM_SETREDRAW, TRUE, 0);
+  InvalidateRect(list, nullptr, TRUE);
+  if (none && Trimmed(GetText(IDC_NEW_PROJECT)).empty()) {
+    TakeRecentFolder();
+    ListConversations();
+  }
+}
+
+// Only the fields: the conversations are looked for when the focus leaves
+// the list, or at OK.  The model follows the agent only when the agent
+// changes, so arrowing among one agent's folders keeps what was typed.
+void NewSessionDialog::TakeRecentFolder() {
+  const int row = static_cast<int>(
+      SendMessageW(Item(IDC_NEW_RECENT), LB_GETCURSEL, 0, 0));
+  if (row < 0 || row >= static_cast<int>(folders_.size())) return;
+  const app::RecentFolder& folder = folders_[row];
+  SetText(IDC_NEW_PROJECT, folder.path);
+  if (folder.backend != SelectedBackend()) {
+    SendMessageW(Item(IDC_NEW_BACKEND), CB_SETCURSEL, folder.backend, 0);
+    ShowModels(folder.backend);
+  }
 }
 
 // The focus goes back into the field, not onto the button: the picker
@@ -275,6 +360,14 @@ bool NewSessionDialog::OnCommand(int id, int notification) {
     ListConversations();
     return true;
   }
+  if (id == IDC_NEW_RECENT && notification == LBN_SELCHANGE) {
+    TakeRecentFolder();
+    return true;
+  }
+  if (id == IDC_NEW_RECENT && notification == LBN_KILLFOCUS) {
+    ListConversations();
+    return true;
+  }
   return false;
 }
 
@@ -282,6 +375,12 @@ bool NewSessionDialog::OnMessage(UINT message, WPARAM, LPARAM lParam) {
   if (message == kMsgListed) {
     std::unique_ptr<Listed> listed(reinterpret_cast<Listed*>(lParam));
     if (listed->generation == generation_) ShowConversations(*listed);
+    return true;
+  }
+  if (message == kMsgFolders) {
+    std::unique_ptr<FoldersListed> listed(
+        reinterpret_cast<FoldersListed*>(lParam));
+    ShowFolders(std::move(listed->folders));
     return true;
   }
   if (message == WM_DESTROY) {
@@ -294,6 +393,10 @@ bool NewSessionDialog::OnMessage(UINT message, WPARAM, LPARAM lParam) {
     MSG pending;
     while (PeekMessageW(&pending, hwnd_, kMsgListed, kMsgListed, PM_REMOVE)) {
       delete reinterpret_cast<Listed*>(pending.lParam);
+    }
+    while (PeekMessageW(&pending, hwnd_, kMsgFolders, kMsgFolders,
+                        PM_REMOVE)) {
+      delete reinterpret_cast<FoldersListed*>(pending.lParam);
     }
     return false;
   }

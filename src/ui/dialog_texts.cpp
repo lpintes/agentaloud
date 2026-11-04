@@ -72,6 +72,7 @@ const std::vector<Template>& Templates() {
        Str::kDlgNewCaption,
        {{IDC_NEW_BACKEND_LABEL, Str::kDlgNewBackend},
         {IDC_NEW_MODEL_LABEL, Str::kDlgNewModel},
+        {IDC_NEW_RECENT_LABEL, Str::kDlgNewRecent},
         {IDC_NEW_PROJECT_LABEL, Str::kDlgNewProject},
         {IDC_NEW_BROWSE, Str::kDlgNewBrowse},
         {IDC_NEW_CONVERSATION_LABEL, Str::kDlgNewConversation},

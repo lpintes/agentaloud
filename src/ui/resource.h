@@ -106,11 +106,13 @@
 #define IDC_NEW_PROJECT         1102
 #define IDC_NEW_BROWSE          1103
 #define IDC_NEW_CONVERSATION    1104
+#define IDC_NEW_RECENT          1105
 
 #define IDC_NEW_BACKEND_LABEL   1110
 #define IDC_NEW_MODEL_LABEL     1111
 #define IDC_NEW_PROJECT_LABEL   1112
 #define IDC_NEW_CONVERSATION_LABEL 1113
+#define IDC_NEW_RECENT_LABEL    1114
 
 // Hľadanie v prepise.  See ui/find_dialog.h.
 #define IDC_FIND_TEXT           1120

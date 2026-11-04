@@ -362,6 +362,7 @@ S(kDlgSignInCancel, L"Cance&l")
 S(kDlgNewCaption, L"new session")
 S(kDlgNewBackend, L"&Backend:")
 S(kDlgNewModel, L"&Model (empty = default):")
+S(kDlgNewRecent, L"&Recent folders:")
 S(kDlgNewProject, L"&Folder:")
 S(kDlgNewBrowse, L"Bro&wse…")
 S(kDlgNewConversation, L"Con&versation:")
@@ -455,6 +456,9 @@ S(kNewConversationsListing, L"Looking for conversations…")
 S(kNewConversationsFailed, L"The conversations could not be listed.")
 S(kNewConversationNoPrompt, L"(no prompt)")
 S(kNewConversationOpen, L"open: {0}")
+S(kNewRecentListing, L"Looking for folders…")
+S(kNewRecentNone, L"No agent has worked in any folder yet.")
+S(kNewRecentRow, L"{0} - {1} - {2}")
 S(kNoSpeechDll,
   L"nvdaControllerClient.dll is missing beside {0}, so the application has "
   L"no way to speak: the keys work, but they beep instead of speaking.\n\n"

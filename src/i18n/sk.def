@@ -364,6 +364,7 @@ S(kDlgSignInCancel, L"&Zrušiť")
 S(kDlgNewCaption, L"nová session")
 S(kDlgNewBackend, L"&Backend:")
 S(kDlgNewModel, L"&Model (prázdny = predvolený):")
+S(kDlgNewRecent, L"&Nedávne priečinky:")
 S(kDlgNewProject, L"&Priečinok:")
 S(kDlgNewBrowse, L"&Vybrať…")
 S(kDlgNewConversation, L"&Rozhovor:")
@@ -460,6 +461,9 @@ S(kNewConversationsListing, L"Hľadám rozhovory…")
 S(kNewConversationsFailed, L"Rozhovory sa nepodarilo zistiť.")
 S(kNewConversationNoPrompt, L"(bez promptu)")
 S(kNewConversationOpen, L"otvorený: {0}")
+S(kNewRecentListing, L"Hľadám priečinky…")
+S(kNewRecentNone, L"Žiadny agent zatiaľ v žiadnom priečinku nepracoval.")
+S(kNewRecentRow, L"{0} - {1} - {2}")
 S(kNoSpeechDll,
   L"Vedľa {0} chýba nvdaControllerClient.dll, takže aplikácia nemá ako "
   L"hovoriť: klávesy fungujú, ale namiesto hlásení pípajú.\n\nSkopírujte "

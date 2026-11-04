@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "agent/backend.h"
+#include "recent_folders.h"
 #include "win/dialog.h"
 
 namespace ui {
@@ -32,8 +33,14 @@ namespace ui {
 using ConversationLister = std::function<bool(
     const std::wstring& projectDir, std::vector<agent::Conversation>* out)>;
 
+// Every backend's ListProjects, merged (app::MergeRecentFolders).
+// RecentFolder::backend indexes NewSession::backends.  Off the dialog's
+// thread, like ConversationLister.
+using FolderLister = std::function<std::vector<app::RecentFolder>()>;
+
 struct NewSessionBackend {
   std::string name;                 // what --backend takes, shown as it is
+  std::wstring agentName;           // Capabilities::agentName, for the rows
   std::vector<std::string> models;  // Capabilities::models
   // What the model field holds when this backend is chosen: --model, or
   // the settings file's line for this backend.  Empty means the CLI's own
@@ -54,6 +61,8 @@ struct OpenConversation {
 
 struct NewSession {
   std::vector<NewSessionBackend> backends;
+  // Empty: the list of recent folders stays empty too.
+  FolderLister folders;
   // In: the one selected first.  Out: the one chosen.
   std::string backend;
   // Out only: what the model field said, trimmed.  May be empty.
@@ -90,8 +99,14 @@ class NewSessionDialog : public win::Dialog {
   // window that is no more.
   struct Shared;
   struct Listed;
+  struct FoldersListed;
 
   void ShowModels(int backend);
+  void ListFolders();
+  void ShowFolders(std::vector<app::RecentFolder> folders);
+  // The row chosen in the recent folders: its path into the folder field,
+  // its agent into the backend list.
+  void TakeRecentFolder();
   void Browse();
   void Refuse(int focus, const std::wstring& why);
   int SelectedBackend() const;
@@ -112,6 +127,9 @@ class NewSessionDialog : public win::Dialog {
   std::wstring listedProject_;
   // Parallel to the list box after its first row.
   std::vector<agent::Conversation> conversations_;
+  // Parallel to the list of recent folders; empty while it says it is
+  // looking.
+  std::vector<app::RecentFolder> folders_;
 };
 
 }  // namespace ui

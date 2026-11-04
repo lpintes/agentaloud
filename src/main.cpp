@@ -295,6 +295,7 @@ bool AskNewSession(HWND owner, const app::Arguments& typed,
     ui::NewSessionBackend entry;
     entry.name = name;
     const agent::Capabilities capabilities = MakeBackend(name)->capabilities();
+    entry.agentName = model::Utf16FromUtf8(capabilities.agentName);
     entry.models = capabilities.models;
     entry.model = !typed.model.empty()
                       ? typed.model
@@ -313,6 +314,22 @@ bool AskNewSession(HWND owner, const app::Arguments& typed,
     }
     choice.backends.push_back(std::move(entry));
   }
+  // One after the other: Codex's process dominates the wait, and a backend
+  // that cannot say just leaves its folders out.
+  std::vector<agent::Program> programs;
+  for (const std::string& name : kBackends) programs.push_back(programFor(name));
+  choice.folders = [programs] {
+    std::vector<app::FolderReport> reports;
+    for (size_t i = 0; i < kBackends.size(); ++i) {
+      std::vector<agent::Project> projects;
+      (void)MakeBackend(kBackends[i], programs[i])->ListProjects(&projects);
+      for (const agent::Project& project : projects) {
+        reports.push_back({win::FolderKey(project.path), project.path,
+                           project.lastActive, static_cast<int>(i)});
+      }
+    }
+    return app::MergeRecentFolders(reports);
+  };
   ui::NewSessionDialog dialog(&choice);
   if (dialog.ShowModal(owner, IDD_NEW_SESSION) != IDOK) return false;
   *switchTo = choice.switchTo;
