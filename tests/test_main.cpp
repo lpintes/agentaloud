@@ -1303,6 +1303,16 @@ void TestMergeRecentFolders() {
   CHECK(ties[0].path == L"x");
   CHECK_EQ(ties[0].backend, 0);
   CHECK(ties[1].path == L"y");
+
+  // Korene profilu (lkk.90): kluce uz normalizovane volajucim, prefix po
+  // celych zlozkach, bez korenov vsetko.
+  const std::vector<std::wstring> roots = {L"C:\\PRACA", L"D:"};
+  CHECK(app::UnderAnyRoot(L"C:\\PRACA", roots));
+  CHECK(app::UnderAnyRoot(L"C:\\PRACA\\X\\Y", roots));
+  CHECK(!app::UnderAnyRoot(L"C:\\PRACAX", roots));
+  CHECK(!app::UnderAnyRoot(L"C:\\INE", roots));
+  CHECK(app::UnderAnyRoot(L"D:\\COKOLVEK", roots));
+  CHECK(app::UnderAnyRoot(L"E:\\X", {}));
 }
 
 // Prikazovy riadok (invariant 16 a claude-gui-lkk.44.7).  Kazde z tychto
@@ -1360,6 +1370,16 @@ void TestArguments() {
   app::CheckBackend(&versionBackend, {"claude"});
   CHECK(versionBackend.error.empty());
 
+  // Profil (lkk.90): volba s hodnotou, bez nej sa odmietne a nestane sa
+  // priecinkom.
+  app::Arguments profiled =
+      app::Parse(W{L"--settings", L"praca.txt", L"C:\\p"});
+  CHECK_EQ(profiled.settings, std::wstring(L"praca.txt"));
+  CHECK_EQ(profiled.project, std::wstring(L"C:\\p"));
+  CHECK(profiled.error.empty());
+  app::Arguments danglingSettings = app::Parse(W{L"--settings"});
+  CHECK(danglingSettings.error.find(L"--settings") != std::wstring::npos);
+  CHECK(danglingSettings.project.empty());
   // --check-updates je volba ako ktorakolvek ina: priecinok za nou zostane
   // priecinkom a start pokracuje.
   app::Arguments check = app::Parse(W{L"--check-updates", L"."});
@@ -1450,8 +1470,8 @@ void TestArguments() {
     for (const wchar_t* option :
          {L"--backend", L"--permission-mode", L"--model", L"--executable",
           L"--resume", L"--continue", L"--help", L"--version",
-          L"--check-updates", L"language=", L".executable=", L".env.",
-          L"F1"}) {
+          L"--check-updates", L"--settings", L"language=", L".executable=",
+          L".env.", L"projects=", L"F1"}) {
       CHECK(text.find(option) != std::wstring::npos);
     }
     for (const std::string& name : known) {
@@ -1580,6 +1600,53 @@ void TestSettings() {
   // Bez riadku: meno adaptera po PATH.
   CHECK(app::ProgramFor(app::Settings::Parse(""), "codex", L"", L"C:\\app")
             .path.empty());
+
+  // Profil (lkk.90): prekryje globalny subor, prazdna hodnota v nom pusti
+  // globalnu, zapis ide len do globalneho.
+  app::Settings global = app::Settings::Parse(
+      "backend=claude\nclaude.model=opus\ncodex.model=gpt\n"
+      "codex.env.CODEX_HOME=G\ncodex.env.KEEP=k\n");
+  const app::Settings profile = app::Settings::Parse(
+      "backend=codex\ncodex.model=\nclaude.model=haiku\n"
+      "codex.env.codex_home=P\nprojects=C:\\praca; ;D:/ine\n");
+  global.Overlay(profile);
+  CHECK_EQ(global.Get("backend"), std::string("codex"));
+  CHECK_EQ(global.Get("claude.model"), std::string("haiku"));
+  CHECK_EQ(global.Get("codex.model"), std::string("gpt"));
+  app::Arguments layered = app::Parse(W{L"."});
+  app::ApplySettings(&layered, global);
+  CHECK_EQ(layered.backend, std::string("codex"));
+  CHECK_EQ(layered.model, std::wstring(L"gpt"));
+  // Ta ista premenna inou velkostou pismen: plati profil, nie obe.
+  const agent::Program layeredProgram =
+      app::ProgramFor(global, "codex", L"", L"C:\\app");
+  CHECK_EQ(layeredProgram.environment.size(), size_t{2});
+  const std::wstring* layeredHome = layeredProgram.Find(L"CODEX_HOME");
+  CHECK(layeredHome != nullptr && *layeredHome == L"P");
+  const std::vector<std::wstring> profileRoots = app::ProjectRoots(global);
+  CHECK_EQ(profileRoots.size(), size_t{2});
+  CHECK(profileRoots[0] == L"C:\\praca");
+  CHECK(profileRoots[1] == L"D:/ine");
+  CHECK(app::ProjectRoots(app::Settings::Parse("projects=\n")).empty());
+  global.Set("last-update-check", "2026-11-04");
+  CHECK(global.Serialize().find("praca") == std::string::npos);
+  CHECK(global.Serialize().find("last-update-check=2026-11-04") !=
+        std::string::npos);
+
+  // Korene musia byt cele cesty; profil nesmie niest jazyk ani kluce, ktore
+  // pise appka.
+  CHECK(errorOf("projects=C:\\a;\\\\srv\\b\n").empty());
+  CHECK(errorOf("projects=C:\\a;praca\n").find(L"praca") != std::wstring::npos);
+  auto profileErrorOf = [&backends](const char* text) {
+    app::Settings settings = app::Settings::Parse(text);
+    settings.Check(backends);
+    settings.CheckProfile();
+    return settings.error();
+  };
+  CHECK(profileErrorOf("backend=codex\nprojects=C:\\a\n").empty());
+  CHECK(profileErrorOf("sounds=0\nlanguage=en\n").find(L"riadok 2") == 0);
+  CHECK(!profileErrorOf("last-update-check=2026-11-04\n").empty());
+  CHECK(!profileErrorOf("skipped-version=2026.10.1\n").empty());
 }
 
 // Zapis do suboru nastaveni (invariant 22): co zapis nemeni, zostane bajt po

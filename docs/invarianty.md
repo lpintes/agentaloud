@@ -1296,6 +1296,31 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     meraní: s `--model haiku` sa `auto` ticho zmení na `default`, aj bez
     akýchkoľvek nastavení.
 
+    **Profil je druhý súbor nastavení, položený cez hlavný**
+    (claude-gui-lkk.90): `--settings <súbor>`, napríklad zástupca na prácu
+    a druhý na domov. Nesie len to, čím sa líši; prednosť je **príkazový
+    riadok > profil > hlavný súbor > zabudované**. Drží to
+    `Settings::Overlay`: `Get` a `Keys` sa pýtajú najprv profilu (prázdna
+    hodnota v ňom pustí hlavnú — je to šablóna), `Set` a `Serialize` robia
+    len s hlavným súborom, takže dátum kontroly aktualizácií pristane tam,
+    kde ho číta každý štart s akýmkoľvek profilom. Premenná `env.` inou
+    veľkosťou písmen v profile hlavnú nahradí, nepribudne vedľa nej.
+    Oba súbory sa kontrolujú zvlášť a chyba menuje ten svoj. Profil navyše
+    **nesmie** obsahovať `language` (vyberá sa pred čítaním príkazového
+    riadka, kde je meno profilu) ani `last-update-check` a `skipped-version`
+    (kópia v profile by zakryla každý zápis appky) — odmietne ich
+    `Settings::CheckProfile`, lebo ignorovaný riadok je tichá chyba.
+    Profil, ktorý neexistuje, sa odmietne ako zlá voľba (kód 2): zástupca
+    na premenovaný súbor by inak spustil session bez profilu a nič by
+    nepovedal. `projects=` (aj v hlavnom súbore) obmedzí zoznam Nedávne
+    priečinky na priečinky pod koreňmi: celé cesty oddelené `;` v jednom
+    riadku (dvakrát kľúč sa odmieta), porovnávané `win::FolderKey` po celých
+    zložkách (`app::UnderAnyRoot`, `C:\praca` nechytí `C:\pracaX`).
+    Relatívny koreň sa odmietne, neexistujúci nie (disk dnes nepripojený je
+    stále koreň). Filter platí len pre zoznam, iný priečinok sa dá napísať.
+    Overené naostro 4. 11. 2026: profil s dvoma koreňmi (jeden `c:/b/`)
+    zúžil zoznam zo 171 riadkov na 58, všetky pod koreňmi.
+
 23. **Aktualizuje sa celý balík, nie holé EXE, a nič sa nevymení, kým nie je
     všetko overené.** Kto si balík stiahol raz a potom už len aktualizuje,
     musí skončiť s tým istým priečinkom ako ten, kto ho stiahne dnes. Holé

@@ -514,6 +514,13 @@ S(kHelp,
   L"      pc-windows-msvc.exe.  A relative path is relative to the current\n"
   L"      folder.  A backend chosen later in New session does not get it.\n"
   L"\n"
+  L"  --settings <file>\n"
+  L"      A profile: another settings file, laid over the main one, that\n"
+  L"      says only how it differs -- one shortcut for work and another\n"
+  L"      for home, say.  See Settings below.  A relative path is relative\n"
+  L"      to the current folder; a file that does not exist is refused.\n"
+  L"      The --settings option of claude itself goes after --.\n"
+  L"\n"
   L"  --resume <id|title>, -r <id|title>\n"
   L"      Carries on the named conversation.  The earlier turns are read\n"
   L"      from disk and the cursor stands after them, where the\n"
@@ -561,6 +568,7 @@ S(kHelp,
   L"      check-updates=0\n"
   L"      sounds=0\n"
   L"      language=sk\n"
+  L"      projects=C:\\work;D:\\clients\n"
   L"  What the command line does not say applies.  language is one of:\n"
   L"  {7}; without it {0} speaks the language of Windows, and English\n"
   L"  when it does not know that one.  check-updates=0 turns off the check\n"
@@ -574,6 +582,11 @@ S(kHelp,
   L"  sets an environment variable for its process, such as CODEX_HOME or\n"
   L"  CLAUDE_CONFIG_DIR when the CLI's configuration is not in the\n"
   L"  profile; the value is taken as it is written.\n"
+  L"  projects= limits the Recent folders list of the New session dialog\n"
+  L"  to folders under these roots: full paths separated by semicolons.\n"
+  L"  Another folder can still be typed.\n"
+  L"  The file given with --settings comes before this one and must not\n"
+  L"  hold language, last-update-check or skipped-version.\n"
   L"  {0} refuses an unknown key or mode and\n"
   L"  names the line, just as it does an unknown option.  A config folder\n"
   L"  beside {8}, when there is one, is used instead of the one in\n"
@@ -591,6 +604,11 @@ S(kSettingsOnOff, L"{0} is 0 or 1, not {1}")
 S(kUnknownLanguage, L"unknown language {0}; known are: {1}")
 S(kUnknownKey, L"unknown key {0}")
 S(kSettingsFileError, L"settings {0}, {1}")
+S(kSettingsRelativeRoot, L"projects: {0} is not a full path")
+S(kSettingsNotInProfile,
+  L"{0} belongs only in the main settings file, not in one given with "
+  L"--settings")
+S(kSettingsProfileMissing, L"the settings file {0} does not exist")
 S(kNoRichEdit, L"Msftedit.dll could not be loaded.")
 S(kSessionStartFailed, L"The session could not be started.")
 S(kProgramNotFound,

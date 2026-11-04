@@ -39,6 +39,14 @@ struct RecentFolder {
 std::vector<RecentFolder> MergeRecentFolders(
     const std::vector<FolderReport>& reports);
 
+// Whether the folder whose key is `key` lies in one of `rootKeys`, or is one
+// of them -- a profile's projects= (claude-gui-lkk.90).  Keys made by the same
+// rule as FolderReport::key, so C:\Praca and c:/praca/ are one root.  Whole
+// folders only: C:\praca does not take in C:\pracaX.  No roots takes in
+// everything.
+bool UnderAnyRoot(const std::wstring& key,
+                  const std::vector<std::wstring>& rootKeys);
+
 }  // namespace app
 
 #endif

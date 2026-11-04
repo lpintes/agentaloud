@@ -37,6 +37,9 @@ struct Arguments {
   // a backend chosen later in Nová session -- a path to codex.exe handed to
   // the Claude adapter is a session that fails for a reason nobody typed.
   std::wstring executable;
+  // --settings: a profile, a settings file laid over the main one
+  // (claude-gui-lkk.90).  As typed; main.cpp makes it absolute and reads it.
+  std::wstring settings;
   // --resume was given, with what followed it.  The id may be empty: a bare
   // --resume asks for the list of conversations in Nová session, and is not
   // passed on (claude-gui-lkk.7.11.4).

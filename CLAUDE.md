@@ -369,11 +369,15 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
     `%APPDATA%\AgentAloud\settings.txt` alebo prenosné `config\settings.txt`.
     Kľúče s prefixom backendu. Ctrl+Space sa neukladá. Zápis mení len svoje
     riadky (`Settings::Set` + `Serialize`, `win::WriteFileBytes`). Prednosť:
-    príkazový riadok > súbor > zabudované (`app::ApplySettings`). Kontrolujú
+    príkazový riadok > profil > súbor > zabudované (`app::ApplySettings`). Kontrolujú
     sa riadky všetkých backendov. CLI a prostredie: `<backend>.executable`
     (relatívne voči priečinku appky) a `<backend>.env.<MENO>` →
     `agent::Program` (`app::ProgramFor`); `--executable` len pre backend
-    štartu; program dostáva aj zoznam rozhovorov.
+    štartu; program dostáva aj zoznam rozhovorov. Profil `--settings` sa
+    kladie cez hlavný súbor (`Settings::Overlay`: čítanie najprv z profilu,
+    zápis len do hlavného), bez `language` a kľúčov, ktoré píše appka
+    (`CheckProfile`); `projects=` filtruje zoznam Nedávne priečinky
+    (`app::UnderAnyRoot`).
 23. **Aktualizuje sa celý balík a nič sa nevymení, kým nie je všetko
     overené**: súčet ZIP-u → rozbalenie do `.update-new\` →
     `update::PlanReplace` → výmena so zálohou v `.update-old\` a návratom

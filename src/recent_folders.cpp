@@ -27,4 +27,14 @@ std::vector<RecentFolder> MergeRecentFolders(
   return merged;
 }
 
+bool UnderAnyRoot(const std::wstring& key,
+                  const std::vector<std::wstring>& rootKeys) {
+  if (rootKeys.empty()) return true;
+  for (const std::wstring& root : rootKeys) {
+    if (root.empty() || !key.starts_with(root)) continue;
+    if (key.size() == root.size() || key[root.size()] == L'\\') return true;
+  }
+  return false;
+}
+
 }  // namespace app

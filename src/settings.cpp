@@ -94,9 +94,33 @@ Settings Settings::Parse(std::string_view text) {
 }
 
 std::string Settings::Get(const std::string& key) const {
+  const auto over = overlay_.find(key);
+  if (over != overlay_.end() && !over->second.value.empty()) {
+    return over->second.value;
+  }
   const auto found = entries_.find(key);
   return found == entries_.end() ? std::string() : found->second.value;
 }
+
+std::vector<std::string> Settings::Keys() const {
+  std::vector<std::string> keys;
+  for (const auto& [key, entry] : overlay_) keys.push_back(key);
+  for (const auto& [key, entry] : entries_) {
+    if (overlay_.count(key) != 0) continue;
+    bool shadowed = false;
+    if (key.find(std::string(".") + kEnvPrefix) != std::string::npos) {
+      for (const auto& [other, otherEntry] : overlay_) {
+        if (!otherEntry.value.empty() && AsciiLower(other) == AsciiLower(key)) {
+          shadowed = true;
+        }
+      }
+    }
+    if (!shadowed) keys.push_back(key);
+  }
+  return keys;
+}
+
+void Settings::Overlay(const Settings& profile) { overlay_ = profile.entries_; }
 
 void Settings::Set(const std::string& key, const std::string& value) {
   // A file that ends its lines in CRLF gets a CRLF line; Notepad would cope
@@ -167,6 +191,19 @@ void Settings::Check(const std::map<std::string, agent::Capabilities>& backends)
     // Written by the application and read by update::, which treats anything
     // it cannot use as nothing -- no shape to check here.
     if (key == kLastUpdateCheckKey || key == kSkippedVersionKey) continue;
+    // Not checked for being there: a root on a drive that is not plugged in
+    // today is still a root.  A relative one is refused -- relative to what
+    // would be anybody's guess, and a root that matches nothing looks exactly
+    // like a profile with no projects in it yet.
+    if (key == kProjectsKey) {
+      for (const std::wstring& root : ProjectRoots(*this)) {
+        if (IsRelative(root)) {
+          Complain(entry.line,
+                   i18n::Format(i18n::Str::kSettingsRelativeRoot, {root}));
+        }
+      }
+      continue;
+    }
     const size_t dot = key.find('.');
     const auto backend = dot == std::string::npos
                              ? backends.end()
@@ -214,6 +251,30 @@ void Settings::Check(const std::map<std::string, agent::Capabilities>& backends)
   }
 }
 
+void Settings::CheckProfile() {
+  for (const auto& [key, entry] : entries_) {
+    if (key == kLanguageKey || key == kLastUpdateCheckKey ||
+        key == kSkippedVersionKey) {
+      Complain(entry.line,
+               i18n::Format(i18n::Str::kSettingsNotInProfile, {Wide(key)}));
+    }
+  }
+}
+
+std::vector<std::wstring> ProjectRoots(const Settings& settings) {
+  std::vector<std::wstring> roots;
+  const std::string value = settings.Get(kProjectsKey);
+  std::string_view rest = value;
+  while (true) {
+    const size_t semicolon = rest.find(';');
+    const std::string_view root = Trim(rest.substr(0, semicolon));
+    if (!root.empty()) roots.push_back(Wide(root));
+    if (semicolon == std::string_view::npos) break;
+    rest.remove_prefix(semicolon + 1);
+  }
+  return roots;
+}
+
 void ApplySettings(Arguments* arguments, const Settings& settings) {
   if (arguments->backend.empty()) arguments->backend = settings.Get(kBackendKey);
   const std::string backend =
@@ -239,15 +300,16 @@ agent::Program ProgramFor(const Settings& settings, const std::string& backend,
     }
   }
   const std::string prefix = backend + "." + kEnvPrefix;
-  for (const auto& [key, entry] : settings.entries()) {
+  for (const std::string& key : settings.Keys()) {
     // Empty is a template line, as everywhere in the file -- not a request to
     // set the variable to nothing.
+    const std::string value = settings.Get(key);
     if (!key.starts_with(prefix) || key.size() == prefix.size() ||
-        entry.value.empty()) {
+        value.empty()) {
       continue;
     }
     program.environment.emplace_back(Wide(key.substr(prefix.size())),
-                                     Wide(entry.value));
+                                     Wide(value));
   }
   return program;
 }

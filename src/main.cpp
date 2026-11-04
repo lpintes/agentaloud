@@ -318,14 +318,22 @@ bool AskNewSession(HWND owner, const app::Arguments& typed,
   // that cannot say just leaves its folders out.
   std::vector<agent::Program> programs;
   for (const std::string& name : kBackends) programs.push_back(programFor(name));
-  choice.folders = [programs] {
+  // A profile's projects= (claude-gui-lkk.90) limits the list and nothing
+  // else: a folder outside the roots can still be typed into the field.
+  std::vector<std::wstring> rootKeys;
+  for (const std::wstring& root : app::ProjectRoots(settings)) {
+    rootKeys.push_back(win::FolderKey(root));
+  }
+  choice.folders = [programs, rootKeys] {
     std::vector<app::FolderReport> reports;
     for (size_t i = 0; i < kBackends.size(); ++i) {
       std::vector<agent::Project> projects;
       (void)MakeBackend(kBackends[i], programs[i])->ListProjects(&projects);
       for (const agent::Project& project : projects) {
-        reports.push_back({win::FolderKey(project.path), project.path,
-                           project.lastActive, static_cast<int>(i)});
+        std::wstring key = win::FolderKey(project.path);
+        if (!app::UnderAnyRoot(key, rootKeys)) continue;
+        reports.push_back({std::move(key), project.path, project.lastActive,
+                           static_cast<int>(i)});
       }
     }
     return app::MergeRecentFolders(reports);
@@ -431,7 +439,25 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   // typed.  A file with a bad line is not applied at all -- half a file is a
   // setting nobody wrote.
   app::Settings settings = ReadSettings(settingsBytes);
-  if (settings.error().empty()) {
+  // The profile (claude-gui-lkk.90), laid over the file and under the line.
+  // A file named on the line that is not there is refused like a bad option:
+  // a shortcut pointing at a renamed file would otherwise start the session
+  // with nothing of the profile and nothing said.
+  std::wstring profileFile;
+  app::Settings profile;
+  if (!arguments.settings.empty()) {
+    profileFile = Expand(arguments.settings);
+    std::string bytes;
+    if (win::ReadFileBytes(profileFile, &bytes)) {
+      profile = ReadSettings(bytes);
+      profile.CheckProfile();
+    } else if (arguments.error.empty()) {
+      arguments.error =
+          i18n::Format(i18n::Str::kSettingsProfileMissing, {profileFile});
+    }
+  }
+  if (settings.error().empty() && profile.error().empty()) {
+    settings.Overlay(profile);
     app::ApplySettings(&arguments, settings);
     ui::signals::SetEnabled(settings.Sounds());
   }
@@ -501,12 +527,14 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   // written by hand for a reason, and a session started without it would be
   // the wrong mode with nothing said about why.  The file is named in full --
   // the reader has to open it, and %APPDATA% is not a place anyone finds by
-  // guessing.
-  if (!settings.error().empty()) {
+  // guessing.  The main file first, then the profile: each names its own.
+  const bool mainBad = !settings.error().empty();
+  if (mainBad || !profile.error().empty()) {
     const std::wstring text =
         L"" APP_NAME L": " +
         i18n::Format(i18n::Str::kSettingsFileError,
-                     {settingsFile, settings.error()}) +
+                     {mainBad ? settingsFile : profileFile,
+                      mainBad ? settings.error() : profile.error()}) +
         L".\n";
     if (!win::WriteToParentConsole(text)) {
       MessageBoxW(nullptr, text.c_str(), L"" APP_NAME, MB_OK | MB_ICONERROR);

@@ -61,9 +61,28 @@ class Settings {
   // The value of `key`, empty when it is not there.  An empty value in the
   // file means the same as no line at all: a line like `claude.model=` is a
   // template waiting to be filled in, not a request for an empty model.
+  // The profile's value comes first (Overlay), and an empty one there lets
+  // this file's through, for the same reason.
   std::string Get(const std::string& key) const;
 
+  // This file's own lines, without the profile: what Set and Serialize work
+  // on.  Whatever reads a setting asks Get or Keys.
   const std::map<std::string, Entry>& entries() const { return entries_; }
+
+  // Every key Get can answer, the profile's included.  A `<backend>.env.`
+  // key of this file is left out when the profile has the same one in
+  // another case: Windows takes the two for one variable, and the one that
+  // got set last would win by an order nobody wrote.
+  std::vector<std::string> Keys() const;
+
+  // Lays a profile over this file (claude-gui-lkk.90): another settings file,
+  // named by --settings, which says only how it differs -- two shortcuts on
+  // the desktop, one for work and one for home, share everything else.  The
+  // profile only answers Get; Set and Serialize stay with this file, so what
+  // the application writes (the day of the update check) lands where it is
+  // read the next time whatever profile is used.  Both are Checked apart
+  // first, each complaining about its own lines.
+  void Overlay(const Settings& profile);
 
   // The first thing wrong with the file, without its name, "riadok 3: ...".
   // Empty when there is nothing wrong.
@@ -100,10 +119,19 @@ class Settings {
   // Sets error() and does nothing when there is one already.
   void Check(const std::map<std::string, agent::Capabilities>& backends);
 
+  // What a profile must not say, on top of Check: the language, because it
+  // is chosen before the command line that names the profile is read, and
+  // the keys the application writes, because it writes them into the main
+  // file and a profile's copy would hide every later write.  Refused rather
+  // than ignored -- a line that silently does not apply is the one failure
+  // this file exists to avoid.
+  void CheckProfile();
+
  private:
   void Complain(int line, const std::wstring& text);
 
   std::map<std::string, Entry> entries_;
+  std::map<std::string, Entry> overlay_;
   std::wstring error_;
   // The file as it came, a line per element, without the '\n' but with any
   // '\r' -- so Serialize gives back what was read.
@@ -136,10 +164,18 @@ inline constexpr char kSoundsKey[] = "sounds";
 // configuration does not live in the profile.
 inline constexpr char kExecutableKey[] = "executable";
 inline constexpr char kEnvPrefix[] = "env.";
+// The roots the list of recent folders is limited to, full paths separated
+// by ';' as in PATH -- one line, because a key given twice is refused
+// (claude-gui-lkk.90).  Meant for a profile, but the main file may say it too.
+inline constexpr char kProjectsKey[] = "projects";
+
+// The roots of kProjectsKey, as written, without the empty ones.  None means
+// the list is not limited.
+std::vector<std::wstring> ProjectRoots(const Settings& settings);
 
 // Fills in what the command line left empty: the command line wins, the file
-// comes next, and the built-in default -- which CheckBackend supplies -- last.
-// The mode and the model are read for the backend that will actually run,
+// comes next -- with a profile laid over it first (Overlay) -- and the
+// built-in default, which CheckBackend supplies, last.  The mode and the model are read for the backend that will actually run,
 // whichever of the two said which one that is.  Call after Parse and before
 // CheckBackend and CheckMode.
 void ApplySettings(Arguments* arguments, const Settings& settings);

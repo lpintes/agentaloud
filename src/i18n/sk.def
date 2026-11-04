@@ -519,6 +519,13 @@ S(kHelp,
   L"      msvc.exe.  Relatívna cesta je voči aktuálnemu priečinku.\n"
   L"      Backend zvolený neskôr v dialógu Nová session ju nedostane.\n"
   L"\n"
+  L"  --settings <súbor>\n"
+  L"      Profil: ďalší súbor nastavení, ktorý sa položí cez hlavný\n"
+  L"      a nesie len to, čím sa líši, napríklad jeden zástupca na prácu\n"
+  L"      a druhý na domov.  Pozri Nastavenia nižšie.  Relatívna cesta je\n"
+  L"      voči aktuálnemu priečinku; súbor, ktorý neexistuje, {0} odmietne.\n"
+  L"      Voľba --settings samotného claude patrí za --.\n"
+  L"\n"
   L"  --resume <id|titul>, -r <id|titul>\n"
   L"      Pokračuje v pomenovanom rozhovore.  Predchádzajúce ťahy sa\n"
   L"      prečítajú z disku a kurzor stojí za nimi, na mieste, kde sa\n"
@@ -566,6 +573,7 @@ S(kHelp,
   L"      check-updates=0\n"
   L"      sounds=0\n"
   L"      language=en\n"
+  L"      projects=C:\\praca;D:\\klienti\n"
   L"  Platí to, čo nepovie príkazový riadok.  language je jeden z: {7};\n"
   L"  bez neho hovorí {0} jazykom Windows, a keď ho nevie,\n"
   L"  po anglicky.  check-updates=0 vypne kontrolu novej verzie, ktorú\n"
@@ -579,6 +587,11 @@ S(kHelp,
   L"  nastaví premennú prostredia pre jeho proces, napríklad CODEX_HOME\n"
   L"  alebo CLAUDE_CONFIG_DIR, keď konfigurácia CLI nie je v profile;\n"
   L"  hodnota sa berie tak, ako je napísaná.\n"
+  L"  projects= obmedzí zoznam Nedávne priečinky v dialógu\n"
+  L"  Nová session na priečinky pod týmito koreňmi; korene sú celé cesty\n"
+  L"  oddelené bodkočiarkou.  Iný priečinok sa dá stále napísať.\n"
+  L"  Súbor z --settings má prednosť pred týmto a nesmie obsahovať\n"
+  L"  language, last-update-check ani skipped-version.\n"
   L"  Neznámy kľúč alebo režim {0} odmietne a povie riadok, rovnako\n"
   L"  ako neznámu voľbu.  Priečinok config vedľa {8}, keď existuje,\n"
   L"  sa použije namiesto toho v %APPDATA%.\n"
@@ -595,6 +608,11 @@ S(kSettingsOnOff, L"{0} je 0 alebo 1, nie {1}")
 S(kUnknownLanguage, L"neznámy jazyk {0}; známe sú: {1}")
 S(kUnknownKey, L"neznámy kľúč {0}")
 S(kSettingsFileError, L"nastavenia {0}, {1}")
+S(kSettingsRelativeRoot, L"projects: {0} nie je celá cesta")
+S(kSettingsNotInProfile,
+  L"{0} patrí len do hlavného súboru nastavení, nie do súboru zadaného "
+  L"cez --settings")
+S(kSettingsProfileMissing, L"súbor nastavení {0} neexistuje")
 S(kNoRichEdit, L"Nepodarilo sa načítať Msftedit.dll.")
 S(kSessionStartFailed, L"Nepodarilo sa spustiť session.")
 S(kProgramNotFound,
