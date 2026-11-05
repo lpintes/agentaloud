@@ -740,6 +740,24 @@ std::vector<agent::ModelChoice> ModelCatalog(const Json& modelListResult) {
   return out;
 }
 
+agent::RateLimitChanged RateLimits(const Json& snapshot) {
+  agent::RateLimitChanged out;
+  for (const char* name : {"primary", "secondary"}) {
+    const Json& window = Field(snapshot, name);
+    if (!window.is_object()) continue;
+    agent::LimitWindow entry;
+    entry.minutes = static_cast<int>(NumberField(window, "windowDurationMins"));
+    const Json& used = Field(window, "usedPercent");
+    if (used.is_number()) entry.used = used.get<double>() / 100.0;
+    entry.resetsAt = NumberField(window, "resetsAt");
+    out.windows.push_back(entry);
+  }
+  if (!Field(snapshot, "rateLimitReachedType").is_null()) {
+    out.state = agent::LimitState::Exhausted;
+  }
+  return out;
+}
+
 Json CollaborationMode(const std::string& collaboration,
                        const std::string& model, const std::string& effort) {
   return {{"mode", collaboration},
@@ -1126,22 +1144,7 @@ std::vector<agent::Event> Translator::Translate(const Json& message) {
     // No cost: Codex does not state one, and a zero would be read as free.
     events.push_back(agent::UsageChanged{out});
   } else if (method == "account/rateLimits/updated") {
-    const Json& limits = Field(params, "rateLimits");
-    agent::RateLimitChanged out;
-    for (const char* name : {"primary", "secondary"}) {
-      const Json& window = Field(limits, name);
-      if (!window.is_object()) continue;
-      agent::LimitWindow entry;
-      entry.minutes = static_cast<int>(NumberField(window, "windowDurationMins"));
-      const Json& used = Field(window, "usedPercent");
-      if (used.is_number()) entry.used = used.get<double>() / 100.0;
-      entry.resetsAt = NumberField(window, "resetsAt");
-      out.windows.push_back(entry);
-    }
-    if (!Field(limits, "rateLimitReachedType").is_null()) {
-      out.state = agent::LimitState::Exhausted;
-    }
-    events.push_back(out);
+    events.push_back(RateLimits(Field(params, "rateLimits")));
   } else if (method == "account/login/completed") {
     // A cancelled one too: success false, with the CLI's reason.
     const Json& success = Field(params, "success");

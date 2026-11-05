@@ -123,6 +123,9 @@ class CodexBackend : public agent::Backend {
     // account/read at the start, to say "not signed in" before the first
     // prompt rather than after it.
     ReadAccount,
+    // account/rateLimits/read at the start: the notification comes only with
+    // a turn, and the status bar would name no limit until the first prompt.
+    ReadRateLimits,
     // account/login/start; its outcome comes later, as a notification.
     StartSignIn,
     CancelSignIn,

@@ -232,6 +232,12 @@ std::string ReplacementModel(const Json& modelListResult,
 // takes; `id` has always been the same string, but is not what it asks for.
 std::vector<agent::ModelChoice> ModelCatalog(const Json& modelListResult);
 
+// A RateLimitSnapshot: params.rateLimits of account/rateLimits/updated, which
+// comes only with a turn, and result.rateLimits of account/rateLimits/read,
+// which the backend asks for at the start so that the status bar has the
+// limit before the first prompt (tools/probe_codex_ratelimits.py).
+agent::RateLimitChanged RateLimits(const Json& snapshot);
+
 // ---- The stream -----------------------------------------------------------
 
 // The live stream, message by message.  A class, because a call is complete

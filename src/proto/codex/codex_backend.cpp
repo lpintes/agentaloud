@@ -714,6 +714,8 @@ void CodexBackend::OnLine(std::string_view line) {
     const Json& success = Field(params, "success");
     if (success.is_boolean() && success.get<bool>()) {
       Request(Purpose::ListModels, "model/list", Json::object());
+      // The one asked for at the start was refused for want of an account.
+      Request(Purpose::ReadRateLimits, "account/rateLimits/read", Json());
     }
   } else if (method == "turn/started") {
     std::string turn = StringField(Field(params, "turn"), "id");
@@ -835,6 +837,9 @@ void CodexBackend::OnResponse(const Json& message) {
       // succeeds (tools/probe_noauth.notes.md), and the session is there to
       // sign in from.
       Request(Purpose::ReadAccount, "account/read", {{"refreshToken", false}});
+      // Answered in under a second and costs nothing; signed out, refused
+      // with -32600 (tools/probe_codex_ratelimits.py).
+      Request(Purpose::ReadRateLimits, "account/rateLimits/read", Json());
       Request(Purpose::ReadModelCatalog, "model/list", Json::object());
       using Resume = agent::StartOptions::Resume;
       if (options_.resume == Resume::ById && !options_.resumeId.empty()) {
@@ -938,6 +943,9 @@ void CodexBackend::OnResponse(const Json& message) {
       break;
     case Purpose::ReadAccount:
       if (!failed && NeedsSignIn(result)) Emit({agent::SignInRequired{}});
+      break;
+    case Purpose::ReadRateLimits:
+      if (!failed) Emit({RateLimits(Field(result, "rateLimits"))});
       break;
     case Purpose::StartSignIn: {
       agent::SignInPrompt prompt;

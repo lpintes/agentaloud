@@ -6350,6 +6350,27 @@ void TestCodexFixtureNoAuth(const std::string& dir) {
   CHECK(!proto::codex::FailedOnSignIn(proto::Json::parse(
       R"({"codexErrorInfo": {"httpConnectionFailed":
           {"httpStatusCode": 500}}})")));
+
+  // account/rateLimits/read hned po starte, tvar zo sondy
+  // probe_codex_ratelimits: ten isty RateLimitSnapshot ako v notifikacii.
+  const proto::Json read = proto::Json::parse(
+      R"({"ordinaryUsageAllowed": true,
+          "rateLimits": {"limitId": "codex", "primary": {"usedPercent": 5,
+            "windowDurationMins": 43200, "resetsAt": 1795081787},
+            "secondary": null, "planType": "free",
+            "rateLimitReachedType": null}})");
+  const agent::RateLimitChanged limit =
+      proto::codex::RateLimits(read["rateLimits"]);
+  CHECK_EQ(limit.windows.size(), size_t{1});
+  if (!limit.windows.empty()) {
+    CHECK_EQ(limit.windows[0].minutes, 43200);
+    CHECK(limit.windows[0].used > 0.049 && limit.windows[0].used < 0.051);
+    CHECK_EQ(limit.windows[0].resetsAt, 1795081787LL);
+  }
+  CHECK(limit.state != agent::LimitState::Exhausted);
+  CHECK(proto::codex::RateLimits(proto::Json::parse(
+            R"({"primary": null, "rateLimitReachedType": "rate_limit_reached"})"))
+            .state == agent::LimitState::Exhausted);
 }
 
 void TestCodexFixtureResume(const std::string& dir) {
