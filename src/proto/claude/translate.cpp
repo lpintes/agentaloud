@@ -595,12 +595,16 @@ std::vector<agent::Event> Translator::Translate(const Json& record) {
     case EventKind::SystemOther:
       if (IsMovedToBackground(event.raw)) movedSinceAnswer_ = true;
       break;
-    case EventKind::ControlResponse:
+    case EventKind::ControlResponse: {
+      agent::RateLimitChanged limit;
       if (IsBackgroundAnswer(event.raw)) {
         events.push_back(agent::BackgroundMoved{movedSinceAnswer_});
         movedSinceAnswer_ = false;
+      } else if (ParseUsageResponse(event.raw, &limit)) {
+        events.push_back(limit);
       }
       break;
+    }
     case EventKind::SystemHook:
     case EventKind::ControlRequest:
       break;

@@ -194,6 +194,26 @@ bool IsBackgroundAnswer(const Json& record);
 // True for the system/task_updated that says a task went to the background.
 bool IsMovedToBackground(const Json& record);
 
+// The plan's rate limits without a turn: rate_limit_event comes only during
+// one, so the status bar would otherwise show the last turn's numbers until
+// a prompt is sent (claude-gui-lkk.5.8).  skip_behaviors leaves out the scan
+// of every transcript of the last seven days, which a usage meter has no use
+// for.  Measured 2026-11-05 (tools/probe_usage.notes.md): answered about
+// 0.3 s after initialize, no prompt, no credit.
+Json MakeGetUsage(const std::string& requestId);
+
+// What our get_usage request ids start with.
+extern const char kUsageRequestPrefix[];
+
+// The answer to one of our get_usage requests, as the same event a
+// rate_limit_event gives.  Its numbers differ in kind from that record's:
+// utilization is a PERCENT and resets_at an ISO 8601 string.  False for any
+// other record, for an error, and when the account has no plan limits (API
+// key, Bedrock, Vertex: rate_limits null).  The state is Exhausted only for a
+// window at 100 %: the answer has a severity, but only "normal" was ever
+// seen, and a guessed word for the warning is worse than none.
+bool ParseUsageResponse(const Json& record, agent::RateLimitChanged* out);
+
 // Shift+Tab without restarting the session: change the permission mode of the
 // turn in flight and every turn after it.  The mode a terminal is switched
 // into this way is runtime state of that one process -- settings, hooks and

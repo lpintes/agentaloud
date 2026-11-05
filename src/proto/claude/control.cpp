@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "proto/claude/sessions.h"
 #include "proto/elicitation.h"
 
 namespace proto {
@@ -379,6 +380,50 @@ bool IsMovedToBackground(const Json& record) {
   auto backgrounded = patch->find("is_backgrounded");
   return backgrounded != patch->end() && backgrounded->is_boolean() &&
          backgrounded->get<bool>();
+}
+
+Json MakeGetUsage(const std::string& requestId) {
+  return Json{{"type", "control_request"},
+              {"request_id", requestId},
+              {"request", Json{{"subtype", "get_usage"},
+                               {"skip_behaviors", true}}}};
+}
+
+const char kUsageRequestPrefix[] = "usage-";
+
+bool ParseUsageResponse(const Json& record, agent::RateLimitChanged* out) {
+  if (StringField(record, "type") != "control_response") return false;
+  auto outer = record.find("response");
+  if (outer == record.end() || !outer->is_object()) return false;
+  if (StringField(*outer, "request_id").rfind(kUsageRequestPrefix, 0) != 0 ||
+      StringField(*outer, "subtype") != "success") {
+    return false;
+  }
+  auto inner = outer->find("response");
+  if (inner == outer->end() || !inner->is_object()) return false;
+  auto limits = inner->find("rate_limits");
+  if (limits == inner->end() || !limits->is_object()) return false;
+
+  agent::RateLimitChanged result;
+  const struct {
+    const char* name;
+    int minutes;
+  } kWindows[] = {{"five_hour", 300}, {"seven_day", 7 * 24 * 60}};
+  for (const auto& known : kWindows) {
+    auto window = limits->find(known.name);
+    if (window == limits->end() || !window->is_object()) continue;
+    auto used = window->find("utilization");
+    if (used == window->end() || !used->is_number()) continue;
+    agent::LimitWindow entry;
+    entry.minutes = known.minutes;
+    entry.used = used->get<double>() / 100.0;
+    entry.resetsAt = UnixSeconds(StringField(*window, "resets_at"));
+    if (entry.used >= 1) result.state = agent::LimitState::Exhausted;
+    result.windows.push_back(entry);
+  }
+  if (result.windows.empty()) return false;
+  *out = std::move(result);
+  return true;
 }
 
 Json MakeAllow(const PermissionRequest& request, const Json& updatedInput,

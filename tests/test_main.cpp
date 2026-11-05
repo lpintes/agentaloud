@@ -1047,6 +1047,59 @@ void TestRateLimitParsing() {
       &ignored));
 }
 
+void TestUsageResponseParsing() {
+  TEST("control: get_usage dava limit bez promptu");
+  // Tvar odmerany 2026-11-05 na CLI 2.1.314 (tools/probe_usage.notes.md),
+  // skrateny na polia, ktore sa citaju. Pozor na rozdiel od rate_limit_event:
+  // utilization je v PERCENTACH a resets_at je ISO 8601 retazec.
+  proto::Json answer = proto::Json::parse(R"({
+    "type": "control_response",
+    "response": {
+      "subtype": "success",
+      "request_id": "usage-2",
+      "response": {
+        "subscription_type": "pro",
+        "rate_limits_available": true,
+        "rate_limits": {
+          "five_hour": {"utilization": 26,
+                        "resets_at": "2026-11-05T15:00:00.242538+00:00"},
+          "seven_day": {"utilization": 100,
+                        "resets_at": "2026-11-11T00:00:00.242560+00:00"},
+          "seven_day_opus": null
+        }
+      }
+    }
+  })");
+  CHECK_EQ(proto::MakeGetUsage("usage-2")["request"]["subtype"],
+           proto::Json("get_usage"));
+  agent::RateLimitChanged limit;
+  CHECK(proto::ParseUsageResponse(answer, &limit));
+  CHECK_EQ(limit.windows.size(), static_cast<size_t>(2));
+  CHECK_EQ(limit.windows[0].minutes, 300);
+  CHECK(limit.windows[0].used > 0.25 && limit.windows[0].used < 0.27);
+  CHECK_EQ(limit.windows[0].resetsAt, 1793890800LL);
+  CHECK_EQ(limit.windows[1].minutes, 7 * 24 * 60);
+  CHECK_EQ(limit.windows[1].resetsAt, 1794355200LL);
+  // Okno na 100 % je vycerpane; slovo pre varovanie CLI nikdy nepovedalo.
+  CHECK(limit.state == agent::LimitState::Exhausted);
+
+  // Ucet bez limitov planu (API kluc), chyba a cudzia odpoved nie su limit.
+  agent::RateLimitChanged ignored;
+  CHECK(!proto::ParseUsageResponse(proto::Json::parse(R"({
+    "type": "control_response",
+    "response": {"subtype": "success", "request_id": "usage-3",
+                 "response": {"rate_limits_available": false,
+                              "rate_limits": null}}
+  })"), &ignored));
+  CHECK(!proto::ParseUsageResponse(proto::Json::parse(R"({
+    "type": "control_response",
+    "response": {"subtype": "error", "request_id": "usage-4",
+                 "error": "get_usage is not supported in this context"}
+  })"), &ignored));
+  answer["response"]["request_id"] = "init-1";
+  CHECK(!proto::ParseUsageResponse(answer, &ignored));
+}
+
 void TestInitializeResponseParsing() {
   TEST("control: rezim povoleni sa vie uz z odpovede na initialize");
   // Odpozorovane cez tools/probe_init.py: CLI odpovie na 'initialize' este
@@ -6369,6 +6422,7 @@ int main(int argc, char** argv) {
   TestFindSearchesCollapsedBlocks();
   TestLinksInText();
   TestRateLimitParsing();
+  TestUsageResponseParsing();
   TestResetToSayPicksShortestUnlessExhausted();
   TestLongResetToSayIsTheWeekUnlessAlreadySaid();
   TestInitializeResponseParsing();

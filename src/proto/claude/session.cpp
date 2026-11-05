@@ -163,8 +163,14 @@ void Session::OnLine(std::string_view line) {
     InitializeInfo info;
     if (ParseInitializeResponse(event.raw, &info) &&
         info.requestId == initRequestId_) {
-      std::lock_guard<std::mutex> lock(mutex_);
-      handshake_ = info;
+      {
+        std::lock_guard<std::mutex> lock(mutex_);
+        handshake_ = info;
+      }
+      // The limits as they are now, not as the last turn left them: a
+      // rate_limit_event comes only during a turn (claude-gui-lkk.5.8).
+      SendJson(MakeGetUsage(kUsageRequestPrefix +
+                            std::to_string(nextRequestId_++)));
     }
   }
 
