@@ -165,7 +165,8 @@ agent::FormAnswer ClaudeBackend::OnElicitation(
   const agent::ToolCall call =
       FormCall(form, "elicitation-" + request.requestId);
   if (callbacks_.onEvents) {
-    callbacks_.onEvents({agent::ToolCallStarted{call, form.by}});
+    callbacks_.onEvents({agent::ToolCallStarted{
+        call, form.by, translator_.RunningCallOf(form.server)}});
   }
   if (callbacks_.onForm) answer = callbacks_.onForm(form);
   if (callbacks_.onEvents) {

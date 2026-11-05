@@ -1126,7 +1126,8 @@ void CodexBackend::OnServerRequest(const Json& message) {
       // only has to be unique in the session; the server request's is.
       const agent::ToolCall call =
           proto::FormCall(form, "elicitation-" + id.dump());
-      Emit({agent::ToolCallStarted{call, form.by}});
+      Emit({agent::ToolCallStarted{call, form.by,
+                                   translator_.RunningCallOf(form.server)}});
       agent::FormAnswer answer;
       if (callbacks_.onForm) answer = callbacks_.onForm(form);
       Send({{"id", id}, {"result", MakeFormAnswer(form, answer)}});

@@ -246,7 +246,9 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
    každom vstupe do bloku. Do obyčajného `EDIT` poľa ho späť na `\r\n`
    prekladá jedine `win::Dialog::SetTextLines`.
 5. **Index bloku sa hýbe, `Block::id` nie.** Výsledok nástroja sa vkladá za
-   svoje volanie. Čo pomenúva blok naprieč časom, drží `id`.
+   svoje volanie a za bloky, ktoré vznikli v ňom (`Block::within`: formulár
+   MCP, volanie určí adaptér cez `RunningCallOf`). Čo pomenúva blok naprieč
+   časom, drží `id`.
 6. **NVDA neohlási posun kurzora, ktorý nespravila sama.** Každá klávesa musí
    prehovoriť (`SessionPane::Announce`), aj keď sa nič nestalo; hovorí sa
    riadok, kde kurzor stojí. Dlhá akcia dvakrát (začiatok aj koniec —

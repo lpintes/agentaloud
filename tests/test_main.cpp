@@ -5312,6 +5312,87 @@ void TestClaudeElicitation() {
   CHECK(!proto::ParseElicitation(other, &request));
 }
 
+// Formulare, ktore si server vypytal pocas volania, idu pred jeho vysledok,
+// nie za nim (claude-gui-lkk.95).  Volanie, v ktorom formular vznikol, vie
+// len adapter -- poziadavka nesie iba meno servera.
+void TestFormBlocksSitInsideTheirCall() {
+  TEST("formular MCP: vysledok volania az za formularmi, ktore vyvolalo");
+  proto::Translator translator;
+  model::Transcript transcript;
+  std::string problem;
+  transcript.AppendUserPrompt(L"zbieraj");
+  transcript.Append(translator.Translate(proto::Json::parse(R"({
+    "type": "assistant",
+    "message": {"content": [
+      {"type": "tool_use", "id": "toolu_C", "name": "mcp__fakeel__collect",
+       "input": {}},
+      {"type": "tool_use", "id": "toolu_D", "name": "Bash",
+       "input": {"command": "ls"}}
+    ]}
+  })")));
+  CHECK_EQ(translator.RunningCallOf("fakeel"), std::string("toolu_C"));
+  CHECK_EQ(translator.RunningCallOf("fake"), std::string());
+
+  agent::FormRequest form;
+  form.server = "fakeel";
+  form.message = "CASE valid";
+  form.fields.resize(1);
+  form.fields[0].name = "name";
+  for (const char* id : {"elicitation-r-1", "elicitation-r-2"}) {
+    const agent::ToolCall call = proto::FormCall(form, id);
+    transcript.Append({agent::ToolCallStarted{
+        call, "", translator.RunningCallOf(form.server)}});
+    transcript.Append({agent::ToolCallFinished{
+        proto::FormResult(call.id, form, agent::FormAnswer())}});
+  }
+  transcript.Append(translator.Translate(proto::Json::parse(R"({
+    "type": "user",
+    "message": {"content": [
+      {"type": "tool_result", "tool_use_id": "toolu_C",
+       "content": "done, 2 cases"}
+    ]}
+  })")));
+  CHECK(transcript.CheckInvariants(&problem));
+  CHECK_EQ(translator.RunningCallOf("fakeel"), std::string());
+
+  // prompt, C, D, formular 1 a jeho vysledok, formular 2, vysledok C.  D stoji
+  // medzi: formulare prisli az po nom a vysledok C ich nepredbehne.
+  std::vector<std::string> order;
+  for (const model::Block& block : transcript.blocks()) {
+    order.push_back(block.toolUseId);
+  }
+  CHECK(order == (std::vector<std::string>{
+                     "", "toolu_C", "toolu_D", "elicitation-r-1",
+                     "elicitation-r-1", "elicitation-r-2", "elicitation-r-2",
+                     "toolu_C"}));
+  CHECK(transcript.blocks().back().kind == model::BlockKind::ToolResult);
+
+  // Dve bezace volania toho isteho servera: nevie sa ktore, takze ziadne.
+  transcript.Append(translator.Translate(proto::Json::parse(R"({
+    "type": "assistant",
+    "message": {"content": [
+      {"type": "tool_use", "id": "toolu_E", "name": "mcp__fakeel__collect",
+       "input": {}},
+      {"type": "tool_use", "id": "toolu_F", "name": "mcp__fakeel__collect",
+       "input": {}}
+    ]}
+  })")));
+  CHECK_EQ(translator.RunningCallOf("fakeel"), std::string());
+
+  // Codex: bezaci mcpToolCall z item/started, s polom server.
+  proto::codex::Translator codex;
+  codex.Translate(proto::Json::parse(R"({"method":"item/started","params":{
+      "item":{"type":"mcpToolCall","id":"exec-1","server":"fakeel",
+              "tool":"collect","status":"inProgress","arguments":{}}}})"));
+  CHECK_EQ(codex.RunningCallOf("fakeel"), std::string("exec-1"));
+  CHECK_EQ(codex.RunningCallOf("other"), std::string());
+  codex.Translate(proto::Json::parse(R"({"method":"item/completed","params":{
+      "item":{"type":"mcpToolCall","id":"exec-1","server":"fakeel",
+              "tool":"collect","status":"completed","arguments":{},
+              "result":{"content":[]}}}})"));
+  CHECK_EQ(codex.RunningCallOf("fakeel"), std::string());
+}
+
 // Codex nevaliduje nic (tools/probe_elicit_form.notes.md, pripad C), takze
 // co tu prejde, dostane server.
 void TestCheckFormField() {
@@ -6319,6 +6400,7 @@ int main(int argc, char** argv) {
   TestCodexElicitation();
   TestElicitationForm();
   TestClaudeElicitation();
+  TestFormBlocksSitInsideTheirCall();
   TestCheckFormField();
   TestCodexFileChangeScope();
   TestCodexReviewerDenial();

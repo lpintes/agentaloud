@@ -258,6 +258,10 @@ class Translator {
   // The same, as Codex sent it: what an approval allows is read from the
   // item, and the call made of it has lost the shape (paths joined by commas).
   bool FindItem(const std::string& itemId, Json* out) const;
+  // The mcpToolCall of this server that has started and not finished -- the
+  // one an elicitation came out of, since the request names only the server.
+  // Empty when none runs, or more than one and so no telling.
+  std::string RunningCallOf(const std::string& server) const;
 
   const std::string& model() const { return model_; }
 

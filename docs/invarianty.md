@@ -120,6 +120,16 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
    doprostred posunie indexy všetkých blokov za ním. Čokoľvek, čo pomenúva blok
    naprieč časom — záložka, prvý nový blok dávky — preto drží `id`, nie index. Indexy
    sú platné len v rámci jednej obsluhy.
+
+   „Za svoje volanie" znamená za volanie **a za posledný blok, ktorý vznikol
+   v ňom** (`Block::within`, v porte `ToolCallStarted::within`). Dnes sú to
+   formuláre MCP: server si ich vypýta počas volania nástroja, prídu na koniec
+   prepisu a výsledok vložený hneď za volanie by stál pred nimi — čitateľ by
+   počul „done, 2 cases" skôr než formuláre, na ktoré to odpovedá (overené
+   naostro 5. 11. 2026, claude-gui-lkk.95). Ktoré volanie formulár vyvolalo,
+   vie len adaptér, lebo požiadavka nesie iba meno servera
+   (`Translator::RunningCallOf` v oboch): bežiace volanie toho servera, a keď
+   bežia dve, žiadne — vtedy platí pôvodné „hneď za volanie".
 6. **NVDA neohlási posun kurzora, ktorý nespravila sama.** Overené skúšaním.
    Každá akcia, ktorej jedinou odozvou mal byť presun kurzora — skok na blok,
    zbalenie, návrat na záložku — musí prehovoriť sama, cez

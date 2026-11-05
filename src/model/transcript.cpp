@@ -680,22 +680,36 @@ Edit Transcript::InsertBlocks(size_t at, std::vector<Block> blocks) {
   return edit;
 }
 
-std::optional<size_t> Transcript::PlaceForResult(
+std::optional<size_t> Transcript::IndexOfCall(
     const std::string& toolUseId) const {
   if (toolUseId.empty()) return std::nullopt;
   for (size_t i = blocks_.size(); i-- > 0;) {
     if (blocks_[i].kind == BlockKind::ToolUse &&
         blocks_[i].toolUseId == toolUseId) {
-      return i + 1;
+      return i;
     }
   }
   return std::nullopt;
 }
 
+std::optional<size_t> Transcript::PlaceForResult(
+    const std::string& toolUseId) const {
+  const std::optional<size_t> call = IndexOfCall(toolUseId);
+  if (!call.has_value()) return std::nullopt;
+  // A form came in later than the call, maybe behind other calls, and the
+  // result answers it: "done, 2 cases" read before the two forms is the
+  // wrong way round.
+  size_t place = *call + 1;
+  for (size_t i = place; i < blocks_.size(); ++i) {
+    if (blocks_[i].within == toolUseId) place = i + 1;
+  }
+  return place;
+}
+
 const Block* Transcript::CallFor(const std::string& toolUseId) const {
-  const std::optional<size_t> place = PlaceForResult(toolUseId);
-  if (!place.has_value()) return nullptr;
-  return &blocks_[*place - 1];
+  const std::optional<size_t> call = IndexOfCall(toolUseId);
+  if (!call.has_value()) return nullptr;
+  return &blocks_[*call];
 }
 
 std::optional<size_t> Transcript::IndexOfId(size_t id) const {
@@ -829,6 +843,7 @@ std::vector<Edit> Transcript::Append(const std::vector<agent::Event>& events) {
                    std::get_if<agent::ToolCallStarted>(&event)) {
       made.push_back(MakeToolUse(started->call, projectRoot_));
       made.back().speaker = Widen(started->by);
+      made.back().within = started->within;
     } else if (const auto* finished =
                    std::get_if<agent::ToolCallFinished>(&event)) {
       // The call is looked up among the blocks already placed.  A batch that
@@ -836,14 +851,17 @@ std::vector<Edit> Transcript::Append(const std::vector<agent::Event>& events) {
       // would go to the end -- which is right behind the call anyway.
       const Block* call = CallFor(finished->result.callId);
       std::wstring speaker = call != nullptr ? call->speaker : std::wstring();
+      std::string within = call != nullptr ? call->within : std::string();
       for (const Block& earlier : made) {
         if (earlier.kind == BlockKind::ToolUse &&
             earlier.toolUseId == finished->result.callId) {
           speaker = earlier.speaker;
+          within = earlier.within;
         }
       }
       made.push_back(MakeToolResult(finished->result, call));
       made.back().speaker = std::move(speaker);
+      made.back().within = std::move(within);
     } else if (const auto* change =
                    std::get_if<agent::ToolCallChanged>(&event)) {
       // After everything of this batch is placed, so that a call made in the

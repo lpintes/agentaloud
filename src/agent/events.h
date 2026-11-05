@@ -168,6 +168,10 @@ struct ThinkingTick {};
 struct ToolCallStarted {
   ToolCall call;
   std::string by = {};
+  // The id of the call this one happened inside, empty for most: a form an
+  // MCP server asks for while its tool runs.  The outer call's result then
+  // goes behind the form, not between the two (claude-gui-lkk.95).
+  std::string within = {};
 };
 struct ToolCallFinished { ToolResult result; };
 

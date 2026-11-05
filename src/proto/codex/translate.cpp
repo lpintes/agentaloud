@@ -966,6 +966,19 @@ bool Translator::FindItem(const std::string& itemId, Json* out) const {
   return true;
 }
 
+std::string Translator::RunningCallOf(const std::string& server) const {
+  std::string found;
+  for (const auto& [id, item] : running_) {
+    if (StringField(item, "type") != "mcpToolCall" ||
+        StringField(item, "server") != server) {
+      continue;
+    }
+    if (!found.empty()) return std::string();
+    found = id;
+  }
+  return found;
+}
+
 std::vector<agent::Event> Translator::Translate(const Json& message) {
   std::vector<agent::Event> events;
   if (KindOf(message) != MessageKind::Notification) return events;

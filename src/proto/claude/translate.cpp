@@ -354,6 +354,17 @@ std::string Translator::AgentName(const std::string& agentId) const {
   return known != agentIds_.end() ? known->second : std::string("agent");
 }
 
+std::string Translator::RunningCallOf(const std::string& server) const {
+  const std::string prefix = "mcp__" + server + "__";
+  std::string found;
+  for (const auto& [id, name] : mcpCalls_) {
+    if (name.rfind(prefix, 0) != 0) continue;
+    if (!found.empty()) return std::string();
+    found = id;
+  }
+  return found;
+}
+
 std::vector<agent::Event> Translator::Translate(const Json& record) {
   std::vector<agent::Event> events;
   const Event event = Classify(record);
@@ -423,6 +434,7 @@ std::vector<agent::Event> Translator::Translate(const Json& record) {
                 call.id, StringField(arguments, "subagent_type"));
             call.primary = named + ": " + call.primary;
           }
+          if (name.rfind("mcp__", 0) == 0) mcpCalls_[call.id] = name;
           events.push_back(agent::ToolCallStarted{std::move(call), by});
         }
       }
@@ -454,6 +466,7 @@ std::vector<agent::Event> Translator::Translate(const Json& record) {
         if (!item.is_object()) continue;
         if (StringField(item, "type") == "tool_result") {
           agent::ToolResult result = MakeToolResult(item);
+          mcpCalls_.erase(result.callId);
           if (readableResults_.erase(result.callId) != 0) {
             result.text = ReadableIfJson(result.text);
           }

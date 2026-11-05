@@ -104,6 +104,10 @@ struct Block {
   // the block is made and never after: it is part of the rendered text.  A
   // result has its call's.
   std::wstring speaker;
+  // The toolUseId of the call this block happened inside
+  // (agent::ToolCallStarted::within); a result has its call's.  That call's
+  // result is placed behind every such block.
+  std::string within;
 
   // Offsets into Transcript::Text(), maintained by Transcript.  length always
   // includes the block's trailing newline, so the blocks tile the buffer with
@@ -263,10 +267,12 @@ class Transcript {
   Edit AppendBlocks(std::vector<Block> blocks);
   // `at` is the index to insert before; past the end means append.
   Edit InsertBlocks(size_t at, std::vector<Block> blocks);
-  // Where a result for this tool_use_id belongs: right behind the call.
-  // Empty when the call is not in the transcript, which happens when a tool
-  // was started before we attached to the session.
+  // Where a result for this tool_use_id belongs: right behind the call, or
+  // behind the last block that happened inside it.  Empty when the call is
+  // not in the transcript, which happens when a tool was started before we
+  // attached to the session.
   std::optional<size_t> PlaceForResult(const std::string& toolUseId) const;
+  std::optional<size_t> IndexOfCall(const std::string& toolUseId) const;
   // The call a result answers.  nullptr when the call is not here, and then
   // the result is rendered as any tool's would be.
   const Block* CallFor(const std::string& toolUseId) const;

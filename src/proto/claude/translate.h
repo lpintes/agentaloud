@@ -67,6 +67,11 @@ class Translator {
   // still a subagent, and says so.
   std::string AgentName(const std::string& agentId) const;
 
+  // The call of this MCP server that has started and not finished -- the one
+  // an elicitation from the server came out of, since the request names only
+  // the server.  Empty when none runs, or more than one and so no telling.
+  std::string RunningCallOf(const std::string& server) const;
+
  private:
   // The name a subagent goes by from its Agent call on: its type and how
   // many of that type this translator has seen, "Explore 2".  The type alone
@@ -97,6 +102,8 @@ class Translator {
   std::map<std::string, std::string> planFiles_;
   // Calls whose result, if JSON, is shown as ReadableIfJson; gone once it is.
   std::set<std::string> readableResults_;
+  // MCP calls without a result yet: call id -> tool name ("mcp__fakeel__x").
+  std::map<std::string, std::string> mcpCalls_;
   // A task went to the background since the last answer to background_tasks
   // -- the only sign that Ctrl+B did anything (MakeBackgroundTasks).
   bool movedSinceAnswer_ = false;
