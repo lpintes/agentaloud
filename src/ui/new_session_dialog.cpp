@@ -261,13 +261,28 @@ void NewSessionDialog::ShowFolders(std::vector<app::RecentFolder> folders) {
   if (folders_.empty()) AddRow(list, i18n::Text(i18n::Str::kNewRecentNone));
   // Never no selection: NVDA says "not selected" only after the row, and the
   // reader, already on the next arrow key, hears the first row twice.
-  // An empty field takes the first row, so what is selected is what starts.
+  // An empty field takes the first row, so what is selected is what starts --
+  // with an agent typed on the line, the first row of that agent, and none
+  // when it has no row: the list arrives seconds after the dialog, and
+  // changing the agent then would also throw away the model typed for it.
   const bool none = selected < 0;
+  bool take = none && Trimmed(GetText(IDC_NEW_PROJECT)).empty();
   if (none) selected = 0;
+  if (take && session_->backendTyped) {
+    const int backend = SelectedBackend();
+    take = false;
+    for (size_t i = 0; i < folders_.size(); ++i) {
+      if (folders_[i].backend == backend) {
+        selected = static_cast<int>(i);
+        take = true;
+        break;
+      }
+    }
+  }
   SendMessageW(list, LB_SETCURSEL, selected, 0);
   SendMessageW(list, WM_SETREDRAW, TRUE, 0);
   InvalidateRect(list, nullptr, TRUE);
-  if (none && Trimmed(GetText(IDC_NEW_PROJECT)).empty()) {
+  if (take) {
     TakeRecentFolder();
     ListConversations();
   }

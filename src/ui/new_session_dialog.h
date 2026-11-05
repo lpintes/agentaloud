@@ -71,6 +71,10 @@ struct NewSession {
   FolderLister folders;
   // In: the one selected first.  Out: the one chosen.
   std::string backend;
+  // In only: `backend` was typed on the command line (--backend).  An empty
+  // folder field then takes the first recent folder of that agent and never
+  // another agent's, which would overrule the line (invariant 22).
+  bool backendTyped = false;
   // Out only: what the model field said, trimmed.  May be empty.
   std::wstring model;
   // In and out.  Out, it names a folder that existed when OK was pressed.

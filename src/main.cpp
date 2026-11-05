@@ -288,6 +288,7 @@ bool AskNewSession(HWND owner, const app::Arguments& typed,
                    int* switchTo) {
   ui::NewSession choice;
   choice.backend = arguments->backend;
+  choice.backendTyped = !typed.backend.empty();
   choice.project = arguments->project;
   choice.open = open;
   choice.focusConversations = focusConversations;
