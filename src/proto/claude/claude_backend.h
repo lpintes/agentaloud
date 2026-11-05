@@ -53,6 +53,7 @@ class ClaudeBackend : public agent::Backend {
   bool SetMode(const std::string& id) override;
   bool SetModel(const std::string& id) override;
   bool SetEffort(const std::string& level) override;
+  bool RefreshRateLimits() override;
   // `claude auth login`, a process of its own beside the session's: unlike
   // Codex, Claude's stream has no request for it (claude-gui-lkk.71.4).
   bool StartSignIn() override;

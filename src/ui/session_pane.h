@@ -150,6 +150,10 @@ class SessionPane {
   // Ctrl+B: what the turn in flight waits for goes on in the background.
   void Background();
 
+  // F6: the plan's limits asked for now.  Said twice (invariant 6): that it
+  // is being checked, and the field once the answer is in.
+  void RefreshLimit();
+
   // Ctrl+T: the background tasks, live, with Stop for one of them.
   void ShowTasks();
 
@@ -280,7 +284,12 @@ class SessionPane {
   void RefreshModelField();
   // The stage the bar names, to notice when the backend's has moved.
   std::string effortShown_;
-  void ShowRateLimit(const agent::RateLimitChanged& limit);
+  // Returns what it put in the field; empty when it knows nothing to say.
+  std::wstring ShowRateLimit(const agent::RateLimitChanged& limit);
+  // F6 was pressed and its answer has not come yet.  The next limit to
+  // arrive is said, whoever asked for it: a rate_limit_event of a turn
+  // answers the question just as well.
+  bool limitAsked_ = false;
   // Puts the caret at the start of a block and says which line that is.
   void GoToBlock(size_t index);
   // Whether the caret is still where the application left it, or at the end.

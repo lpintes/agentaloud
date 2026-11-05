@@ -2548,6 +2548,25 @@ void TestTranslatorModelAndTurn() {
     CHECK_EQ(weekly->windows[1].resetsAt, 1700400000LL);
     CHECK_EQ(agent::ResetToSay(*weekly), 1700000000LL);
   }
+
+  // Odpoved na get_usage bez cisel ukonci F6 vetou, nie tichom
+  // (claude-gui-lkk.5.34); cudzia odpoved nie.
+  events = translator.Translate(proto::Json::parse(R"({
+    "type": "control_response",
+    "response": {"subtype": "success", "request_id": "usage-7",
+                 "response": {"rate_limits_available": false,
+                              "rate_limits": null}}})"));
+  CHECK_EQ(CountOf<agent::RateLimitUnavailable>(events), size_t{1});
+  events = translator.Translate(proto::Json::parse(R"({
+    "type": "control_response",
+    "response": {"subtype": "error", "request_id": "usage-8",
+                 "error": "get_usage is not supported in this context"}})"));
+  CHECK_EQ(CountOf<agent::RateLimitUnavailable>(events), size_t{1});
+  events = translator.Translate(proto::Json::parse(R"({
+    "type": "control_response",
+    "response": {"subtype": "success", "request_id": "init-1",
+                 "response": {}}})"));
+  CHECK_EQ(CountOf<agent::RateLimitUnavailable>(events), size_t{0});
 }
 
 void TestResetToSayPicksShortestUnlessExhausted() {

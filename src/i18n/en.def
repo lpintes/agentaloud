@@ -123,6 +123,9 @@ S(kStatusModel, L"model {0}")
 S(kStatusEffort, L"effort {0}")
 S(kModeNamed, L"{0} mode")
 S(kStatusLimit, L"limit {0}")
+S(kLimitRefreshing, L"checking the limit")
+S(kLimitUnavailable, L"the limit cannot be found out")
+S(kLimitUnsupported, L"this agent cannot check the limit on demand")
 S(kLimitExhausted, L"limit reached")
 S(kLimitWarning, L"near the limit")
 S(kLimitResets, L"resets {0}")
@@ -269,6 +272,10 @@ S(kKeysNoModel, L"F5 — model change; this agent cannot do it while running.\n"
 S(kKeysModelEffort,
   L"F5 — changes the model and effort of the running session; the lists come "
   L"from the agent. Not saved to the settings.\n")
+S(kKeysLimit,
+  L"F6 — checks the plan's limit now, also outside a turn, and reads it out; "
+  L"the status bar shows it too.\n")
+S(kKeysNoLimit, L"F6 — checking the limit; this agent cannot do it on demand.\n")
 S(kKeysSignIn,
   L"Ctrl+L — signs the agent in to its account through a browser; a dialog "
   L"shows the address and the code.\n")

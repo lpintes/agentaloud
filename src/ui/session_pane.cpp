@@ -784,7 +784,17 @@ void SessionPane::OnDrain() {
         OnSessionEnded();
       } else if (const auto* limit =
                      std::get_if<agent::RateLimitChanged>(&event)) {
-        ShowRateLimit(*limit);
+        const std::wstring said = ShowRateLimit(*limit);
+        if (limitAsked_) {
+          limitAsked_ = false;
+          Announce(said.empty() ? i18n::Text(Str::kLimitUnavailable) : said);
+        }
+      } else if (std::holds_alternative<agent::RateLimitUnavailable>(event)) {
+        // The field keeps what it had: a refusal is no news about the limit.
+        if (limitAsked_) {
+          limitAsked_ = false;
+          Announce(i18n::Text(Str::kLimitUnavailable));
+        }
       } else if (const auto* changed = std::get_if<agent::ModeChanged>(&event)) {
         mode = changed->id;
       }
@@ -1429,7 +1439,7 @@ void SessionPane::RefreshModelField() {
   SetField(StatusBar::kModel, facts);
 }
 
-void SessionPane::ShowRateLimit(const agent::RateLimitChanged& limit) {
+std::wstring SessionPane::ShowRateLimit(const agent::RateLimitChanged& limit) {
   const auto percent = [](double share) {
     return std::to_wstring(static_cast<int>(share * 100 + 0.5)) + L" %";
   };
@@ -1493,6 +1503,7 @@ void SessionPane::ShowRateLimit(const agent::RateLimitChanged& limit) {
     text = i18n::Format(Str::kStatusLimit, {text});
   }
   SetField(StatusBar::kLimit, text);
+  return text;
 }
 
 void SessionPane::FocusPrompt() const { SetFocus(prompt_); }
@@ -1701,6 +1712,20 @@ void SessionPane::Background() {
   // answers -- agent::BackgroundMoved says whether anything went.
   Announce(i18n::Text(backend_->Background() ? Str::kBackgrounding
                                              : Str::kRequestFailed));
+}
+
+void SessionPane::RefreshLimit() {
+  if (!backend_->capabilities().refreshLimits) {
+    Announce(i18n::Text(Str::kLimitUnsupported));
+    return;
+  }
+  if (ended_) {
+    Announce(i18n::Text(Str::kStatusAgentEnded));
+    return;
+  }
+  limitAsked_ = backend_->RefreshRateLimits();
+  Announce(i18n::Text(limitAsked_ ? Str::kLimitRefreshing
+                                  : Str::kRequestFailed));
 }
 
 void SessionPane::ShowTasks() {
@@ -2095,6 +2120,10 @@ LRESULT CALLBACK SessionPane::PromptProc(HWND window, UINT message,
       pane->ShowCommands();
       return 0;
     }
+    if (wParam == VK_F6) {
+      pane->RefreshLimit();
+      return 0;
+    }
     if (IsFindChord(wParam)) {
       pane->ShowFind();
       return 0;
@@ -2207,6 +2236,10 @@ LRESULT CALLBACK SessionPane::TranscriptProc(HWND window, UINT message,
   // reading the transcript.
   if (message == WM_KEYDOWN && wParam == VK_F4) {
     pane->ShowCommands();
+    return 0;
+  }
+  if (message == WM_KEYDOWN && wParam == VK_F6) {
+    pane->RefreshLimit();
     return 0;
   }
   if (message == WM_KEYDOWN && IsCopyIdChord(wParam)) {

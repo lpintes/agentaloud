@@ -602,6 +602,8 @@ std::vector<agent::Event> Translator::Translate(const Json& record) {
         movedSinceAnswer_ = false;
       } else if (ParseUsageResponse(event.raw, &limit)) {
         events.push_back(limit);
+      } else if (IsUsageResponse(event.raw)) {
+        events.push_back(agent::RateLimitUnavailable{});
       }
       break;
     }
@@ -750,6 +752,8 @@ agent::Capabilities ClaudeCapabilities() {
   // As set_model: the request after the next tool result carries it.
   capabilities.switchEffort = true;
   capabilities.switchEffortInTurn = true;
+  // get_usage, the same request the start makes (MakeGetUsage).
+  capabilities.refreshLimits = true;
   // The aliases --help names, plus opusplan.  Aliases rather than ids
   // because they follow the newest model on their own; the list that is
   // true for the account comes only with the initialize answer, which is

@@ -88,6 +88,9 @@ struct Capabilities {
   bool switchEffort = false;
   // ...and the change reaches the turn in flight, as switchModelInTurn.
   bool switchEffortInTurn = false;
+  // The plan's limits can be asked for on demand, without a prompt:
+  // RefreshRateLimits, F6.
+  bool refreshLimits = false;
   // Where the CLI keeps its sign-in and settings, for the sentences that say
   // why it will not answer (claude-gui-lkk.73).  Per backend, not per CLI:
   // the adapter fills it in from its Program when it is made.
@@ -495,6 +498,12 @@ class Backend {
   // stage it does not know and ignores it (tools/probe_claude_effort.notes.md).
   // Not saved anywhere (invariant 22).
   virtual bool SetEffort(const std::string& level) = 0;
+
+  // Only with Capabilities::refreshLimits; false without it, and when the
+  // request could not be sent.  Asks for the plan's limits as they are now,
+  // in or out of a turn.  The answer is RateLimitChanged, or
+  // RateLimitUnavailable when the CLI has none to give (claude-gui-lkk.5.34).
+  virtual bool RefreshRateLimits() = 0;
 
   // ---- Signing in.  Only with Capabilities::signIn; false without it.
   // Where to go arrives as SignInPrompt and the outcome as SignInFinished,

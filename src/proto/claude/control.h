@@ -214,6 +214,10 @@ extern const char kUsageRequestPrefix[];
 // seen, and a guessed word for the warning is worse than none.
 bool ParseUsageResponse(const Json& record, agent::RateLimitChanged* out);
 
+// Any answer to one of our get_usage requests, the ones ParseUsageResponse
+// refuses included: what tells a refresh that waits that no numbers come.
+bool IsUsageResponse(const Json& record);
+
 // Shift+Tab without restarting the session: change the permission mode of the
 // turn in flight and every turn after it.  The mode a terminal is switched
 // into this way is runtime state of that one process -- settings, hooks and

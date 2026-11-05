@@ -116,6 +116,10 @@ class Session {
   bool StopAllTasks();
   bool BackgroundTasks();
 
+  // get_usage, as after initialize; the answer is read by the translator
+  // (ParseUsageResponse).  False when the request could not be written.
+  bool RequestUsage();
+
   // Shift+Tab: switch the permission mode without restarting.  False when the
   // request could not be written.  Fire and forget otherwise -- the CLI's
   // control_response confirms the mode, and OnLine folds it into

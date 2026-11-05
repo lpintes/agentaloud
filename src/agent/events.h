@@ -256,6 +256,12 @@ long long ResetToSay(const RateLimitChanged& limit);
 // who does not plan by the week has stopped listening before it.
 const LimitWindow* LongResetToSay(const RateLimitChanged& limit);
 
+// A request for the limits was answered without them: refused (signed out),
+// or an account that has no plan limits (API key).  Also for the request the
+// adapter makes at the start by itself, which is why the status bar ignores
+// it -- it ends only a refresh someone asked for and is waiting to hear.
+struct RateLimitUnavailable {};
+
 // The CLI has finished starting: commands(), account() and the mode are now
 // what they are going to be.  With a SessionStart hook that is twenty seconds
 // in (invariant 17), so "not ready" is an ordinary state that has to be said.
@@ -377,7 +383,8 @@ using Event = std::variant<AssistantText, Thinking, ThinkingTick,
                            ToolDenied,
                            QuestionByPrompt, UserPrompt, Interrupted, WorkingDirectory,
                            ModelChanged, ModeChanged, ContextUsed,
-                           UsageChanged, RateLimitChanged, Ready, TurnStarted,
+                           UsageChanged, RateLimitChanged,
+                           RateLimitUnavailable, Ready, TurnStarted,
                            TurnEnded, BackgroundTasksChanged, BackgroundMoved,
                            SessionEnded, SignInRequired, SignInPrompt,
                            SignInFinished, Unrecognised>;

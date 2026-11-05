@@ -426,6 +426,13 @@ bool ParseUsageResponse(const Json& record, agent::RateLimitChanged* out) {
   return true;
 }
 
+bool IsUsageResponse(const Json& record) {
+  if (StringField(record, "type") != "control_response") return false;
+  auto outer = record.find("response");
+  return outer != record.end() && outer->is_object() &&
+         StringField(*outer, "request_id").rfind(kUsageRequestPrefix, 0) == 0;
+}
+
 Json MakeAllow(const PermissionRequest& request, const Json& updatedInput,
                const Json& updatedPermissions) {
   Json body{{"behavior", "allow"},

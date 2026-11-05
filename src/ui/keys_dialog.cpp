@@ -118,6 +118,8 @@ std::wstring KeysText(const agent::Capabilities& capabilities) {
   text += i18n::Text(!capabilities.switchModel  ? Str::kKeysNoModel
                      : capabilities.switchEffort ? Str::kKeysModelEffort
                                                  : Str::kKeysModel);
+  text += i18n::Text(capabilities.refreshLimits ? Str::kKeysLimit
+                                                : Str::kKeysNoLimit);
   text += i18n::Text(capabilities.signIn ? Str::kKeysSignIn
                                          : Str::kKeysNoSignIn);
   text += i18n::Text(Str::kKeysSave);

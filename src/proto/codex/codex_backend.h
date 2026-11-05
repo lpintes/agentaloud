@@ -83,6 +83,7 @@ class CodexBackend : public agent::Backend {
   // either.  A stage goes as effort; the default only as a collaboration mode
   // naming the mode the thread is in.  Before the thread exists, as SetModel.
   bool SetEffort(const std::string& level) override;
+  bool RefreshRateLimits() override;
   // The device code flow, in this same process: the page and the code come
   // back as text and the server finishes on its own when the reader is done
   // on the page.  Nothing to hand back, so SubmitSignInCode is false.

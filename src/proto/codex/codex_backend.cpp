@@ -545,6 +545,10 @@ bool CodexBackend::SetEffort(const std::string& level) {
                  std::move(params));
 }
 
+bool CodexBackend::RefreshRateLimits() {
+  return Request(Purpose::ReadRateLimits, "account/rateLimits/read", Json());
+}
+
 std::string CodexBackend::effort() const {
   std::lock_guard<std::mutex> lock(mutex_);
   return effort_;
@@ -945,7 +949,11 @@ void CodexBackend::OnResponse(const Json& message) {
       if (!failed && NeedsSignIn(result)) Emit({agent::SignInRequired{}});
       break;
     case Purpose::ReadRateLimits:
-      if (!failed) Emit({RateLimits(Field(result, "rateLimits"))});
+      if (failed) {
+        Emit({agent::RateLimitUnavailable{}});
+      } else {
+        Emit({RateLimits(Field(result, "rateLimits"))});
+      }
       break;
     case Purpose::StartSignIn: {
       agent::SignInPrompt prompt;

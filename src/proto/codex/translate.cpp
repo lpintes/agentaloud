@@ -361,6 +361,8 @@ agent::Capabilities CodexCapabilities() {
   // The same call and the same limit (effortreset, midturn).
   capabilities.switchEffort = true;
   capabilities.switchEffortInTurn = false;
+  // account/rateLimits/read, the same request the start makes.
+  capabilities.refreshLimits = true;
   // None: Codex says which models there are only through model/list, which
   // needs app-server running.  A name written here from memory would go
   // stale with the next release, silently.

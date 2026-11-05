@@ -126,6 +126,9 @@ S(kStatusModel, L"model {0}")
 S(kStatusEffort, L"effort {0}")
 S(kModeNamed, L"režim {0}")
 S(kStatusLimit, L"limit {0}")
+S(kLimitRefreshing, L"zisťujem limit")
+S(kLimitUnavailable, L"limit sa nedá zistiť")
+S(kLimitUnsupported, L"tento agent limit na požiadanie zistiť nevie")
 S(kLimitExhausted, L"limit vyčerpaný")
 S(kLimitWarning, L"blízko limitu")
 S(kLimitResets, L"obnova {0}")
@@ -270,6 +273,10 @@ S(kKeysNoModel, L"F5 — zmena modelu; tento agent ju za behu nevie.\n")
 S(kKeysModelEffort,
   L"F5 — zmení model a effort bežiacej session; zoznamy sú od agenta. Do "
   L"nastavení sa neukladá.\n")
+S(kKeysLimit,
+  L"F6 — zistí limit plánu teraz, aj mimo ťahu, a prečíta ho; obnoví ho aj "
+  L"v stavovom riadku.\n")
+S(kKeysNoLimit, L"F6 — zistenie limitu; tento agent ho na požiadanie nevie.\n")
 S(kKeysSignIn,
   L"Ctrl+L — prihlási agenta k účtu cez prehliadač; dialóg ukáže adresu "
   L"a kód.\n")

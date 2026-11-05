@@ -353,6 +353,8 @@ bool ClaudeBackend::SetEffort(const std::string& level) {
   return session_.SetEffort(level);
 }
 
+bool ClaudeBackend::RefreshRateLimits() { return session_.RequestUsage(); }
+
 bool ClaudeBackend::StartSignIn() {
   std::unique_ptr<win::Process> previous;
   std::unique_ptr<win::Process> process = std::make_unique<win::Process>();
