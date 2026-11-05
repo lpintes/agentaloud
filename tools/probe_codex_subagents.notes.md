@@ -156,6 +156,15 @@ proces, ktorý Codex nevidí; list prázdny). S výslovným pokynom
 - `thread/backgroundTerminals/clean {threadId}` → `{}`, oba hneď
   `item/completed status:"failed"`; list prázdny. Toto je „zastav všetky
   príkazy" (Codex TUI: „stop all background terminals").
+- Zopakované 2026-11-05 na codex-cli 0.166.0 (claude-gui-lkk.44.9): to isté,
+  oba procesy prežili `turn/interrupt`, `clean` ich zastavil.
+- Je to zámer, nie chyba Windows. Zdroják openai/codex (main, 2026-11-05):
+  `Op::Interrupt` → `interrupt_task` → `handle_task_abort` zruší úlohu ťahu,
+  ale `unified_exec_manager` nezastaví; `terminate_all_processes` volá len
+  `Op::CleanBackgroundTerminals` (TUI príkaz `/stop`) a koniec session.
+  Testy v `core/tests/suite/abort_tasks.rs` po `Op::Interrupt` posielajú
+  `CleanBackgroundTerminals` samy. Esc v termináli teda príkaz tiež nezastaví;
+  appka to nemení, „zastav všetko" je dvojité Esc.
 
 ## Záver pre port (porovnanie s Claude, probe_subagents.notes.md)
 - Subagent v Codexe = vlákno (threadId) s vlastnými ťahmi; v Claude = úloha
