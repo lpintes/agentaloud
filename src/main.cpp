@@ -312,6 +312,10 @@ bool AskNewSession(HWND owner, const app::Arguments& typed,
         return MakeBackend(name, program)->ListConversations(projectDir, out);
       };
     }
+    entry.listModels = [name, program = programFor(name)](
+                           std::vector<agent::ModelChoice>* out) {
+      return MakeBackend(name, program)->ListModels(out);
+    };
     choice.backends.push_back(std::move(entry));
   }
   // One after the other: Codex's process dominates the wait, and a backend

@@ -433,6 +433,15 @@ class Backend {
   // list could be had.
   virtual bool ListProjects(std::vector<Project>* out) = 0;
 
+  // The models this agent's CLI offers, for the New session dialog's field
+  // (claude-gui-lkk.58): the same catalog modelCatalog() gives a running
+  // session, without one.  The same contract as ListConversations -- asked
+  // of a backend never started, BLOCKS, not on a window's thread.  False
+  // when the adapter cannot say without a session (Claude: its catalog
+  // comes with initialize, and starting the CLI for it is not worth it);
+  // Capabilities::models is what is offered then.
+  virtual bool ListModels(std::vector<ModelChoice>* out) = 0;
+
   virtual bool Start(const StartOptions& options, Callbacks callbacks) = 0;
   // After a Start that returned false; meaningless otherwise.
   virtual StartFailure startFailure() const = 0;

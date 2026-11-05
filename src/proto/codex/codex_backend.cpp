@@ -100,14 +100,41 @@ bool CodexBackend::ListProjects(std::vector<agent::Project>* out) {
   return success;
 }
 
+bool CodexBackend::ListModels(std::vector<agent::ModelChoice>* out) {
+  out->clear();
+  // One page: the server sends the whole catalog in it (measured,
+  // claude-gui-lkk.86), and a cursor it might add one day is not followed.
+  std::vector<agent::ModelChoice> found;
+  const bool success = AskOnce(
+      "model/list", [](const std::string&) { return Json::object(); },
+      [&](const Json& result) {
+        found = ModelCatalog(result);
+        return std::string();
+      });
+  if (success) *out = std::move(found);
+  return success;
+}
+
 bool CodexBackend::ListThreads(
     const std::string& cwd,
     const std::function<std::string(const Json& result)>& onPage) {
+  constexpr int kPage = 100;
+  return AskOnce(
+      "thread/list",
+      [&](const std::string& cursor) {
+        return ThreadListParams(cwd, cursor, kPage);
+      },
+      onPage);
+}
+
+bool CodexBackend::AskOnce(
+    const std::string& method,
+    const std::function<Json(const std::string& cursor)>& params,
+    const std::function<std::string(const Json& result)>& onPage) {
   // A process of its own and not this backend's: the list is wanted before
   // there is a session, and a backend that answered it would have to be
-  // started for nothing.  Initialize, thread/list a page at a time, close
+  // started for nothing.  Initialize, the request a page at a time, close
   // stdin -- half a second, nearly all of it Codex starting up.
-  constexpr int kPage = 100;
   constexpr long long kInitialize = 1;
 
   std::mutex mutex;
@@ -131,9 +158,8 @@ bool CodexBackend::ListThreads(
     return process.Write(message.dump() + "\n");
   };
   const auto requestPage = [&](const std::string& cursor) {
-    return send({{"id", nextId++},
-                 {"method", "thread/list"},
-                 {"params", ThreadListParams(cwd, cursor, kPage)}});
+    return send(
+        {{"id", nextId++}, {"method", method}, {"params", params(cursor)}});
   };
 
   // The reader thread.  Only answers matter: without a thread nothing is

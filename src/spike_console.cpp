@@ -116,6 +116,29 @@ int ProjectsOfBoth() {
   return failed;
 }
 
+// The `models` errand (claude-gui-lkk.58): agent::Backend::ListModels of
+// both adapters, the same way.  The folder argument is not used.  Claude's
+// false is the answer it is meant to give, not a failure.
+int ModelsOfBoth() {
+  proto::ClaudeBackend claude;
+  proto::codex::CodexBackend codex;
+  agent::Backend* const backends[] = {&claude, &codex};
+  const char* const names[] = {"claude", "codex"};
+  int failed = 0;
+  for (int i = 0; i < 2; ++i) {
+    std::vector<agent::ModelChoice> list;
+    const ULONGLONG begun = GetTickCount64();
+    const bool ok = backends[i]->ListModels(&list);
+    std::printf("%s: %s, %zu modelov, %llu ms\n", names[i],
+                ok ? "ok" : "nevie", list.size(), GetTickCount64() - begun);
+    if (!ok && i > 0) ++failed;
+    for (const agent::ModelChoice& model : list) {
+      std::printf("  %s  (%s)\n", model.id.c_str(), model.name.c_str());
+    }
+  }
+  return failed;
+}
+
 }  // namespace
 
 int wmain(int argc, wchar_t** argv) {
@@ -123,12 +146,13 @@ int wmain(int argc, wchar_t** argv) {
   if (argc < 2) {
     std::printf(
         "pouzitie: spike_console <pracovny-adresar> "
-        "[allow|deny|interrupt|list|projects]\n");
+        "[allow|deny|interrupt|list|projects|models]\n");
     return 2;
   }
   const std::wstring mode = argc < 3 ? L"allow" : argv[2];
   if (mode == L"list") return ListBoth(argv[1]);
   if (mode == L"projects") return ProjectsOfBoth();
+  if (mode == L"models") return ModelsOfBoth();
   const bool interrupt = mode == L"interrupt";
   // The interrupt errand has to let the tool start before it can stop it.
   const bool allow = interrupt || mode != L"deny";

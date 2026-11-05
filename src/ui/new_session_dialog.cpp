@@ -18,6 +18,8 @@ namespace {
 constexpr UINT kMsgListed = WM_APP + 1;
 // The recent folders have arrived; lParam is a FoldersListed, likewise.
 constexpr UINT kMsgFolders = WM_APP + 2;
+// One backend's models have arrived; lParam is a ModelsListed, likewise.
+constexpr UINT kMsgModels = WM_APP + 3;
 
 // A first prompt can be a page long.  The row is for telling conversations
 // apart, and the screen reader reads all of it before the next arrow key
@@ -98,6 +100,11 @@ struct NewSessionDialog::FoldersListed {
   std::vector<app::RecentFolder> folders;
 };
 
+struct NewSessionDialog::ModelsListed {
+  int backend = -1;
+  std::vector<agent::ModelChoice> models;
+};
+
 NewSessionDialog::NewSessionDialog(NewSession* session)
     : session_(session), shared_(std::make_shared<Shared>()) {}
 
@@ -127,6 +134,7 @@ bool NewSessionDialog::OnInit() {
   SetText(IDC_NEW_PROJECT, session_->project);
   ListFolders();
   ListConversations();
+  ListModels();
   if (session_->focusConversations) {
     SendMessageW(hwnd_, WM_NEXTDLGCTL,
                  reinterpret_cast<WPARAM>(Item(IDC_NEW_CONVERSATION)), TRUE);
@@ -144,13 +152,63 @@ void NewSessionDialog::ShowModels(int backend) {
   if (backend < 0 || backend >= static_cast<int>(session_->backends.size())) {
     return;
   }
-  const NewSessionBackend& entry = session_->backends[backend];
-  for (const std::string& name : entry.models) {
+  FillModels(backend);
+  SetText(IDC_NEW_MODEL, session_->backends[backend].model);
+}
+
+// The drop-down only.  CB_RESETCONTENT empties the edit part as well, and the
+// list may arrive while the reader is typing in it, so the text and the caret
+// are put back as they were.
+void NewSessionDialog::FillModels(int backend) {
+  const HWND models = Item(IDC_NEW_MODEL);
+  const std::wstring typed = GetText(IDC_NEW_MODEL);
+  DWORD start = 0;
+  DWORD end = 0;
+  SendMessageW(models, CB_GETEDITSEL, reinterpret_cast<WPARAM>(&start),
+               reinterpret_cast<LPARAM>(&end));
+  SendMessageW(models, CB_RESETCONTENT, 0, 0);
+  for (const std::string& name : session_->backends[backend].models) {
     const std::wstring wide = model::Utf16FromUtf8(name);
     SendMessageW(models, CB_ADDSTRING, 0,
                  reinterpret_cast<LPARAM>(wide.c_str()));
   }
-  SetText(IDC_NEW_MODEL, entry.model);
+  SetText(IDC_NEW_MODEL, typed);
+  SendMessageW(models, CB_SETEDITSEL, 0, MAKELPARAM(start, end));
+}
+
+// Codex has no names to suggest until a server says (claude-gui-lkk.58), and
+// its server takes a second to start: the field is there to type in at once,
+// and the list fills in when the answer comes.
+void NewSessionDialog::ListModels() {
+  for (size_t i = 0; i < session_->backends.size(); ++i) {
+    const ModelLister& lister = session_->backends[i].listModels;
+    if (!lister) continue;
+    std::thread([shared = shared_, lister, backend = static_cast<int>(i)] {
+      auto listed = std::make_unique<ModelsListed>();
+      listed->backend = backend;
+      if (!lister(&listed->models) || listed->models.empty()) return;
+      std::lock_guard<std::mutex> guard(shared->lock);
+      if (shared->dialog &&
+          PostMessageW(shared->dialog, kMsgModels, 0,
+                       reinterpret_cast<LPARAM>(listed.get()))) {
+        (void)listed.release();  // the dialog owns it now
+      }
+    }).detach();
+  }
+}
+
+// The ids, because the field's text goes to --model as it is.
+void NewSessionDialog::TakeModels(const ModelsListed& listed) {
+  if (listed.backend < 0 ||
+      listed.backend >= static_cast<int>(session_->backends.size())) {
+    return;
+  }
+  std::vector<std::string>& models = session_->backends[listed.backend].models;
+  models.clear();
+  for (const agent::ModelChoice& choice : listed.models) {
+    models.push_back(choice.id);
+  }
+  if (listed.backend == SelectedBackend()) FillModels(listed.backend);
 }
 
 // Once per dialog: unlike the conversations, the list does not depend on
@@ -384,6 +442,12 @@ bool NewSessionDialog::OnMessage(UINT message, WPARAM, LPARAM lParam) {
     ShowFolders(std::move(listed->folders));
     return true;
   }
+  if (message == kMsgModels) {
+    std::unique_ptr<ModelsListed> listed(
+        reinterpret_cast<ModelsListed*>(lParam));
+    TakeModels(*listed);
+    return true;
+  }
   if (message == WM_DESTROY) {
     {
       std::lock_guard<std::mutex> guard(shared_->lock);
@@ -398,6 +462,9 @@ bool NewSessionDialog::OnMessage(UINT message, WPARAM, LPARAM lParam) {
     while (PeekMessageW(&pending, hwnd_, kMsgFolders, kMsgFolders,
                         PM_REMOVE)) {
       delete reinterpret_cast<FoldersListed*>(pending.lParam);
+    }
+    while (PeekMessageW(&pending, hwnd_, kMsgModels, kMsgModels, PM_REMOVE)) {
+      delete reinterpret_cast<ModelsListed*>(pending.lParam);
     }
     return false;
   }

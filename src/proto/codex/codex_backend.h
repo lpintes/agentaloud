@@ -52,6 +52,8 @@ class CodexBackend : public agent::Backend {
                          std::vector<agent::Conversation>* out) override;
   // The same, over every folder's threads.
   bool ListProjects(std::vector<agent::Project>* out) override;
+  // model/list, the same way.
+  bool ListModels(std::vector<agent::ModelChoice>* out) override;
   bool Start(const agent::StartOptions& options, Callbacks callbacks) override;
   agent::StartFailure startFailure() const override {
     return {ProgramName(), process_.startError(), !program_.path.empty()};
@@ -167,10 +169,15 @@ class CodexBackend : public agent::Backend {
     return program_.path.empty() ? L"codex" : program_.path;
   }
   std::wstring AppServerLine() const;
-  // thread/list, in a short `codex app-server` of its own, page after page:
-  // onPage takes each result and returns the cursor of the page it wants
-  // next, empty to stop.  Empty `cwd` is every folder's threads.  It is called
-  // on the reader thread, and not after this has returned.
+  // One request, in a short `codex app-server` of its own, page after page:
+  // `params` makes the request's params for a cursor (empty for the first
+  // page), onPage takes each result and returns the cursor of the page it
+  // wants next, empty to stop.  onPage is called on the reader thread, and
+  // not after this has returned.
+  bool AskOnce(const std::string& method,
+               const std::function<Json(const std::string& cursor)>& params,
+               const std::function<std::string(const Json& result)>& onPage);
+  // thread/list through AskOnce.  Empty `cwd` is every folder's threads.
   bool ListThreads(const std::string& cwd,
                    const std::function<std::string(const Json& result)>& onPage);
 

@@ -38,6 +38,10 @@ using ConversationLister = std::function<bool(
 // thread, like ConversationLister.
 using FolderLister = std::function<std::vector<app::RecentFolder>()>;
 
+// agent::Backend::ListModels on a backend made for the asking, off the
+// dialog's thread like ConversationLister.
+using ModelLister = std::function<bool(std::vector<agent::ModelChoice>* out)>;
+
 struct NewSessionBackend {
   std::string name;                 // what --backend takes, shown as it is
   std::wstring agentName;           // Capabilities::agentName, for the rows
@@ -48,6 +52,8 @@ struct NewSessionBackend {
   std::wstring model;
   // Empty when the backend cannot carry a conversation on.
   ConversationLister list;
+  // Empty, or false from it: `models` is all the field offers.
+  ModelLister listModels;
 };
 
 // A conversation some session of this application has open.  Starting it a
@@ -100,8 +106,14 @@ class NewSessionDialog : public win::Dialog {
   struct Shared;
   struct Listed;
   struct FoldersListed;
+  struct ModelsListed;
 
   void ShowModels(int backend);
+  // Once per dialog, for every backend that can say.  What arrives replaces
+  // that backend's suggestions, and the field keeps what it holds.
+  void ListModels();
+  void TakeModels(const ModelsListed& listed);
+  void FillModels(int backend);
   void ListFolders();
   void ShowFolders(std::vector<app::RecentFolder> folders);
   // The row chosen in the recent folders: its path into the folder field,
