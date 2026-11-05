@@ -76,6 +76,11 @@
 #define IDC_PERM_PROJECT        1055
 #define IDC_PERM_PROJECT_SCOPE  1056
 #define IDC_PERM_PROJECT_SCOPE_LABEL 1064
+// Allowed for good in every project (agent::Verdict::AllowEverywhere), as the
+// project button: shown with what it lets through only when offered.
+#define IDC_PERM_EVERYWHERE     1065
+#define IDC_PERM_EVERYWHERE_SCOPE 1066
+#define IDC_PERM_EVERYWHERE_SCOPE_LABEL 1067
 
 #define IDC_PERM_INPUT_LABEL        1060
 #define IDC_PERM_DESCRIPTION_LABEL  1061

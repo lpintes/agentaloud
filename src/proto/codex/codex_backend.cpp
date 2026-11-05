@@ -35,23 +35,6 @@ const Json& Field(const Json& object, const char* name) {
   return found == object.end() ? null : *found;
 }
 
-// What Codex's approval wants for a verdict.  "decline" lets the turn go on
-// without the call -- the model sees the refusal and carries on -- and
-// "cancel" stops the turn.  Both measured; decline works even where
-// availableDecisions does not list it.
-const char* Decision(agent::Verdict verdict) {
-  switch (verdict) {
-    // Never offered here: the amendment Codex would keep is a rule for the
-    // whole account, not the project.  A plain yes, should it come anyway.
-    case agent::Verdict::AllowInProject:
-    case agent::Verdict::Allow: return "accept";
-    case agent::Verdict::AllowForSession: return "acceptForSession";
-    case agent::Verdict::Deny: return "decline";
-    case agent::Verdict::Abort: return "cancel";
-  }
-  return "decline";
-}
-
 }  // namespace
 
 CodexBackend::CodexBackend(agent::Program program)
@@ -1080,9 +1063,8 @@ void CodexBackend::OnServerRequest(const Json& message) {
     request.reason = StringField(params, "reason");
     request.by = translator_.Author(params);
     // A command lists what it takes, and "acceptForSession" is not always
-    // there (measured: accept, acceptWithExecpolicyAmendment, cancel -- the
-    // amendment is a rule written to disk, not offered here).  A file change
-    // lists nothing and its schema takes it.
+    // there (measured: accept, acceptWithExecpolicyAmendment, cancel).  A file
+    // change lists nothing and its schema takes it.
     bool session = true;
     const Json& available = Field(params, "availableDecisions");
     if (available.is_array()) {
@@ -1098,11 +1080,20 @@ void CodexBackend::OnServerRequest(const Json& message) {
     if (session && method == "item/fileChange/requestApproval") {
       request.sessionScope = FileChangeScope(item);
     }
+    // The amendment is a rule for the whole account, every project
+    // (claude-gui-lkk.82), so it is a button of its own and says so.
+    const Json amendment = ExecpolicyAmendment(available);
+    if (!amendment.is_null()) {
+      request.offered.push_back(agent::Verdict::AllowEverywhere);
+      request.everywhereScope = AmendmentScope(amendment);
+    }
     request.offered.push_back(agent::Verdict::Deny);
     request.offered.push_back(agent::Verdict::Abort);
     agent::PermissionAnswer answer;
     if (callbacks_.onPermission) answer = callbacks_.onPermission(request);
-    Send({{"id", id}, {"result", {{"decision", Decision(answer.verdict)}}}});
+    Send({{"id", id},
+          {"result",
+           {{"decision", MakeApprovalDecision(answer.verdict, amendment)}}}});
     return;
   }
 

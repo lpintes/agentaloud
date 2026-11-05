@@ -72,6 +72,9 @@ bool PermissionDialog::OnInit() {
   ShowChoice(agent::Verdict::AllowInProject, request_.projectScope,
              IDC_PERM_PROJECT, IDC_PERM_PROJECT_SCOPE_LABEL,
              IDC_PERM_PROJECT_SCOPE);
+  ShowChoice(agent::Verdict::AllowEverywhere, request_.everywhereScope,
+             IDC_PERM_EVERYWHERE, IDC_PERM_EVERYWHERE_SCOPE_LABEL,
+             IDC_PERM_EVERYWHERE_SCOPE);
 
   // Focus into the arguments rather than onto a button.  This is the text the
   // answer is about, and it is the one control here worth walking by line.
@@ -107,7 +110,10 @@ void PermissionDialog::ShowChoice(agent::Verdict verdict,
 }
 
 bool PermissionDialog::OnCommand(int id, int notification) {
-  if (id != IDC_PERM_SESSION && id != IDC_PERM_PROJECT) return false;
+  if (id != IDC_PERM_SESSION && id != IDC_PERM_PROJECT &&
+      id != IDC_PERM_EVERYWHERE) {
+    return false;
+  }
   if (notification != BN_CLICKED) return false;
   EndDialog(hwnd_, id);
   return true;
@@ -122,6 +128,7 @@ agent::Verdict AskPermission(HWND owner,
     case IDOK: return agent::Verdict::Allow;
     case IDC_PERM_SESSION: return agent::Verdict::AllowForSession;
     case IDC_PERM_PROJECT: return agent::Verdict::AllowInProject;
+    case IDC_PERM_EVERYWHERE: return agent::Verdict::AllowEverywhere;
     default: return agent::Verdict::Deny;
   }
 }

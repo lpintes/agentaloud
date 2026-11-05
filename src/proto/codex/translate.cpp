@@ -636,6 +636,58 @@ std::vector<std::string> FileChangeScope(const Json& item) {
   return lines;
 }
 
+Json ExecpolicyAmendment(const Json& availableDecisions) {
+  // Measured (tools/probe_codex_persist.py): the entry is an object,
+  //   {"acceptWithExecpolicyAmendment":{"execpolicy_amendment":["git",...]}},
+  // among plain strings; the same tokens come as proposedExecpolicyAmendment.
+  // The whole command with its arguments, not a shorter prefix.
+  if (!availableDecisions.is_array()) return nullptr;
+  for (const Json& each : availableDecisions) {
+    const Json& tokens = Field(Field(each, "acceptWithExecpolicyAmendment"),
+                               "execpolicy_amendment");
+    if (!tokens.is_array() || tokens.empty()) continue;
+    bool strings = true;
+    for (const Json& token : tokens) strings = strings && token.is_string();
+    if (strings) return tokens;
+  }
+  return nullptr;
+}
+
+std::vector<std::string> AmendmentScope(const Json& amendment) {
+  // Joined with spaces as the reader would type it.  Codex's rule matches
+  // tokens, so a token holding a space reads ambiguously here; the command
+  // above in the dialog shows how it was meant.
+  if (!amendment.is_array() || amendment.empty()) return {};
+  std::string prefix;
+  for (const Json& token : amendment) {
+    if (!token.is_string()) return {};
+    if (!prefix.empty()) prefix += ' ';
+    prefix += token.get<std::string>();
+  }
+  return {i18n::Utf8(i18n::Str::kScopeCommandPrefix, {prefix})};
+}
+
+Json MakeApprovalDecision(agent::Verdict verdict, const Json& amendment) {
+  // "decline" lets the turn go on without the call -- the model sees the
+  // refusal and carries on -- and "cancel" stops the turn.  Both measured;
+  // decline works even where availableDecisions does not list it.
+  switch (verdict) {
+    case agent::Verdict::AllowEverywhere:
+      if (amendment.is_array()) {
+        return {{"acceptWithExecpolicyAmendment",
+                 {{"execpolicy_amendment", amendment}}}};
+      }
+      return "accept";
+    // Never offered: Codex keeps nothing for the project alone.
+    case agent::Verdict::AllowInProject:
+    case agent::Verdict::Allow: return "accept";
+    case agent::Verdict::AllowForSession: return "acceptForSession";
+    case agent::Verdict::Deny: return "decline";
+    case agent::Verdict::Abort: return "cancel";
+  }
+  return "decline";
+}
+
 bool NeedsSignIn(const Json& accountReadResult) {
   // requiresOpenaiAuth alone is not it: it says the provider wants an
   // account, and is true when one is signed in as well.
@@ -825,8 +877,11 @@ bool ElicitationPermission(const Json& params, agent::PermissionRequest* out) {
 
 Json MakeElicitationAnswer(agent::Verdict verdict) {
   switch (verdict) {
-    // Not offered: "always" writes config.toml, which is not the project's.
+    // Not offered.  "always" writes config.toml for every project, and only
+    // for a server defined there: for one from -c or elsewhere Codex keeps
+    // nothing and tells only its stderr (tools/probe_codex_persist.py).
     case agent::Verdict::AllowInProject:
+    case agent::Verdict::AllowEverywhere:
     case agent::Verdict::Allow:
       return {{"action", "accept"},
               {"content", Json::object()},

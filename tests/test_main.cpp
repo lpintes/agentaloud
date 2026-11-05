@@ -5179,6 +5179,55 @@ void TestCodexElicitation() {
   CHECK_EQ(proto::codex::MakeElicitationAnswer(agent::Verdict::Deny),
            proto::Json::parse(
                R"({"action":"decline","content":null,"_meta":null})"));
+  // "always" zapise config.toml pre vsetky projekty, a pre server z -c nic
+  // (tools/probe_codex_persist.py): neponuka sa a odpoved je obycajne accept.
+  CHECK_EQ(
+      proto::codex::MakeElicitationAnswer(agent::Verdict::AllowEverywhere),
+      proto::Json::parse(R"({"action":"accept","content":{},"_meta":null})"));
+}
+
+// availableDecisions doslova zo sondy (tools/probe_codex_persist.py,
+// 5. 11. 2026, codex 0.166.0).  Pravidlo ide do CODEX_HOME/rules/default.rules
+// bez projektu, preto vlastne tlacidlo (claude-gui-lkk.82).
+void TestCodexExecpolicyAmendment() {
+  TEST("codex: natrvalo vo vsetkych projektoch je pravidlo prefixu prikazu");
+  const proto::Json available = proto::Json::parse(
+      R"(["accept",
+          {"acceptWithExecpolicyAmendment":
+             {"execpolicy_amendment":["git","checkout","-b","alpha"]}},
+          "cancel"])");
+  const proto::Json amendment = proto::codex::ExecpolicyAmendment(available);
+  CHECK_EQ(amendment,
+           proto::Json::parse(R"(["git","checkout","-b","alpha"])"));
+  CHECK(proto::codex::ExecpolicyAmendment(
+            proto::Json::parse(R"(["accept","acceptForSession","cancel"])"))
+            .is_null());
+  CHECK(proto::codex::ExecpolicyAmendment(nullptr).is_null());
+
+  i18n::SetLanguage(i18n::Lang::kSlovak);
+  CHECK(proto::codex::AmendmentScope(amendment) ==
+        (std::vector<std::string>{
+            "každý príkaz, ktorý začína git checkout -b alpha"}));
+  CHECK(proto::codex::AmendmentScope(nullptr).empty());
+
+  // Odpoved, ktoru Codex prijal; vnutorny kluc je snake_case.
+  CHECK_EQ(proto::codex::MakeApprovalDecision(agent::Verdict::AllowEverywhere,
+                                              amendment),
+           proto::Json::parse(
+               R"({"acceptWithExecpolicyAmendment":
+                     {"execpolicy_amendment":["git","checkout","-b","alpha"]}})"));
+  CHECK_EQ(proto::codex::MakeApprovalDecision(agent::Verdict::AllowEverywhere,
+                                              nullptr),
+           proto::Json("accept"));
+  CHECK_EQ(proto::codex::MakeApprovalDecision(agent::Verdict::Allow, amendment),
+           proto::Json("accept"));
+  CHECK_EQ(proto::codex::MakeApprovalDecision(agent::Verdict::AllowForSession,
+                                              nullptr),
+           proto::Json("acceptForSession"));
+  CHECK_EQ(proto::codex::MakeApprovalDecision(agent::Verdict::Deny, nullptr),
+           proto::Json("decline"));
+  CHECK_EQ(proto::codex::MakeApprovalDecision(agent::Verdict::Abort, nullptr),
+           proto::Json("cancel"));
 }
 
 // Schema je doslova zo sondy (tools/probe_elicit_form.py, 27. 10. 2026),
@@ -6527,6 +6576,7 @@ int main(int argc, char** argv) {
   TestFixtureDisk(fixtures);
   TestCodexModes();
   TestCodexElicitation();
+  TestCodexExecpolicyAmendment();
   TestElicitationForm();
   TestClaudeElicitation();
   TestFormBlocksSitInsideTheirCall();

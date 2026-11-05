@@ -689,6 +689,24 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     Obe povolenia prežijú do ďalšieho ťahu v tom istom vlákne. Pri príkaze
     Codex `acceptForSession` neponúka, takže pole nie je.
 
+    Natrvalo Codex ukladá **pre celý účet, nikdy pre projekt**
+    (claude-gui-lkk.82, codex 0.166.0, `tools/probe_codex_persist.py`
+    a `.notes.md`), preto to nie je „Povoliť v tomto projekte", ale vlastná
+    voľba `Verdict::AllowEverywhere` s tlačidlom „Povoliť natrvalo vo
+    všetkých projektoch" a poľom `everywhereScope` na tom istom mieste
+    (žiadne CLI neponúka obe). Pri príkaze ju adaptér ponúkne, len keď
+    `availableDecisions` nesie objekt `acceptWithExecpolicyAmendment`
+    (`ExecpolicyAmendment`), a pošle ho späť nezmenený
+    (`MakeApprovalDecision`). Pravidlo je **celý príkaz aj s argumentmi** ako
+    prefix tokenov; Codex ho pripíše do `CODEX_HOME/rules/default.rules`
+    (`prefix_rule(pattern=[…], decision="allow")`) a platí v novom vlákne,
+    inom priečinku aj po reštarte. Kratší prefix by Codex prijal tiež; úprava
+    pravidla v dialógu nie je. MCP `persist: always` sa **neponúka**: zapíše
+    `approval_mode = "approve"` do `config.toml`, ale len pre server, ktorý je
+    definovaný tam — pri serveri z `-c` neuloží nič, ani na session, a povie
+    to len do stderr. Appka by musela `config.toml` čítať, aby nesľúbila, čo
+    sa nestane.
+
     Plán na schválenie (Claude `ExitPlanMode`) prichádza ako povolenie, ale
     dialóg má vlastný (`ui::AskPlanApproval`, claude-gui-lkk.43). Panel ho
     spozná len podľa `PermissionRequest::modesAfter`, nie podľa mena nástroja.

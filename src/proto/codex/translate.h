@@ -202,6 +202,20 @@ Json MakeFormAnswer(const agent::FormRequest& request,
 // dialog (agent::PermissionRequest::sessionScope).  Empty when it is not known.
 std::vector<std::string> FileChangeScope(const Json& item);
 
+// The rule a command approval offers to keep for good: the token array of the
+// `acceptWithExecpolicyAmendment` entry in `availableDecisions`, or null when
+// none is offered (claude-gui-lkk.82).
+Json ExecpolicyAmendment(const Json& availableDecisions);
+
+// What that rule lets through, as lines for the dialog
+// (agent::PermissionRequest::everywhereScope).  Measured: a prefix of tokens,
+// written to CODEX_HOME/rules/default.rules with no project in it.
+std::vector<std::string> AmendmentScope(const Json& amendment);
+
+// The `decision` of a command or file change approval.  AllowEverywhere sends
+// the amendment back as Codex offered it; without one it is a plain accept.
+Json MakeApprovalDecision(agent::Verdict verdict, const Json& amendment);
+
 // ---- Sign-in -------------------------------------------------------------
 
 // Whether the result of account/read says no one is signed in.  Codex knows

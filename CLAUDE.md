@@ -320,6 +320,9 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
     povolí, povie pole pred ním (`sessionScope` / `projectScope`, píše adaptér):
     reťazec príkazov = pravidlo na každú časť. Codex: MCP = celý nástroj
     servera, úprava = len súbory patchu (cesty z itemu cez `itemId`).
+    Codex natrvalo len pre celý účet: príkaz s `acceptWithExecpolicyAmendment`
+    = „Povoliť natrvalo vo všetkých projektoch" (`AllowEverywhere`,
+    `everywhereScope`, pravidlo vrátené nezmenené); MCP `always` sa neponúka.
     Plán (`ExitPlanMode`) má vlastný dialóg (`ui::AskPlanApproval`), panel ho
     spozná podľa `modesAfter`: schválenie nesie režim (`setMode`), „Plánovať
     ďalej" aj Esc sú zamietnutie s `interrupt` — ťah skončí, fokus do promptu.

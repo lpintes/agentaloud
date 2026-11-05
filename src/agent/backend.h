@@ -164,7 +164,11 @@ enum class Verdict {
   // Kept in the project's settings by the CLI itself, past this session.
   // Offered only where the CLI suggested exactly that (claude-gui-lkk.29).
   AllowInProject,
-  Deny,             // the turn goes on without the tool
+  // Kept by the CLI for the whole account, every project, past this session:
+  // Codex's execpolicy amendment (claude-gui-lkk.82).  Offered only where the
+  // CLI suggested it and the rule it would keep is known.
+  AllowEverywhere,
+  Deny,            // the turn goes on without the tool
   Abort,            // the turn stops; offered only by a CLI that can do it
 };
 
@@ -186,6 +190,8 @@ struct PermissionRequest {
   // What AllowInProject lets through, as sessionScope.  A line that holds
   // for this session only says so: one answer can carry both kinds.
   std::vector<std::string> projectScope;
+  // What AllowEverywhere lets through, as sessionScope.
+  std::vector<std::string> everywhereScope;
   // The subagent asking, by the name its blocks go by ("Explore 2"); empty
   // for the conversation itself.  Several may wait at once, and a dialog that
   // does not say whose call it is cannot be answered (claude-gui-b8n.10).

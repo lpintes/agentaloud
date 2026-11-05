@@ -147,6 +147,7 @@ agent::FormAnswer ClaudeBackend::OnElicitation(
       case agent::Verdict::Allow:
       case agent::Verdict::AllowForSession:
       case agent::Verdict::AllowInProject:
+      case agent::Verdict::AllowEverywhere:
         answer.action = agent::FormAnswer::Action::Accept;
         break;
       case agent::Verdict::Deny:
@@ -297,7 +298,9 @@ PermissionDecision ClaudeBackend::OnPermission(
   const agent::PermissionAnswer answer = callbacks_.onPermission(out);
   decision.allow = answer.verdict == agent::Verdict::Allow ||
                    answer.verdict == agent::Verdict::AllowForSession ||
-                   answer.verdict == agent::Verdict::AllowInProject;
+                   answer.verdict == agent::Verdict::AllowInProject ||
+                   // Never offered here; a plain yes, should it come anyway.
+                   answer.verdict == agent::Verdict::AllowEverywhere;
   if (answer.verdict == agent::Verdict::AllowForSession) {
     decision.updatedPermissions = kept;
   }
