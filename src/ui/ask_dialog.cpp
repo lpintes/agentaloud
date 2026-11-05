@@ -59,6 +59,12 @@ class AskDialog : public win::Dialog {
   int ListId() const {
     return question_.multiSelect ? IDC_ASK_OPTIONS_MULTI : IDC_ASK_OPTIONS;
   }
+  // A question that refuses answers of its own still gets the item when it
+  // has no options at all: a dialog with nothing to pick could only be
+  // cancelled, and that would answer a question the reader never saw answered.
+  bool OffersOther() const {
+    return question_.allowsOther || question_.options.empty();
+  }
   LRESULT List(UINT message, WPARAM wParam = 0, LPARAM lParam = 0) const {
     return SendDlgItemMessageW(hwnd_, ListId(), message, wParam, lParam);
   }
@@ -114,8 +120,16 @@ bool AskDialog::OnInit() {
     line = OneLine(std::move(line));
     List(LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(line.c_str()));
   }
-  List(LB_ADDSTRING, 0,
-       reinterpret_cast<LPARAM>(i18n::Text(Str::kAskOtherItem)));
+  if (OffersOther()) {
+    List(LB_ADDSTRING, 0,
+         reinterpret_cast<LPARAM>(i18n::Text(Str::kAskOtherItem)));
+  } else {
+    // Hidden and disabled together, for the same reason as the unused list.
+    for (int id : {IDC_ASK_OTHER_LABEL, IDC_ASK_OTHER}) {
+      ShowWindow(Item(id), SW_HIDE);
+      SetEnabled(id, false);
+    }
+  }
   // Nothing preselected on purpose.  Enter is the default button, so a
   // preselected first option would turn one keystroke into an answer the
   // reader never chose -- and it would be the answer the model listed first.
@@ -146,9 +160,11 @@ bool AskDialog::Refuse(const wchar_t* why, int focusId) const {
 }
 
 bool AskDialog::OnOk() {
-  const int otherIndex = static_cast<int>(question_.options.size());
+  const int optionCount = static_cast<int>(question_.options.size());
+  const int otherIndex = OffersOther() ? optionCount : -1;
   const std::vector<int> selected = Selected();
-  const std::wstring typed = Trim(GetText(IDC_ASK_OTHER));
+  const std::wstring typed =
+      OffersOther() ? Trim(GetText(IDC_ASK_OTHER)) : std::wstring();
   bool wantsOther = false;
   for (int index : selected) wantsOther = wantsOther || index == otherIndex;
 
@@ -170,7 +186,7 @@ bool AskDialog::OnOk() {
   for (int index : selected) {
     if (index == otherIndex) {
       chosen_.push_back(model::Utf8FromUtf16(typed));
-    } else if (index >= 0 && index < otherIndex) {
+    } else if (index >= 0 && index < optionCount) {
       chosen_.push_back(question_.options[static_cast<size_t>(index)].label);
     }
   }
