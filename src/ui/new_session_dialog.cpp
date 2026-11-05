@@ -317,7 +317,8 @@ void NewSessionDialog::ShowConversations(const Listed& listed) {
 
 std::wstring NewSessionDialog::RowText(
     const agent::Conversation& conversation) const {
-  std::wstring prompt = model::Utf16FromUtf8(conversation.firstPrompt);
+  std::wstring prompt = model::Utf16FromUtf8(
+      conversation.title.empty() ? conversation.firstPrompt : conversation.title);
   if (prompt.size() > kPromptChars) {
     prompt.resize(kPromptChars);
     prompt += L"…";

@@ -35,6 +35,11 @@ struct SessionSummary {
   std::wstring id;          // file name without .jsonl; the handle --resume takes
   std::string lastStamp;    // ISO 8601 UTC of the last record that carries one
   std::string firstPrompt;  // UTF-8, whitespace collapsed; empty when none
+  // UTF-8, one line; empty when the file names none.  The last custom-title
+  // (the terminal's /rename) wins over any ai-title (a name the model made
+  // up), and within each kind the last one wins, because a later record is a
+  // rename.  Measured 2026-11-05: ai-title in 127 files, custom-title in 1.
+  std::string title;
 };
 
 // The directory name the CLI keeps a project's sessions under: every character

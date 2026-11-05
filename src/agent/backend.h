@@ -344,12 +344,14 @@ struct StartOptions {
 };
 
 // A conversation a folder already has: one line of a list the reader picks
-// from to carry it on (claude-gui-lkk.7.11).  Headless conversations have no
-// title -- Claude writes one only in its terminal, Codex leaves its name empty
-// nearly always -- so what names one is the first thing the reader said in
-// it, and when it was last spoken in.
+// from to carry it on (claude-gui-lkk.7.11).  Headless conversations seldom
+// have a title -- Claude writes one mostly in its terminal, Codex leaves its
+// name empty nearly always -- so what names one is its title when there is
+// one, else the first thing the reader said in it, and when it was last
+// spoken in.
 struct Conversation {
   std::wstring id;          // what StartOptions::resumeId takes
+  std::string title;        // UTF-8, one line; empty when it has none
   std::string firstPrompt;  // UTF-8, one line; empty when nobody typed one
   // Seconds since 1970 UTC, so that the two CLIs' ways of writing a time
   // compare and sort alike.  0 when unknown.

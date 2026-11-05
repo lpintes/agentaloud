@@ -261,6 +261,32 @@ bool ReadSessionSummary(const std::wstring& path, SessionSummary* out) {
     }
   }
 
+  // Backwards for the title too, since the last one wins.  A line is parsed
+  // only when it starts the way a title record does -- the CLI writes the type
+  // first, in all 2881 of them measured 2026-11-05 -- because searching every
+  // line whole for the name doubled the time the list takes.
+  constexpr std::string_view kCustomTitle = R"({"type":"custom-title")";
+  constexpr std::string_view kAiTitle = R"({"type":"ai-title")";
+  const auto TitleOf = [&](std::string_view line, const char* type,
+                           const char* field) {
+    if (!ParseLine(line, &record, &error)) return std::string();
+    if (record.value("type", std::string()) != type) return std::string();
+    const auto title = record.find(field);
+    if (title == record.end() || !title->is_string()) return std::string();
+    return OneLine(title->get_ref<const std::string&>());
+  };
+  std::string aiTitle;
+  for (size_t i = lines.size(); i-- > 0;) {
+    const std::string_view line = lines[i];
+    if (line.starts_with(kCustomTitle)) {
+      summary.title = TitleOf(line, "custom-title", "customTitle");
+      if (!summary.title.empty()) break;
+    } else if (aiTitle.empty() && line.starts_with(kAiTitle)) {
+      aiTitle = TitleOf(line, "ai-title", "aiTitle");
+    }
+  }
+  if (summary.title.empty()) summary.title = std::move(aiTitle);
+
   // Forwards for the prompt, and for the one thing that decides whether this
   // file is a conversation at all.
   bool spoken = false;
@@ -328,6 +354,7 @@ bool ProjectConversations(const std::wstring& projectPath,
   for (SessionSummary& session : sessions) {
     agent::Conversation conversation;
     conversation.id = std::move(session.id);
+    conversation.title = std::move(session.title);
     conversation.firstPrompt = std::move(session.firstPrompt);
     conversation.lastActive = UnixSeconds(session.lastStamp);
     out->push_back(std::move(conversation));

@@ -81,7 +81,8 @@ int ListBoth(const std::wstring& folder) {
                 ok ? "ok" : "ZLYHALO", list.size(), GetTickCount64() - begun);
     if (!ok) ++failed;
     for (size_t j = 0; j < list.size() && j < 5; ++j) {
-      std::printf("  %ls  %lld  %s\n", list[j].id.c_str(), list[j].lastActive,
+      std::printf("  %ls  %lld  [%s]  %s\n", list[j].id.c_str(),
+                  list[j].lastActive, Shorten(list[j].title, 40).c_str(),
                   Shorten(list[j].firstPrompt, 70).c_str());
     }
   }

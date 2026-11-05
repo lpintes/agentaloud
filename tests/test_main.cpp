@@ -3987,6 +3987,30 @@ void TestSessionSummaryFindsTheHumanPrompt() {
   CHECK_EQ(summary.firstPrompt, std::string("prvy riadok a druhy"));
   CHECK_EQ(summary.lastStamp, std::string("2026-09-03T08:00:03.000Z"));
   CHECK_EQ(summary.id, std::wstring(L"agentaloud-summary-test"));
+  CHECK(summary.title.empty());
+
+  // Titul: posledny custom-title (/rename) vyhrava nad kazdym ai-title, aj
+  // nad neskorsim.  Riadok, ktory meno typu len spomina v texte, titul nie je.
+  WriteFile(file,
+            "{\"type\":\"user\",\"timestamp\":\"2026-09-03T08:00:00.000Z\","
+            "\"message\":{\"content\":\"o com je \\\"ai-title\\\"\"}}\n"
+            "{\"type\":\"ai-title\",\"aiTitle\":\"prvy model\"}\n"
+            "{\"type\":\"custom-title\",\"customTitle\":\"stare meno\"}\n"
+            "{\"type\":\"custom-title\",\"customTitle\":\"nove\\nmeno\"}\n"
+            "{\"type\":\"ai-title\",\"aiTitle\":\"druhy model\"}\n");
+  CHECK(proto::ReadSessionSummary(file.wstring(), &summary));
+  CHECK_EQ(summary.title, std::string("nove meno"));
+  CHECK_EQ(summary.firstPrompt, std::string("o com je \"ai-title\""));
+
+  // Bez custom-title posledny ai-title; pole, ktore nie je retazec, sa
+  // preskoci, nespadne.
+  WriteFile(file,
+            "{\"type\":\"user\",\"timestamp\":\"2026-09-03T08:00:00.000Z\","
+            "\"message\":{\"content\":\"ahoj\"}}\n"
+            "{\"type\":\"ai-title\",\"aiTitle\":\"prvy model\"}\n"
+            "{\"type\":\"ai-title\",\"aiTitle\":null}\n");
+  CHECK(proto::ReadSessionSummary(file.wstring(), &summary));
+  CHECK_EQ(summary.title, std::string("prvy model"));
 
   // Subor bez jedineho 'user' alebo 'assistant' zaznamu nie je rozhovor.
   WriteFile(file, "{\"type\":\"summary\",\"summary\":\"nic\"}\n");
