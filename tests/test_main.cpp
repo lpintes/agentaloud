@@ -1945,6 +1945,23 @@ void TestPermissionModeSwitch() {
            std::wstring(L"def"));
   CHECK_EQ(proto::ResumedConversation({L"--resume", L"abc", L"--resume"}),
            std::wstring(L"abc"));
+  // Tvary, ktore CLI (commander) berie tiez: --volba=hodnota a zlepene -rX.
+  // -r=X da "=X", lebo tak to cita aj CLI.
+  CHECK(proto::ResumesConversation({L"--resume=abc"}));
+  CHECK(proto::ResumesConversation({L"-rabc"}));
+  CHECK(!proto::ResumesConversation({L"--resumes"}));
+  CHECK_EQ(proto::ResumedConversation({L"--resume=abc"}),
+           std::wstring(L"abc"));
+  CHECK_EQ(proto::ResumedConversation({L"-rabc"}), std::wstring(L"abc"));
+  CHECK_EQ(proto::ResumedConversation({L"-r=abc"}), std::wstring(L"=abc"));
+  CHECK_EQ(proto::ResumedConversation({L"--resume=abc", L"--resume="}),
+           std::wstring(L"abc"));
+  CHECK_EQ(proto::StartupEffort({L"--effort=high"}), std::string("high"));
+  CHECK_EQ(proto::OptionValues({L"--session-id=abc"}, L"--session-id"),
+           std::vector<std::wstring>{L"abc"});
+  CHECK(proto::OptionValues({L"--session-idx"}, L"--session-id").empty());
+  CHECK_EQ(proto::OptionValues({L"--model", L"opus", L"--model"}, L"--model"),
+           (std::vector<std::wstring>{L"opus", L""}));
 
   // Poziadavka: subtype set_permission_mode a holy mod.
   const proto::Json request = proto::MakeSetPermissionMode("mode-3", "plan");

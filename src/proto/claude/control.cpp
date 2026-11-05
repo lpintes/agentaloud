@@ -150,39 +150,60 @@ Json MakeSetEffort(const std::string& requestId, const std::string& level) {
                                                           : Json(level)}}}}}};
 }
 
-bool ResumesConversation(const std::vector<std::wstring>& extraArgs) {
-  for (const std::wstring& argument : extraArgs) {
-    if (argument == L"--resume" || argument == L"-r" ||
-        argument == L"--continue" || argument == L"-c") {
-      return true;
+std::vector<std::wstring> OptionValues(
+    const std::vector<std::wstring>& extraArgs, const std::wstring& longName,
+    const std::wstring& shortName) {
+  std::vector<std::wstring> values;
+  for (size_t i = 0; i < extraArgs.size(); ++i) {
+    const std::wstring& argument = extraArgs[i];
+    if (argument == longName || (!shortName.empty() && argument == shortName)) {
+      values.push_back(i + 1 < extraArgs.size() ? extraArgs[++i]
+                                                : std::wstring());
+    } else if (argument.size() > longName.size() &&
+               argument.compare(0, longName.size(), longName) == 0 &&
+               argument[longName.size()] == L'=') {
+      values.push_back(argument.substr(longName.size() + 1));
+    } else if (!shortName.empty() && argument.size() > shortName.size() &&
+               argument.compare(0, shortName.size(), shortName) == 0) {
+      // Glued "-rVALUE"; "-r=VALUE" lands here too and keeps its "=",
+      // because that is the value the CLI then looks for.
+      values.push_back(argument.substr(shortName.size()));
     }
   }
-  return false;
+  return values;
 }
 
-std::wstring ResumedConversation(const std::vector<std::wstring>& extraArgs) {
-  // The last one wins, for the same reason the CLI's own parser takes it: two
-  // --resume on one command line is somebody correcting themselves.
-  std::wstring named;
-  for (size_t i = 0; i + 1 < extraArgs.size(); ++i) {
-    if (extraArgs[i] == L"--resume" || extraArgs[i] == L"-r") {
-      named = extraArgs[i + 1];
-    }
+bool ResumesConversation(const std::vector<std::wstring>& extraArgs) {
+  return !OptionValues(extraArgs, L"--resume", L"-r").empty() ||
+         !OptionValues(extraArgs, L"--continue", L"-c").empty();
+}
+
+namespace {
+
+// The last one wins, for the same reason the CLI's own parser takes it: two
+// --resume on one command line is somebody correcting themselves.  A bare one
+// at the end of the line has nothing to give and does not erase the one
+// before it.
+std::wstring LastValue(const std::vector<std::wstring>& values) {
+  for (auto it = values.rbegin(); it != values.rend(); ++it) {
+    if (!it->empty()) return *it;
   }
-  // A bare --resume at the end of the line has nothing after it, and neither
-  // has --continue; both leave this empty, which is the honest answer.
-  return named;
+  return std::wstring();
+}
+
+}  // namespace
+
+std::wstring ResumedConversation(const std::vector<std::wstring>& extraArgs) {
+  // --continue has no value to give; it leaves this empty, which is the
+  // honest answer.
+  return LastValue(OptionValues(extraArgs, L"--resume", L"-r"));
 }
 
 std::string StartupEffort(const std::vector<std::wstring>& extraArgs) {
+  // The stages are ASCII words; anything else the CLI itself refuses.
   std::string level;
-  for (size_t i = 0; i + 1 < extraArgs.size(); ++i) {
-    if (extraArgs[i] == L"--effort") {
-      // The stages are ASCII words; anything else the CLI itself refuses.
-      level.clear();
-      for (wchar_t c : extraArgs[i + 1]) level += static_cast<char>(c);
-    }
-  }
+  for (wchar_t c : LastValue(OptionValues(extraArgs, L"--effort")))
+    level += static_cast<char>(c);
   return level;
 }
 

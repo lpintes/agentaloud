@@ -77,11 +77,8 @@ namespace {
 // tools/probe_session_id.py).  Resuming keeps the id it resumes, so a session
 // started this way has one either way.
 bool SaysWhichConversation(const std::vector<std::wstring>& extraArgs) {
-  if (ResumesConversation(extraArgs)) return true;
-  for (const std::wstring& argument : extraArgs) {
-    if (argument == L"--session-id") return true;
-  }
-  return false;
+  return ResumesConversation(extraArgs) ||
+         !OptionValues(extraArgs, L"--session-id").empty();
 }
 
 }  // namespace

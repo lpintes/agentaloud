@@ -245,6 +245,17 @@ Json MakeSetModel(const std::string& requestId, const std::string& model);
 // the new model has (tools/probe_claude_effort.notes.md, 2.1.304, 2026-10-30).
 Json MakeSetEffort(const std::string& requestId, const std::string& level);
 
+// Every value the arguments give one option, in order, in each spelling the
+// CLI's parser (commander) accepts: "--name value", "--name=value", "-x value"
+// and the glued "-xVALUE".  "-x=VALUE" gives "=VALUE" -- the CLI reads it so
+// too (tools/probe_resume_forms.notes.md).  An option with nothing after it
+// gives an empty string; an option that is not there gives no entry at all.
+// The next word is taken as the value whatever it looks like, so a flag
+// without a value asks only whether the result is empty.
+std::vector<std::wstring> OptionValues(
+    const std::vector<std::wstring>& extraArgs, const std::wstring& longName,
+    const std::wstring& shortName = std::wstring());
+
 // Do these arguments carry on a conversation that already exists -- --resume,
 // -r, --continue, -c?  Two callers ask, and they ask for different reasons:
 // Start(), because such a session keeps the id it resumes and refuses to be
