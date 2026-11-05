@@ -19,8 +19,8 @@ bool StatusBar::Create(HWND host, HINSTANCE instance) {
   if (bar_ == nullptr) return false;
   // Unthemed, and not for looks.  NVDA reads a part whose text is empty by its
   // display model -- what it last saw drawn there -- and the turn field is
-  // empty between turns, so NVDA+End must find nothing there and start with
-  // the model.  The classic bar wipes a part with FillRect, which NVDA hooks;
+  // empty between turns, so NVDA+End must find nothing there and go on to
+  // the next field.  The classic bar wipes a part with FillRect, which NVDA hooks;
   // since the Common Controls 6 manifest (app.manifest, for the updater) the
   // bar is drawn through the theme instead, the old "pracujem" stayed in the
   // model and was read after every turn while the control itself was empty
@@ -42,7 +42,7 @@ int StatusBar::Resize(int width) {
   // read out in full either way, but the cut-off form is what a sighted user
   // reports as a bug.
   const int unit = width > 0 ? width / 20 : 0;
-  int edges[kFieldCount] = {unit * 3, unit * 8, unit * 12, -1};
+  int edges[kFieldCount] = {unit * 3, unit * 11, unit * 16, -1};
   SendMessageW(bar_, SB_SETPARTS, kFieldCount,
                reinterpret_cast<LPARAM>(edges));
   return height();

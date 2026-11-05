@@ -22,12 +22,15 @@ namespace ui {
 
 class StatusBar {
  public:
-  // The four fields, in the order they stand on screen.
+  // The four fields, in the order they stand on screen, which is the order
+  // NVDA+End reads them.  Whether a turn runs is the one word and comes first;
+  // the limit is a long sentence that would bury it, so it comes second, and
+  // ahead of the model and project, which rarely change.
   enum Field {
     kTurn = 0,     // pripravene / pracujem / hotove
-    kModel = 1,    // model, and the permission mode it is running under
-    kProject = 2,  // which directory this session is in
-    kLimit = 3,    // rate limit, empty until the CLI says something about one
+    kLimit = 1,    // rate limit, empty until the CLI says something about one
+    kModel = 2,    // model, and the permission mode it is running under
+    kProject = 3,  // which directory this session is in
     kFieldCount = 4,
   };
 

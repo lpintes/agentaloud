@@ -1418,7 +1418,7 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     v jej pamäti starý text a NVDA+End hovorilo „pracujem" aj po ťahu, hoci
     `WM_GETTEXT` vracal prázdne pole (5. 10. 2026). Preto má stavový riadok
     tému vypnutú (`SetWindowTheme` v `StatusBar::Create`). Prázdne pole po ťahu
-    je zámer — podľa toho, že NVDA+End začne modelom, sa pozná koniec práce.
+    je zámer — podľa toho, že NVDA+End nezačne stavom ťahu, ale limitom alebo modelom, sa pozná koniec práce.
 
     Repozitár bez vydania — alebo súkromný — vráti na `releases/latest` 404,
     čo appka berie ako „nie je vydanie" a mlčí. Naostro sa to dá overiť až
