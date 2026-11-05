@@ -53,6 +53,10 @@ Rezimy run, error, bad, silent, interrupt. Logy: C:/b/claude-elicit-probe/logs/<
   prepose este PO `result`. To iste `control_cancel_request` pride, ked sa zavrie spojenie s MCP
   serverom (tool_result "Connection closed").
 - Zatvoreny stdin: otvorena elicitacia -> cancel, dalsie uz klientovi nechodia (cancel hned).
+- `perm-interrupt` (CLI 2.1.314, 2026-11-05): interrupt pocas neodpovedaneho `can_use_tool` ->
+  `control_cancel_request {"request_id":"<id povolenia>"}` pred odpovedou na interrupt, potom
+  tool_result is_error "The user doesn't want to proceed..." a result `error_during_execution`.
+  Plati teda aj pre povolenie, nielen elicitaciu.
 
 ## Neodskusane
 - `--permission-prompts none`, `_meta["anthropic/permissionDisplay"]`, elicitacia zo subagenta

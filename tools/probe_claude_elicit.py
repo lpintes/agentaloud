@@ -15,6 +15,9 @@
 #   probe_claude_elicit.py silent  na elicitaciu sa neodpovie vobec; po 60 s
 #                                  sonda zavrie stdin (co spravi CLI?)
 #   probe_claude_elicit.py interrupt  neodpovie, po 5 s posle interrupt
+#   probe_claude_elicit.py perm-interrupt  na can_use_tool pre collect
+#                                  neodpovie, po 5 s posle interrupt (pride
+#                                  control_cancel_request aj pre povolenie?)
 #
 # tool_progress s heartbeat chodi kazdych 30 s, do limitu bez zaznamu sa
 # preto nerata.
@@ -180,6 +183,18 @@ def main():
                 sub = req.get("subtype")
                 if sub == "can_use_tool":
                     name = req.get("tool_name")
+                    if mode == "perm-interrupt" and \
+                            name == "mcp__fakeel__collect":
+                        p("--- (povolenie neodpovedam, o 5 s interrupt)")
+
+                        def interrupt_later():
+                            time.sleep(5)
+                            send({"type": "control_request",
+                                  "request_id": "int-1",
+                                  "request": {"subtype": "interrupt"}})
+                        threading.Thread(target=interrupt_later,
+                                         daemon=True).start()
+                        continue
                     if name in ("mcp__fakeel__collect", "ToolSearch"):
                         resp = {"behavior": "allow",
                                 "updatedInput": req.get("input") or {}}
