@@ -72,6 +72,10 @@ class Session {
   // The process ended on its own -- after the last event, and never for an
   // end that Stop() asked for.  Also on the reader thread.
   using ExitCallback = std::function<void(const win::Process::Exit&)>;
+  // An MCP server asking for a form or a link.  Also on the reader thread;
+  // without one the request is cancelled.
+  using ElicitationCallback =
+      std::function<agent::FormAnswer(const ElicitationRequest&)>;
 
   Session() = default;
   ~Session();
@@ -82,7 +86,8 @@ class Session {
   // not starting at all; a CLI that starts and then refuses its arguments
   // returns true here and is reported through onExit.
   bool Start(const Options& options, EventCallback onEvent,
-             PermissionCallback onPermission, ExitCallback onExit = nullptr);
+             PermissionCallback onPermission, ExitCallback onExit = nullptr,
+             ElicitationCallback onElicitation = nullptr);
   DWORD startError() const { return process_.startError(); }
 
   // Sends one prompt, also while a turn runs: the CLI folds it into the turn
@@ -197,6 +202,7 @@ class Session {
   std::unique_ptr<LineAssembler> assembler_;
   EventCallback onEvent_;
   PermissionCallback onPermission_;
+  ElicitationCallback onElicitation_;
   // The id of the initialize request, so that an answer to something else is
   // not mistaken for the handshake.  Set once, in Start, before the reader
   // thread exists.

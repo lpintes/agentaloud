@@ -113,10 +113,12 @@ bool SaysWhichConversation(const std::vector<std::wstring>& extraArgs) {
 Session::~Session() { Stop(5000); }
 
 bool Session::Start(const Options& options, EventCallback onEvent,
-                    PermissionCallback onPermission, ExitCallback onExit) {
+                    PermissionCallback onPermission, ExitCallback onExit,
+                    ElicitationCallback onElicitation) {
   onEvent_ = std::move(onEvent);
   onPermission_ = std::move(onPermission);
   onExit_ = std::move(onExit);
+  onElicitation_ = std::move(onElicitation);
   assembler_ = std::make_unique<LineAssembler>(
       [this](std::string_view line) { OnLine(line); });
   // The id is ours to decide, and deciding it here is the point: told to the
@@ -202,6 +204,7 @@ void Session::OnLine(std::string_view line) {
 
   if (event.kind == EventKind::ControlRequest) {
     PermissionRequest request;
+    ElicitationRequest elicitation;
     if (ParsePermissionRequest(event.raw, &request)) {
       PermissionDecision decision;
       if (onPermission_) decision = onPermission_(request);
@@ -212,9 +215,14 @@ void Session::OnLine(std::string_view line) {
                                            ? "The user declined."
                                            : decision.denyMessage,
                               decision.interrupt));
+    } else if (ParseElicitation(event.raw, &elicitation)) {
+      agent::FormAnswer answer;  // Cancel
+      if (onElicitation_) answer = onElicitation_(elicitation);
+      SendJson(MakeElicitationAnswer(elicitation.requestId, elicitation.form,
+                                     answer));
     } else {
-      // elicitation lands here, and so would request_user_dialog -- but that
-      // second one cannot actually arrive.  The CLI fails closed on it: a
+      // An elicitation with nothing to show lands here, and so would
+      // request_user_dialog -- but that second one cannot actually arrive.  The CLI fails closed on it: a
       // dialog kind is only ever sent to a client that named it in
       // `initialize.supportedDialogKinds`, and we name none.  See invariant 12
       // in CLAUDE.md, and proto/ask.h for the request that DOES bring the

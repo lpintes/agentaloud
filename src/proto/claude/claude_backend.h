@@ -73,6 +73,7 @@ class ClaudeBackend : public agent::Backend {
   // Reader thread.
   void OnRecord(const Event& event);
   PermissionDecision OnPermission(const PermissionRequest& request);
+  agent::FormAnswer OnElicitation(const ElicitationRequest& request);
   // The reader thread of the sign-in process.  `generation` is the sign-in
   // the call belongs to; a call from one already cancelled or replaced is
   // dropped.

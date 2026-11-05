@@ -1,7 +1,9 @@
 #include "proto/claude/claude_backend.h"
 
+#include "i18n/i18n.h"
 #include "proto/claude/ask.h"
 #include "proto/claude/sessions.h"
+#include "proto/elicitation.h"
 
 namespace proto {
 namespace {
@@ -120,7 +122,57 @@ bool ClaudeBackend::Start(const agent::StartOptions& options,
         if (!callbacks_.onEvents) return;
         callbacks_.onEvents({agent::SessionEnded{exit.codeKnown, exit.code,
                                                  exit.errorOutput}});
+      },
+      [this](const ElicitationRequest& request) {
+        return OnElicitation(request);
       });
+}
+
+agent::FormAnswer ClaudeBackend::OnElicitation(
+    const ElicitationRequest& request) {
+  agent::FormRequest form = request.form;
+  form.by = translator_.AgentName(request.agentId);
+  agent::FormAnswer answer;
+
+  // Nothing to fill in and no link: a yes or a no, asked as Codex asks it.
+  if (form.url.empty() && form.fields.empty()) {
+    if (!callbacks_.onPermission) return answer;
+    agent::PermissionRequest out;
+    out.call.name = form.server;
+    out.title = i18n::Utf8(i18n::Str::kPermServerAsks, {form.server});
+    out.reason = form.message;
+    out.by = form.by;
+    out.offered = {agent::Verdict::Allow, agent::Verdict::Deny};
+    switch (callbacks_.onPermission(out).verdict) {
+      case agent::Verdict::Allow:
+      case agent::Verdict::AllowForSession:
+      case agent::Verdict::AllowInProject:
+        answer.action = agent::FormAnswer::Action::Accept;
+        break;
+      case agent::Verdict::Deny:
+        answer.action = agent::FormAnswer::Action::Decline;
+        break;
+      case agent::Verdict::Abort:
+        break;
+    }
+    return answer;
+  }
+
+  // Nothing in the stream says it happened -- the tool's result comes only
+  // when the call ends (measured) -- so the transcript gets the call from
+  // here, before the dialog, as Codex's does.  The request id is unique in
+  // the session.
+  const agent::ToolCall call =
+      FormCall(form, "elicitation-" + request.requestId);
+  if (callbacks_.onEvents) {
+    callbacks_.onEvents({agent::ToolCallStarted{call, form.by}});
+  }
+  if (callbacks_.onForm) answer = callbacks_.onForm(form);
+  if (callbacks_.onEvents) {
+    callbacks_.onEvents({agent::ToolCallFinished{FormResult(call.id, form,
+                                                            answer)}});
+  }
+  return answer;
 }
 
 void ClaudeBackend::OnRecord(const Event& event) {

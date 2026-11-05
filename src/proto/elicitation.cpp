@@ -176,13 +176,28 @@ std::string ShownValue(const agent::FormField& field, const std::string& value) 
   return value;
 }
 
-}  // namespace
-
-std::vector<agent::FormField> ReadFormFields(const Json& schema) {
+// In `order`, then the rest as the schema has them.
+std::vector<agent::FormField> ReadFields(const Json& schema, const Json& order) {
   std::vector<agent::FormField> fields;
   const Json& properties = Field(schema, "properties");
   if (!properties.is_object()) return fields;
+  auto taken = [&fields](const std::string& name) {
+    for (const agent::FormField& field : fields) {
+      if (field.name == name) return true;
+    }
+    return false;
+  };
+  if (order.is_array()) {
+    for (const Json& name : order) {
+      if (!name.is_string()) continue;
+      const std::string key = name.get<std::string>();
+      auto property = properties.find(key);
+      if (property == properties.end() || taken(key)) continue;
+      fields.push_back(ReadField(key, *property));
+    }
+  }
   for (const auto& property : properties.items()) {
+    if (taken(property.key())) continue;
     fields.push_back(ReadField(property.key(), property.value()));
   }
   const Json& required = Field(schema, "required");
@@ -195,6 +210,18 @@ std::vector<agent::FormField> ReadFormFields(const Json& schema) {
       }
     }
   }
+  return fields;
+}
+
+}  // namespace
+
+std::vector<agent::FormField> ReadFormFieldsInOrder(const Json& schema,
+                                                    const Json& order) {
+  return ReadFields(schema, order);
+}
+
+std::vector<agent::FormField> ReadFormFields(const Json& schema) {
+  std::vector<agent::FormField> fields = ReadFields(schema, Json());
   std::stable_sort(fields.begin(), fields.end(),
                    [](const agent::FormField& a, const agent::FormField& b) {
                      if (a.required != b.required) return a.required;

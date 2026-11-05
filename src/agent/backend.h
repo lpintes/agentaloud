@@ -225,14 +225,15 @@ struct QuestionAnswer {
 };
 
 // A form an MCP server asks the reader to fill in -- MCP elicitation, which
-// Codex passes on unchanged and Claude would too (claude-gui-lkk.44.18).  A
-// form with no fields is a yes or a no and goes as a PermissionRequest; this
-// is the rest: fields, or a link to open.
+// both CLIs pass on unchanged (claude-gui-lkk.44.13, .44.18).  A form with no
+// fields is a yes or a no and goes as a PermissionRequest; this is the rest:
+// fields, or a link to open.
 //
 // Values travel as text, one entry per value, because the port has no JSON:
 // the adapter turns them back into the type the field says.  Neither CLI
-// checks a value against the schema (tools/probe_elicit_form.notes.md), so
-// the dialog does, with model::CheckFormField.
+// checks a value against the schema (tools/probe_elicit_form.notes.md,
+// tools/probe_claude_elicit.notes.md), so the dialog does, with
+// model::CheckFormField.
 
 enum class FieldType {
   Text,
@@ -276,9 +277,9 @@ struct FormRequest {
   // service, say.  The answer then says only whether it was opened; nothing
   // reports back when the reader is done on the page (measured).
   std::string url;
-  // Required first, the rest after, each part by name: the server's own
-  // order is lost on the way (measured), and the alphabet is at least an
-  // order the reader can predict.
+  // In the server's order where the CLI keeps it (Claude).  Codex loses it
+  // (measured), and there it is required first, the rest after, each part by
+  // name -- the alphabet is at least an order the reader can predict.
   std::vector<FormField> fields;
   std::string by;  // as PermissionRequest::by
 };

@@ -8,7 +8,9 @@
 //
 // Measured with Codex (tools/probe_elicit_form.notes.md): every keyword
 // arrives, but the properties come sorted by name, and nothing on the way
-// checks a value against the schema.
+// checks a value against the schema.  Claude (tools/probe_claude_elicit.
+// notes.md) keeps the server's order and says it once more in
+// `property_order`; it checks nothing either.
 
 #include <string>
 #include <vector>
@@ -23,6 +25,12 @@ namespace proto {
 // by name.  A property of a type the schema does not know is a text field:
 // the reader can still answer it, and the server says if the answer is wrong.
 std::vector<agent::FormField> ReadFormFields(const Json& schema);
+
+// The fields in the server's own order, for a CLI that keeps it: the names in
+// `order` first, then any property it leaves out, as the schema has them.
+// A name in `order` that is no property is skipped.
+std::vector<agent::FormField> ReadFormFieldsInOrder(const Json& schema,
+                                                    const Json& order);
 
 // The `content` of an accepted answer: each value as the JSON type its field
 // says.  A number that does not parse is sent as the text typed.

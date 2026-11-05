@@ -24,6 +24,7 @@
 #include <string>
 #include <vector>
 
+#include "agent/backend.h"
 #include "proto/jsonl.h"
 
 namespace proto {
@@ -386,6 +387,28 @@ Json ProjectPermissions(const Json& suggestions);
 // (measured, tools/probe_plan_revise.py, claude-gui-lkk.67).
 Json MakeDeny(const PermissionRequest& request, const std::string& message,
               bool interrupt = false);
+
+// An MCP server asking the reader for a form or a link: control_request
+// `subtype: elicitation`, which the CLI puts to us only after the tool that
+// asks has been allowed (measured, tools/probe_claude_elicit.notes.md).  The
+// schema comes as the server sent it, its order kept and named again in
+// `property_order`, which the fields follow.  A form with no fields is still
+// one: a yes or a no.  False for any other subtype, and for a link mode with
+// no link or a mode not known -- answered with MakeError, which reaches the
+// server as a cancel.
+struct ElicitationRequest {
+  std::string requestId;
+  std::string agentId;  // unmeasured; as PermissionRequest::agentId
+  agent::FormRequest form;
+};
+bool ParseElicitation(const Json& record, ElicitationRequest* out);
+
+// The answer the server gets as it is: {action} and, for a form accepted,
+// {content}.  A link opened answers with no content at all, and the server
+// sees none (measured; Codex sends it {}).
+Json MakeElicitationAnswer(const std::string& requestId,
+                           const agent::FormRequest& form,
+                           const agent::FormAnswer& answer);
 
 // For a control_request we could not answer.  Better than silence: silence
 // leaves the CLI waiting until its own timeout.

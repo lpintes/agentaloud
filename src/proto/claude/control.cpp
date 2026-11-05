@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "proto/elicitation.h"
+
 namespace proto {
 namespace {
 
@@ -379,6 +381,53 @@ Json MakeDeny(const PermissionRequest& request, const std::string& message,
   Json body{{"behavior", "deny"}, {"message", message}};
   if (interrupt) body["interrupt"] = true;
   return Envelope(request.requestId, body);
+}
+
+bool ParseElicitation(const Json& record, ElicitationRequest* out) {
+  auto request = record.find("request");
+  if (request == record.end() || !request->is_object()) return false;
+  if (StringField(*request, "subtype") != "elicitation") return false;
+
+  ElicitationRequest parsed;
+  parsed.requestId = StringField(record, "request_id");
+  parsed.agentId = StringField(*request, "agent_id");
+  parsed.form.server = StringField(*request, "mcp_server_name");
+  parsed.form.message = StringField(*request, "message");
+  const std::string mode = StringField(*request, "mode");
+  if (mode == "url") {
+    parsed.form.url = StringField(*request, "url");
+    if (parsed.form.url.empty()) return false;
+  } else if (mode == "form") {
+    static const Json null;
+    auto schema = request->find("requested_schema");
+    auto order = request->find("property_order");
+    parsed.form.fields = ReadFormFieldsInOrder(
+        schema != request->end() ? *schema : null,
+        order != request->end() ? *order : null);
+  } else {
+    return false;
+  }
+  *out = std::move(parsed);
+  return true;
+}
+
+Json MakeElicitationAnswer(const std::string& requestId,
+                           const agent::FormRequest& form,
+                           const agent::FormAnswer& answer) {
+  switch (answer.action) {
+    case agent::FormAnswer::Action::Accept: {
+      Json body{{"action", "accept"}};
+      if (form.url.empty()) {
+        body["content"] = FormContent(form.fields, answer.values);
+      }
+      return Envelope(requestId, std::move(body));
+    }
+    case agent::FormAnswer::Action::Decline:
+      return Envelope(requestId, Json{{"action", "decline"}});
+    case agent::FormAnswer::Action::Cancel:
+      break;
+  }
+  return Envelope(requestId, Json{{"action", "cancel"}});
 }
 
 Json MakeError(const std::string& requestId, const std::string& message) {

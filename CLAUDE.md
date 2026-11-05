@@ -302,8 +302,10 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
     (`QuestionByPrompt`, `kMsgQuestionByPrompt`). Neznáma serverová
     požiadavka Codexu = `-32601` = zamietnutie (pozri `Unrecognised`).
     MCP elicitácia s poľami alebo odkazom = `agent::FormRequest`
-    (`proto::ReadFormFields`); Codex hodnoty nekontroluje a poradie polí
-    stratí — kontrola je `model::CheckFormField`.
+    (`proto::ReadFormFields`), bez polí = povolenie; Claude ju posiela ako
+    `control_request` `elicitation` (`proto::ParseElicitation`) s poradím
+    servera (`ReadFormFieldsInOrder`), Codex poradie stratí. Ani jedno CLI
+    hodnoty nekontroluje — kontrola je `model::CheckFormField`.
 13. **Dialóg povolenia ukazuje ten istý text ako prepis** —
     `model::RenderToolCall` nad `agent::ToolCall` z
     `proto::ToolCallFromInput`. Zápis do súboru začína „súbor: <cesta>"; meno

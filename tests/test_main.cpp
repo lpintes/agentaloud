@@ -5214,6 +5214,104 @@ void TestElicitationForm() {
   CHECK(!proto::codex::ElicitationForm(openai, &request));
 }
 
+// Tvar zo sondy (tools/probe_claude_elicit.notes.md, 5. 11. 2026, CLI
+// 2.1.314): obal control_request, poradie servera zachovane aj v
+// property_order.  Tu sa property_order schvalne lisi od poradia v schema,
+// aby bolo vidiet, ze rozhoduje ono.
+void TestClaudeElicitation() {
+  TEST("elicitacia v Claude: poradie servera, obal odpovede");
+  const proto::Json record = proto::Json::parse(R"({"type":"control_request",
+      "request_id":"r-1","request":{"subtype":"elicitation",
+      "mcp_server_name":"fakeel","message":"CASE valid: please fill the form",
+      "mode":"form","requested_schema":{"type":"object","properties":{
+        "name":{"type":"string","title":"Name"},
+        "age":{"type":"integer","title":"Age"},
+        "tags":{"type":"array","items":{"type":"string","enum":["x","y"]}},
+        "subscribe":{"type":"boolean"}},
+      "required":["age"]},
+      "property_order":["subscribe","name","ghost","age"]}})");
+  proto::ElicitationRequest request;
+  CHECK(proto::ParseElicitation(record, &request));
+  CHECK_EQ(request.requestId, std::string("r-1"));
+  CHECK_EQ(request.form.server, std::string("fakeel"));
+  CHECK_EQ(request.form.message,
+           std::string("CASE valid: please fill the form"));
+  // Najprv property_order (bez mena, ktore nie je vlastnost), potom zvysok
+  // v poradi schema; povinne sa nepresuvaju.
+  std::vector<std::string> names;
+  for (const agent::FormField& field : request.form.fields) {
+    names.push_back(field.name);
+  }
+  CHECK(names ==
+        (std::vector<std::string>{"subscribe", "name", "age", "tags"}));
+  if (names.size() == 4) CHECK(request.form.fields[2].required);
+
+  // Bez property_order plati poradie v schema (ordered_json ho drzi).
+  proto::Json plain = record;
+  plain["request"].erase("property_order");
+  CHECK(proto::ParseElicitation(plain, &request));
+  names.clear();
+  for (const agent::FormField& field : request.form.fields) {
+    names.push_back(field.name);
+  }
+  CHECK(names ==
+        (std::vector<std::string>{"name", "age", "tags", "subscribe"}));
+
+  // Odpoved je obvykly obal success; server dostane presne vnutro.
+  agent::FormAnswer answer;
+  answer.action = agent::FormAnswer::Action::Accept;
+  answer.values = {{"Peter"}, {"5"}, {"x", "y"}, {}};
+  CHECK_EQ(proto::MakeElicitationAnswer("r-1", request.form, answer),
+           proto::Json::parse(R"({"type":"control_response","response":{
+               "subtype":"success","request_id":"r-1","response":{
+               "action":"accept","content":{"name":"Peter","age":5,
+               "tags":["x","y"]}}}})"));
+  agent::FormAnswer declined;
+  declined.action = agent::FormAnswer::Action::Decline;
+  CHECK_EQ(proto::MakeElicitationAnswer("r-1", request.form,
+                                        declined)["response"]["response"],
+           proto::Json::parse(R"({"action":"decline"})"));
+  CHECK_EQ(proto::MakeElicitationAnswer("r-1", request.form,
+                                        agent::FormAnswer())["response"]
+                                                            ["response"],
+           proto::Json::parse(R"({"action":"cancel"})"));
+
+  // Rezim url: accept bez content (server ho tak aj dostane).
+  const proto::Json url = proto::Json::parse(R"({"type":"control_request",
+      "request_id":"r-2","request":{"subtype":"elicitation",
+      "mcp_server_name":"fakeel","message":"CASE accept: open the page",
+      "mode":"url","url":"https://example.com/auth?case=accept",
+      "elicitation_id":"el-url_accept"}})");
+  CHECK(proto::ParseElicitation(url, &request));
+  CHECK_EQ(request.form.url,
+           std::string("https://example.com/auth?case=accept"));
+  CHECK(request.form.fields.empty());
+  agent::FormAnswer opened;
+  opened.action = agent::FormAnswer::Action::Accept;
+  CHECK_EQ(proto::MakeElicitationAnswer("r-2", request.form,
+                                        opened)["response"]["response"],
+           proto::Json::parse(R"({"action":"accept"})"));
+  proto::Json noLink = url;
+  noLink["request"].erase("url");
+  CHECK(!proto::ParseElicitation(noLink, &request));
+
+  // Formular bez poli je ano/nie, nie chyba: accept s prazdnym content.
+  proto::Json empty = record;
+  empty["request"]["requested_schema"]["properties"] = proto::Json::object();
+  CHECK(proto::ParseElicitation(empty, &request));
+  CHECK(request.form.fields.empty() && request.form.url.empty());
+  CHECK_EQ(proto::MakeElicitationAnswer("r-1", request.form,
+                                        opened)["response"]["response"],
+           proto::Json::parse(R"({"action":"accept","content":{}})"));
+
+  proto::Json other = record;
+  other["request"]["mode"] = "openai/form";
+  CHECK(!proto::ParseElicitation(other, &request));
+  other["request"]["subtype"] = "can_use_tool";
+  other["request"]["mode"] = "form";
+  CHECK(!proto::ParseElicitation(other, &request));
+}
+
 // Codex nevaliduje nic (tools/probe_elicit_form.notes.md, pripad C), takze
 // co tu prejde, dostane server.
 void TestCheckFormField() {
@@ -6220,6 +6318,7 @@ int main(int argc, char** argv) {
   TestCodexModes();
   TestCodexElicitation();
   TestElicitationForm();
+  TestClaudeElicitation();
   TestCheckFormField();
   TestCodexFileChangeScope();
   TestCodexReviewerDenial();

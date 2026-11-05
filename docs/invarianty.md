@@ -568,6 +568,25 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     - Elicitácia nemá item v prepise; blok volania a výsledku robí adaptér
       (`proto::FormCall` / `FormResult`), aby zostala stopa, čo sa poslalo.
 
+    **Claude** (claude-gui-lkk.44.18) posiela elicitáciu ako `control_request`
+    `subtype: elicitation` (`proto::ParseElicitation`), až keď je povolený
+    MCP nástroj, ktorý sa pýta. Odmerané sondou
+    `tools/probe_claude_elicit.py` (CLI 2.1.314, 5. 11. 2026):
+
+    - Schéma príde nezmenená **aj s poradím** a CLI ho navyše vymenuje
+      v `property_order`. Dialóg ide v poradí servera
+      (`proto::ReadFormFieldsInOrder`), bez presúvania povinných —
+      rozhodnutie s autorom; Codex zostáva abecedne.
+    - Ani Claude nekontroluje nič. Odpoveď je obvyklý obal `success`
+      s `{action, content?}` (`proto::MakeElicitationAnswer`); chybovú či
+      pokazenú odpoveď dostane server ako `cancel`, bez hlášky. Accept odkazu
+      ide bez `content` a server ho bez neho aj dostane.
+    - Formulár bez polí a bez odkazu je dialóg povolenia, ako pri Codexe
+      (`ClaudeBackend::OnElicitation`); `FillForm` by ponúkol otvoriť prázdny
+      odkaz.
+    - Prerušenie počas otvorenej elicitácie pošle `control_cancel_request`
+      s jej id; appka ho dnes nespracúva pri žiadnom dialógu (claude-gui-lkk.94).
+
     Dialóg je jedno pole na dialóg (`ui::FillForm`, Späť / Ďalej / Odmietnuť,
     Esc = zrušiť), predvyplnené `default` zo schémy; nepovinný jednoduchý
     zoznam má na **začiatku** položku „nevyplniť" — na konci by sa k nej
