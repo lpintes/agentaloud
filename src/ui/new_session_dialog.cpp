@@ -106,7 +106,9 @@ struct NewSessionDialog::ModelsListed {
 };
 
 NewSessionDialog::NewSessionDialog(NewSession* session)
-    : session_(session), shared_(std::make_shared<Shared>()) {}
+    : session_(session),
+      shared_(std::make_shared<Shared>()),
+      backendChosen_(session->backendTyped) {}
 
 NewSessionDialog::~NewSessionDialog() {
   std::lock_guard<std::mutex> guard(shared_->lock);
@@ -262,13 +264,14 @@ void NewSessionDialog::ShowFolders(std::vector<app::RecentFolder> folders) {
   // Never no selection: NVDA says "not selected" only after the row, and the
   // reader, already on the next arrow key, hears the first row twice.
   // An empty field takes the first row, so what is selected is what starts --
-  // with an agent typed on the line, the first row of that agent, and none
-  // when it has no row: the list arrives seconds after the dialog, and
-  // changing the agent then would also throw away the model typed for it.
+  // with an agent the reader typed on the line or already chose, the first
+  // row of that agent, and none when it has no row: the list arrives seconds
+  // after the dialog, and changing the agent then would also throw away the
+  // model typed for it.
   const bool none = selected < 0;
   bool take = none && Trimmed(GetText(IDC_NEW_PROJECT)).empty();
   if (none) selected = 0;
-  if (take && session_->backendTyped) {
+  if (take && backendChosen_) {
     const int backend = SelectedBackend();
     take = false;
     for (size_t i = 0; i < folders_.size(); ++i) {
@@ -422,6 +425,7 @@ int NewSessionDialog::OpenIndex(const std::string& backend,
 
 bool NewSessionDialog::OnCommand(int id, int notification) {
   if (id == IDC_NEW_BACKEND && notification == CBN_SELCHANGE) {
+    backendChosen_ = true;
     ShowModels(SelectedBackend());
     ListConversations();
     return true;

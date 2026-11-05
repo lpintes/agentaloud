@@ -146,6 +146,11 @@ class NewSessionDialog : public win::Dialog {
   // Parallel to the list of recent folders; empty while it says it is
   // looking.
   std::vector<app::RecentFolder> folders_;
+  // The agent is the reader's: typed on the line, or chosen in the backend
+  // list before the recent folders arrived.  The first recent folder then
+  // may not bring another agent.  CB_SETCURSEL notifies nobody, so only the
+  // reader's own choice sets it.
+  bool backendChosen_;
 };
 
 }  // namespace ui
