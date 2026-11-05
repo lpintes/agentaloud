@@ -245,6 +245,23 @@ Json MakeSetModel(const std::string& requestId, const std::string& model);
 // the new model has (tools/probe_claude_effort.notes.md, 2.1.304, 2026-10-30).
 Json MakeSetEffort(const std::string& requestId, const std::string& level);
 
+// Do these arguments carry on a conversation that already exists -- --resume,
+// -r, --continue, -c?  Two callers ask, and they ask for different reasons:
+// Start(), because such a session keeps the id it resumes and refuses to be
+// given another one, and the pane, because the stream does not replay the
+// history and an empty window otherwise looks exactly like a session that got
+// lost.  A custom --session-id is deliberately NOT one of these: it names a
+// conversation without continuing one.  Here rather than next to Session,
+// which owns a process and so stays out of the tests.
+bool ResumesConversation(const std::vector<std::wstring>& extraArgs);
+
+// WHICH conversation --resume names, or empty.  Empty is not the same as "not
+// resuming": --continue has no value to give, and --resume takes a session
+// TITLE as readily as an id, in which case what comes back is not a file name
+// and the lookup that uses it will find nothing.  Both are the caller's
+// business -- history that cannot be found is a sentence to say, not an error.
+std::wstring ResumedConversation(const std::vector<std::wstring>& extraArgs);
+
 // The stage --effort starts the session with, or empty.  The last one wins, as
 // in ResumedConversation.
 std::string StartupEffort(const std::vector<std::wstring>& extraArgs);

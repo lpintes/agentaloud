@@ -249,22 +249,6 @@ std::wstring BuildCommandLine(const Session::Options& options);
 // launch -- an id we do not know is worse than nothing only for us.
 std::wstring NewSessionId();
 
-// Do these arguments carry on a conversation that already exists -- --resume,
-// -r, --continue, -c?  Two callers ask, and they ask for different reasons:
-// Start(), because such a session keeps the id it resumes and refuses to be
-// given another one, and the pane, because the stream does not replay the
-// history and an empty window otherwise looks exactly like a session that got
-// lost.  A custom --session-id is deliberately NOT one of these: it names a
-// conversation without continuing one.
-bool ResumesConversation(const std::vector<std::wstring>& extraArgs);
-
-// WHICH conversation --resume names, or empty.  Empty is not the same as "not
-// resuming": --continue has no value to give, and --resume takes a session
-// TITLE as readily as an id, in which case what comes back is not a file name
-// and the lookup that uses it will find nothing.  Both are the caller's
-// business -- history that cannot be found is a sentence to say, not an error.
-std::wstring ResumedConversation(const std::vector<std::wstring>& extraArgs);
-
 }  // namespace proto
 
 #endif

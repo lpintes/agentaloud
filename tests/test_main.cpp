@@ -1928,6 +1928,24 @@ void TestPermissionModeSwitch() {
   CHECK_EQ(proto::StartupEffort({L"--effort", L"low", L"--effort", L"high"}),
            std::string("high"));
 
+  // Pokracovanie rozhovoru: vsetky styri tvary, vlastne --session-id nie.
+  CHECK(!proto::ResumesConversation({}));
+  CHECK(proto::ResumesConversation({L"--resume"}));
+  CHECK(proto::ResumesConversation({L"--model", L"opus", L"-r", L"abc"}));
+  CHECK(proto::ResumesConversation({L"--continue"}));
+  CHECK(proto::ResumesConversation({L"-c"}));
+  CHECK(!proto::ResumesConversation({L"--session-id", L"abc"}));
+  // Ktory rozhovor: posledny vyhrava, holy --resume a --continue nedaju nic.
+  CHECK_EQ(proto::ResumedConversation({}), std::wstring());
+  CHECK_EQ(proto::ResumedConversation({L"--resume"}), std::wstring());
+  CHECK_EQ(proto::ResumedConversation({L"--continue"}), std::wstring());
+  CHECK_EQ(proto::ResumedConversation({L"--resume", L"abc"}),
+           std::wstring(L"abc"));
+  CHECK_EQ(proto::ResumedConversation({L"-r", L"abc", L"--resume", L"def"}),
+           std::wstring(L"def"));
+  CHECK_EQ(proto::ResumedConversation({L"--resume", L"abc", L"--resume"}),
+           std::wstring(L"abc"));
+
   // Poziadavka: subtype set_permission_mode a holy mod.
   const proto::Json request = proto::MakeSetPermissionMode("mode-3", "plan");
   CHECK_EQ(request.value("type", std::string()), std::string("control_request"));
