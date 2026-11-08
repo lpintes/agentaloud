@@ -291,7 +291,9 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
     koniec (`Following()`, `anchor_`, ktorý `Apply` prevezme, kým kurzor stojí
     na konci) → hovorí. Zvuky sú vlastné tóny (`ui::signals`, `tone.cpp`):
     koniec ťahu, agent čaká (`SignalWaiting` + `FlashWindowEx`), agent
-    skončil. Na pozadí sa opakujú každých 30 s, kým okno nepríde dopredu
+    skončil. Text asistenta počas ťahu má klik (`signals::Progress`,
+    `tone::MakeClick`) **v každom stave**, aj keď sa potom číta; raz za
+    dávku, pred rečou, `SND_NOSTOP`, neopakuje sa. Na pozadí sa opakujú každých 30 s, kým okno nepríde dopredu
     (kontrola každých 250 ms; po dialógu `StopRepeating`), v popredí raz;
     dialóg v popredí tón nemá. „Hotovo" a tón po ňom cez `Speech::SayThen`
     (synchrónne `speakSsml` na vlastnom vlákne). `sounds=0` vypne. Fokus pod

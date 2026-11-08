@@ -660,6 +660,19 @@ void SessionPane::OnDrain() {
     // text, a tool call, a tool result.  What each kind of block is worth
     // saying is AnnounceProgress's business, and a batch that added nothing
     // has nothing for it to say.
+    //
+    // The assistant's text gets a tick as well, spoken or not, and ahead of
+    // the sentence.  Muted, it is the only sign that the turn is still moving;
+    // spoken, it says that what follows is the agent's own word and not a
+    // tool's summary.  Tools are left without one: there are too many.
+    const bool said = std::any_of(
+        model_.blocks().begin(), model_.blocks().end(),
+        [idBefore](const model::Block& block) {
+          return block.id >= idBefore &&
+                 block.kind == model::BlockKind::AssistantText &&
+                 !block.body.empty();
+        });
+    if (said) signals::Progress();
     if (model_.nextBlockId() != idBefore && WantsProgressSpeech()) {
       AnnounceProgress(idBefore);
     }

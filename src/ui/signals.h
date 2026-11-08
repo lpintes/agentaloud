@@ -35,6 +35,13 @@ void AgentEnded(HWND top = nullptr);
 // The agent is waiting for an answer -- a permission, a question, a plan.
 void Waiting(HWND top);
 
+// The agent said something in the middle of its turn ("now I am checking
+// this").  A tick, played once whatever else is going on -- even when the
+// sentence is about to be read, it marks the turn as alive.  Never cuts into
+// a tone that is still playing: those carry an event, this one does not.
+// Any thread.
+void Progress();
+
 // Call when the question is answered.  Coming to the front only stops the
 // repeat if the timer happens to look then: answered and left again within
 // the half minute, it went on calling about a question no longer there

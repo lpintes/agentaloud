@@ -1816,6 +1816,25 @@ void TestToneWave() {
   }
   CHECK(loudest <= 16384);
   CHECK(loudest > 16000);
+
+  // Klik: plny hned na zaciatku, potom slabne a konci v nule.  Doznievanie
+  // je cele zmysel -- ton by sa pomylil so signalom konca tahu.
+  const std::vector<std::uint8_t> click = tone::MakeClick(1500, 30, 40.0, 0.5);
+  const size_t clickFrames = static_cast<size_t>(tone::kSampleRate) * 30 / 1000;
+  CHECK_EQ(click.size(), 44 + clickFrames * 2);
+  CHECK_EQ(u32(click, 40), static_cast<std::uint32_t>(clickFrames * 2));
+  auto peakOf = [&](size_t from, size_t to) {
+    int peak = 0;
+    for (size_t i = from; i < to; ++i) {
+      peak = std::max(peak, std::abs(static_cast<int>(sample(click, i))));
+    }
+    return peak;
+  };
+  const size_t third = clickFrames / 3;
+  CHECK(peakOf(0, third) > 15000);
+  CHECK(peakOf(0, third) <= 16384);
+  CHECK(peakOf(third, 2 * third) < peakOf(0, third));
+  CHECK_EQ(sample(click, clickFrames - 1), 0);
 }
 
 // Pravidla aktualizacii bez siete (claude-gui-lkk.53).

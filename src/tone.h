@@ -33,6 +33,13 @@ struct Note {
 std::vector<std::uint8_t> MakeWave(std::initializer_list<Note> notes,
                                    double amplitude);
 
+// A struck sound rather than a note: full at once and dying away at `decay`
+// per second, so that it is heard as a tick and not as a tone -- a tone in
+// the middle of a turn would be taken for one of the signals that end it.
+// Only the tail is ramped to silence; the attack is the point of it.
+std::vector<std::uint8_t> MakeClick(int hz, int ms, double decay,
+                                    double amplitude);
+
 }  // namespace tone
 
 #endif  // TONE_H

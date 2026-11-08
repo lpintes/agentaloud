@@ -452,6 +452,17 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
       a značky nehlási). `ERROR_CANCELLED` (čitateľ reč prerušil) = tón hneď;
       iná chyba (1717, NVDA pred 2024.1) = `speakText` a tón hneď.
     - **Dialóg v popredí tón nemá** — fokus doň skočí a NVDA ho prečíta.
+    - **Text asistenta počas ťahu má klik, vo všetkých troch stavoch**
+      (`signals::Progress`, claude-gui-309). Agent, ktorý píše „teraz
+      kontrolujem toto", v stave 1 a 2 inak nedáva nijaké znamenie, že ťah
+      ešte beží; v stave 3 klik pred vetou povie, že ide slovo agenta, nie
+      súhrn nástroja. Nástroje klik nemajú, je ich priveľa. Nie je to
+      udalosť, preto **úder, nie tón** (`tone::MakeClick`: 1500 Hz, 30 ms,
+      útlm e^(−40t), dobeh do nuly, plná amplitúda — 30 ms úder pri 0,4 tónov takmer nebolo počuť) — tón uprostred ťahu by sa pomýlil
+      s koncom ťahu. Raz za dávku, nikdy sa neopakuje. `SND_NOSTOP`:
+      `PlaySoundW` hrá jeden zvuk a nový starý zastaví, takže klik inak
+      odstrihol „agent čaká" z tej istej dávky. História z disku klik nemá
+      (ide cez `RestoreHistory`, nie `OnDrain`).
 
     **Modálne okno na pozadí je tretia udalosť a potrebuje tretí zvuk.**
     Otázka od modelu aj žiadosť o povolenie ťah **zastavia**, takže mlčať sa tu

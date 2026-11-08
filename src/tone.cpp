@@ -25,6 +25,30 @@ void PutTag(std::vector<std::uint8_t>& out, const char (&tag)[5]) {
   out.insert(out.end(), tag, tag + 4);
 }
 
+std::vector<std::uint8_t> Wrap(const std::vector<std::int16_t>& samples) {
+  const std::uint32_t dataBytes =
+      static_cast<std::uint32_t>(samples.size() * sizeof(std::int16_t));
+  std::vector<std::uint8_t> out;
+  out.reserve(44 + dataBytes);
+  PutTag(out, "RIFF");
+  PutU32(out, 36 + dataBytes);
+  PutTag(out, "WAVE");
+  PutTag(out, "fmt ");
+  PutU32(out, 16);                 // size of the PCM format block
+  PutU16(out, 1);                  // PCM
+  PutU16(out, 1);                  // mono
+  PutU32(out, kSampleRate);
+  PutU32(out, kSampleRate * 2);    // bytes per second
+  PutU16(out, 2);                  // bytes per frame
+  PutU16(out, 16);                 // bits per sample
+  PutTag(out, "data");
+  PutU32(out, dataBytes);
+  for (std::int16_t sample : samples) {
+    PutU16(out, static_cast<std::uint16_t>(sample));
+  }
+  return out;
+}
+
 }  // namespace
 
 std::vector<std::uint8_t> MakeWave(std::initializer_list<Note> notes,
@@ -55,28 +79,28 @@ std::vector<std::uint8_t> MakeWave(std::initializer_list<Note> notes,
       samples.push_back(static_cast<std::int16_t>(std::lround(value)));
     }
   }
+  return Wrap(samples);
+}
 
-  const std::uint32_t dataBytes =
-      static_cast<std::uint32_t>(samples.size() * sizeof(std::int16_t));
-  std::vector<std::uint8_t> out;
-  out.reserve(44 + dataBytes);
-  PutTag(out, "RIFF");
-  PutU32(out, 36 + dataBytes);
-  PutTag(out, "WAVE");
-  PutTag(out, "fmt ");
-  PutU32(out, 16);                 // size of the PCM format block
-  PutU16(out, 1);                  // PCM
-  PutU16(out, 1);                  // mono
-  PutU32(out, kSampleRate);
-  PutU32(out, kSampleRate * 2);    // bytes per second
-  PutU16(out, 2);                  // bytes per frame
-  PutU16(out, 16);                 // bits per sample
-  PutTag(out, "data");
-  PutU32(out, dataBytes);
-  for (std::int16_t sample : samples) {
-    PutU16(out, static_cast<std::uint16_t>(sample));
+std::vector<std::uint8_t> MakeClick(int hz, int ms, double decay,
+                                    double amplitude) {
+  std::vector<std::int16_t> samples;
+  const double peak = std::clamp(amplitude, 0.0, 1.0) * 32767.0;
+  const int count = kSampleRate * std::max(ms, 0) / 1000;
+  // At 30 ms the decay has only reached a third.  Cut off there, the sine
+  // would end on a step -- a second click, of nobody's choosing.
+  const int tail = std::min(kSampleRate * kRampMs / 1000, count);
+  for (int i = 0; i < count; ++i) {
+    const double t = static_cast<double>(i) / kSampleRate;
+    double envelope = std::exp(-decay * t);
+    if (count - 1 - i < tail) {
+      envelope *= static_cast<double>(count - 1 - i) / tail;
+    }
+    constexpr double kTwoPi = 6.283185307179586;
+    const double value = peak * envelope * std::sin(kTwoPi * hz * t);
+    samples.push_back(static_cast<std::int16_t>(std::lround(value)));
   }
-  return out;
+  return Wrap(samples);
 }
 
 }  // namespace tone
