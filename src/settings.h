@@ -53,7 +53,9 @@ class Settings {
 
   // The text of the file.  A UTF-8 BOM is skipped -- Notepad writes one -- and
   // lines may end in CRLF.  Blank lines and lines starting with '#' are
-  // comments.  What cannot be read as key=value, and a key given twice, end
+  // comments, and a line in brackets starts a project's section
+  // (ForProject).  What cannot be read as key=value, and a key given twice
+  // in one section or before any, end
   // up in error(); the rest is read regardless, so the complaint names the
   // first bad line and not whatever happens to come after it.
   static Settings Parse(std::string_view text);
@@ -84,6 +86,23 @@ class Settings {
   // first, each complaining about its own lines.
   void Overlay(const Settings& profile);
 
+  // How two spellings of one folder are found to be the same: win::FolderKey
+  // in the application.  Handed in because this file has no windows.h, and
+  // not a rule of its own because the folder the reader typed, the folder of
+  // the recent list and the folder of a section must all be compared by one
+  // rule -- C:\x\ and c:/X written by two rules would quietly be two
+  // projects.  Null compares the text as written.
+  using FolderKeyFn = std::wstring (*)(std::wstring);
+
+  // These settings with the section of `folder` laid over them
+  // (claude-gui-lkk.56): a project may want another mode or model than the
+  // rest.  A section is headed by the full path in brackets, [C:\vcs\x], and
+  // what follows it up to the next one is its; it says only
+  // <backend>.permission-mode and <backend>.model (Check).  The narrower rule
+  // wins: the profile's section, then this file's, then the profile, then
+  // this file.  A copy for reading, not for Set.
+  Settings ForProject(const std::wstring& folder, FolderKeyFn folderKey) const;
+
   // The first thing wrong with the file, without its name, "riadok 3: ...".
   // Empty when there is nothing wrong.
   const std::wstring& error() const { return error_; }
@@ -92,7 +111,8 @@ class Settings {
   // new value and every other line -- comments, blank lines, their order --
   // stays as it was, so a file written by hand survives being written by the
   // application.  A key not yet in the file goes on a new line at the end.
-  // The caller saves Serialize().
+  // The caller saves Serialize().  The new line goes before the first
+  // section, not at the end, which would be inside the last project's.
   void Set(const std::string& key, const std::string& value);
 
   // The file again, with whatever Set changed.  Byte for byte what Parse got
@@ -116,8 +136,13 @@ class Settings {
   // nothing else may be there.  Every
   // backend's lines are checked, not just the chosen one's -- a typo in the
   // codex lines would otherwise wait to be found the day codex is used.
+  // A section must be headed by a full path, a folder only once by
+  // `folderKey`, and hold only the mode and the model: the CLI and its
+  // environment also list the conversations, before any folder is chosen,
+  // and the rest belongs to the whole process.
   // Sets error() and does nothing when there is one already.
-  void Check(const std::map<std::string, agent::Capabilities>& backends);
+  void Check(const std::map<std::string, agent::Capabilities>& backends,
+             FolderKeyFn folderKey = nullptr);
 
   // What a profile must not say, on top of Check: the language, because it
   // is chosen before the command line that names the profile is read, and
@@ -128,10 +153,24 @@ class Settings {
   void CheckProfile();
 
  private:
-  void Complain(int line, const std::wstring& text);
+  struct Section {
+    std::wstring folder;  // as written between the brackets
+    int line = 0;         // of the heading
+    std::map<std::string, Entry> entries;
+  };
 
-  std::map<std::string, Entry> entries_;
+  void Complain(int line, const std::wstring& text);
+  static const Section* FindSection(const std::vector<Section>& sections,
+                                    const std::wstring& folder,
+                                    FolderKeyFn folderKey);
+
+  std::map<std::string, Entry> entries_;  // the lines before any section
   std::map<std::string, Entry> overlay_;
+  std::vector<Section> sections_;  // in the order of the file
+  std::vector<Section> overlaySections_;
+  // The sections ForProject chose, of this file and of the profile.
+  std::map<std::string, Entry> project_;
+  std::map<std::string, Entry> projectOverlay_;
   std::wstring error_;
   // The file as it came, a line per element, without the '\n' but with any
   // '\r' -- so Serialize gives back what was read.

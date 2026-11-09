@@ -46,10 +46,10 @@ struct NewSessionBackend {
   std::string name;                 // what --backend takes, shown as it is
   std::wstring agentName;           // Capabilities::agentName, for the rows
   std::vector<std::string> models;  // Capabilities::models
-  // What the model field holds when this backend is chosen: --model, or
-  // the settings file's line for this backend.  Empty means the CLI's own
-  // default.
-  std::wstring model;
+  // What the model field holds when this backend is chosen in this folder:
+  // --model, or the settings' line for this backend, the folder's section
+  // first.  Empty means the CLI's own default.  On the dialog's thread.
+  std::function<std::wstring(const std::wstring& project)> modelFor;
   // Empty when the backend cannot carry a conversation on.
   ConversationLister list;
   // Empty, or false from it: `models` is all the field offers.
@@ -113,6 +113,11 @@ class NewSessionDialog : public win::Dialog {
   struct ModelsListed;
 
   void ShowModels(int backend);
+  // The model of the backend in the field for the folder in the field.
+  std::wstring ModelFor(int backend) const;
+  // After the folder changed: the new folder's model, unless the reader
+  // edited the field.
+  void FollowFolderModel();
   // Once per dialog, for every backend that can say.  What arrives replaces
   // that backend's suggestions, and the field keeps what it holds.
   void ListModels();
@@ -151,6 +156,9 @@ class NewSessionDialog : public win::Dialog {
   // may not bring another agent.  CB_SETCURSEL notifies nobody, so only the
   // reader's own choice sets it.
   bool backendChosen_;
+  // What ShowModels put into the model field.  The field follows the folder
+  // only while it still holds that: what the reader typed stays.
+  std::wstring shownModel_;
 };
 
 }  // namespace ui

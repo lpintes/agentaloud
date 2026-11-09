@@ -601,6 +601,10 @@ S(kHelp,
   L"  oddelené bodkočiarkou.  Iný priečinok sa dá stále napísať.\n"
   L"  Súbor z --settings má prednosť pred týmto a nesmie obsahovať\n"
   L"  language, last-update-check ani skipped-version.\n"
+  L"  Riadok [C:\\projekt] začína sekciu pre ten priečinok a jej riadky\n"
+  L"  platia len pre session v ňom; sekcia smie obsahovať len\n"
+  L"  <backend>.permission-mode a <backend>.model.  Sekcia v profile má\n"
+  L"  prednosť pred sekciou v tomto súbore a obe pred ostatnými riadkami.\n"
   L"  Neznámy kľúč alebo režim {0} odmietne a povie riadok, rovnako\n"
   L"  ako neznámu voľbu.  Priečinok config vedľa {8}, keď existuje,\n"
   L"  sa použije namiesto toho v %APPDATA%.\n"
@@ -621,6 +625,11 @@ S(kSettingsRelativeRoot, L"projects: {0} nie je celá cesta")
 S(kSettingsNotInProfile,
   L"{0} patrí len do hlavného súboru nastavení, nie do súboru zadaného "
   L"cez --settings")
+S(kSettingsSectionFolder, L"[{0}] nie je celá cesta k priečinku")
+S(kSettingsSectionDuplicate, L"priečinok {0} má sekciu už na riadku {1}")
+S(kSettingsNotInSection,
+  L"v sekcii priečinka smie byť len <backend>.permission-mode a "
+  L"<backend>.model, nie {0}")
 S(kSettingsProfileMissing, L"súbor nastavení {0} neexistuje")
 S(kNoRichEdit, L"Nepodarilo sa načítať Msftedit.dll.")
 S(kSessionStartFailed, L"Nepodarilo sa spustiť session.")

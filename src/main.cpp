@@ -138,7 +138,7 @@ app::Settings ReadSettings(const std::string& bytes) {
   for (const std::string& name : kBackends) {
     backends[name] = MakeBackend(name)->capabilities();
   }
-  settings.Check(backends);
+  settings.Check(backends, win::FolderKey);
   return settings;
 }
 
@@ -298,10 +298,15 @@ bool AskNewSession(HWND owner, const app::Arguments& typed,
     const agent::Capabilities capabilities = MakeBackend(name)->capabilities();
     entry.agentName = model::Utf16FromUtf8(capabilities.agentName);
     entry.models = capabilities.models;
-    entry.model = !typed.model.empty()
-                      ? typed.model
-                      : model::Utf16FromUtf8(
-                            settings.Get(name + "." + app::kModelKey));
+    // The folder's section may say another model (claude-gui-lkk.56), and the
+    // folder changes while the dialog is open.  Called on its thread, while
+    // `settings` is still here.
+    entry.modelFor = [&typed, &settings, name](const std::wstring& project) {
+      if (!typed.model.empty()) return typed.model;
+      return model::Utf16FromUtf8(
+          settings.ForProject(Expand(project), win::FolderKey)
+              .Get(name + "." + app::kModelKey));
+    };
     // A backend of its own for every asking: the dialog asks from a thread
     // of its own, and may ask again before the last answer came.
     // With its program, because where the conversations are is its
@@ -349,7 +354,8 @@ bool AskNewSession(HWND owner, const app::Arguments& typed,
   if (choice.switchTo >= 0) return true;
   arguments->backend = choice.backend;
   arguments->permissionMode = typed.permissionMode;
-  app::ApplySettings(arguments, settings);
+  app::ApplySettings(arguments,
+                     settings.ForProject(Expand(choice.project), win::FolderKey));
   arguments->model = choice.model;
   arguments->project = choice.project;
   // "Nový rozhovor" is where the list starts, not an answer to what the
@@ -463,7 +469,13 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   }
   if (settings.error().empty() && profile.error().empty()) {
     settings.Overlay(profile);
-    app::ApplySettings(&arguments, settings);
+    // With the folder's section (claude-gui-lkk.56) when the line named the
+    // folder; one asked for in Nová session is applied there.
+    app::ApplySettings(&arguments,
+                       arguments.project.empty()
+                           ? settings
+                           : settings.ForProject(Expand(arguments.project),
+                                                 win::FolderKey));
     ui::signals::SetEnabled(settings.Sounds());
   }
   app::CheckBackend(&arguments, kBackends);

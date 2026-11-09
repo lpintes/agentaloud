@@ -388,7 +388,11 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
     kladie cez hlavný súbor (`Settings::Overlay`: čítanie najprv z profilu,
     zápis len do hlavného), bez `language` a kľúčov, ktoré píše appka
     (`CheckProfile`); `projects=` filtruje zoznam Nedávne priečinky
-    (`app::UnderAnyRoot`).
+    (`app::UnderAnyRoot`). Sekcia `[C:\priečinok]` (hlavný súbor aj profil)
+    smie len `<backend>.permission-mode` a `.model`; `Settings::ForProject`
+    s `win::FolderKey`, poradie príkazový riadok > sekcia profilu > sekcia
+    súboru > profil > súbor. Nová session: pole modelu ide s priečinkom, kým
+    ho čitateľ neprepísal (`FollowFolderModel`).
 23. **Aktualizuje sa celý balík a nič sa nevymení, kým nie je všetko
     overené**: súčet ZIP-u → rozbalenie do `.update-new\` →
     `update::PlanReplace` → výmena so zálohou v `.update-old\` a návratom

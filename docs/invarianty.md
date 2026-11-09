@@ -1365,7 +1365,8 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     z `.claude/settings.json` aj `settings.local.json`, lebo appka ho posiela
     ako `--permission-mode` a voľba vyhráva (odmerané
     `tools/probe_mode_precedence.py`, CLI 2.1.288, 5. 10. 2026). Prijaté
-    vedome; nastavenia podľa projektu sú claude-gui-lkk.56. A pozor pri
+    vedome; kto chce v projekte iný režim, napíše ho do sekcie priečinka
+    (nižšie). A pozor pri
     meraní: s `--model haiku` sa `auto` ticho zmení na `default`, aj bez
     akýchkoľvek nastavení.
 
@@ -1393,6 +1394,30 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     stále koreň). Filter platí len pre zoznam, iný priečinok sa dá napísať.
     Overené naostro 4. 11. 2026: profil s dvoma koreňmi (jeden `c:/b/`)
     zúžil zoznam zo 171 riadkov na 58, všetky pod koreňmi.
+
+    **Nastavenia podľa priečinka** (claude-gui-lkk.56): riadok
+    `[C:\projekt]` začína sekciu, ktorej riadky platia len pre session
+    v tom priečinku, v hlavnom súbore aj v profile. Sekcia smie **len**
+    `<backend>.permission-mode` a `<backend>.model` (rozhodnutie autora):
+    `executable` a `env.` určujú aj zoznam rozhovorov, ktorý sa číta skôr,
+    než je priečinok známy, a ostatné kľúče platia pre celý proces. Iný kľúč
+    v sekcii, relatívna či prázdna hlavička a ten istý priečinok dvakrát
+    (porovnané `win::FolderKey`, teda bez ohľadu na veľkosť písmen a lomky)
+    sa odmietnu ako každý zlý riadok. Prednosť je **príkazový riadok >
+    sekcia profilu > sekcia hlavného súboru > profil > hlavný súbor >
+    zabudované** — `Settings::ForProject(priečinok, FolderKeyFn)` vráti
+    kópiu, ktorej `Get` sa pýta v tomto poradí; `model/` ani `settings`
+    nepoznajú `windows.h`, preto porovnávanie priečinkov prichádza ako
+    funkcia (testy majú vlastnú). Pri štarte sa sekcia použije, keď je
+    priečinok napísaný na príkazovom riadku, inak až po dialógu Nová session
+    (`AskNewSession`). `Set` vkladá nový kľúč pred prvú sekciu, inak by
+    pristál v nej. V dialógu Nová session pole modelu nasleduje priečinok
+    (`FollowFolderModel` z `ListConversations`), ale len kým v ňom stojí
+    hodnota, ktorú tam dal dialóg sám (`shownModel_`) — čo čitateľ napísal,
+    zmena priečinka neprepíše. Overené naostro 9. 11. 2026: sekcia profilu
+    pre `.../PROJ/` (iná veľkosť písmen a lomky) dala v tom priečinku stav
+    „model haiku, režim plánovanie" a v inom nič; v dialógu sa pole menilo
+    haiku/prázdne s priečinkom a napísané „opus" zostalo.
 
 23. **Aktualizuje sa celý balík, nie holé EXE, a nič sa nevymení, kým nie je
     všetko overené.** Kto si balík stiahol raz a potom už len aktualizuje,

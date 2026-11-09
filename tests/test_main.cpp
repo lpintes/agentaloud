@@ -1774,6 +1774,118 @@ void TestSettingsWrite() {
   CHECK(german.error().find(L"de") != std::wstring::npos);
 }
 
+// Ako win::FolderKey, bez windows.h: lomky, koncova lomka, velkost pismen.
+std::wstring TestFolderKey(std::wstring path) {
+  for (wchar_t& c : path) {
+    if (c == L'/') c = L'\\';
+    if (c >= L'a' && c <= L'z') c = static_cast<wchar_t>(c - L'a' + L'A');
+  }
+  while (!path.empty() && path.back() == L'\\') path.pop_back();
+  return path;
+}
+
+// Nastavenia podla projektu (claude-gui-lkk.56): sekcia [cesta] nesie rezim
+// a model, uzsie pravidlo vyhra.
+void TestSettingsProjects() {
+  TEST("nastavenia: sekcie podla projektu");
+  using W = std::vector<std::wstring>;
+  std::map<std::string, agent::Capabilities> backends;
+  backends["claude"] = proto::ClaudeCapabilities();
+  backends["codex"] = proto::codex::CodexCapabilities();
+  auto errorOf = [&backends](const char* text) {
+    app::Settings settings = app::Settings::Parse(text);
+    settings.Check(backends, TestFolderKey);
+    return settings.error();
+  };
+
+  // Sekcia plati len pre svoj priecinok, napisany hocijako.
+  app::Settings main = app::Settings::Parse(
+      "claude.permission-mode=auto\nclaude.model=opus\n\n"
+      "[C:\\vcs\\x]\nclaude.permission-mode=plan\nclaude.model=\n\n"
+      "[ D:/ine ]\ncodex.model=gpt\n");
+  main.Check(backends, TestFolderKey);
+  CHECK(main.error().empty());
+  CHECK_EQ(main.entries().size(), size_t{2});
+  const app::Settings x = main.ForProject(L"c:/VCS/x/", TestFolderKey);
+  CHECK_EQ(x.Get("claude.permission-mode"), std::string("plan"));
+  // Prazdna hodnota v sekcii je sablona, pusti globalnu.
+  CHECK_EQ(x.Get("claude.model"), std::string("opus"));
+  CHECK_EQ(main.ForProject(L"D:\\ine", TestFolderKey).Get("codex.model"),
+           std::string("gpt"));
+  CHECK_EQ(main.ForProject(L"C:\\vcs\\xy", TestFolderKey)
+               .Get("claude.permission-mode"),
+           std::string("auto"));
+  CHECK_EQ(main.ForProject(L"", TestFolderKey).Get("claude.permission-mode"),
+           std::string("auto"));
+  CHECK(main.Get("codex.model").empty());
+  // Druhy vyber nenecha prvy.
+  CHECK_EQ(x.ForProject(L"D:\\ine", TestFolderKey).Get("claude.permission-mode"),
+           std::string("auto"));
+  app::Arguments typed = app::Parse(W{L"--permission-mode", L"default", L"."});
+  app::ApplySettings(&typed, x);
+  CHECK_EQ(typed.permissionMode, std::wstring(L"default"));
+  app::Arguments none = app::Parse(W{L"."});
+  app::ApplySettings(&none, x);
+  CHECK_EQ(none.permissionMode, std::wstring(L"plan"));
+
+  // Prednost: sekcia profilu > sekcia hlavneho > profil > hlavny.
+  app::Settings layered = app::Settings::Parse(
+      "claude.model=main\n[C:\\p]\nclaude.model=main-p\n"
+      "claude.permission-mode=plan\n");
+  layered.Overlay(app::Settings::Parse(
+      "claude.model=profile\nclaude.permission-mode=auto\n"
+      "[c:\\P\\]\nclaude.model=profile-p\n"));
+  const app::Settings p = layered.ForProject(L"C:\\p", TestFolderKey);
+  CHECK_EQ(p.Get("claude.model"), std::string("profile-p"));
+  CHECK_EQ(p.Get("claude.permission-mode"), std::string("plan"));
+  CHECK_EQ(layered.ForProject(L"C:\\q", TestFolderKey).Get("claude.model"),
+           std::string("profile"));
+
+  // V sekcii len rezim a model, rezim podla backendu, cela cesta, priecinok
+  // raz, kluc raz.
+  CHECK(errorOf("[C:\\a]\ncodex.permission-mode=plan\nclaude.model=x\n").empty());
+  const std::wstring backend = errorOf("[C:\\a]\nbackend=codex\n");
+  CHECK(backend.find(L"riadok 2") == 0);
+  CHECK(backend.find(L"backend") != std::wstring::npos);
+  CHECK(!errorOf("[C:\\a]\ncodex.executable=c.exe\n").empty());
+  CHECK(!errorOf("[C:\\a]\ncodex.env.CODEX_HOME=E:\\c\n").empty());
+  CHECK(!errorOf("[C:\\a]\nsounds=0\n").empty());
+  CHECK(!errorOf("[C:\\a]\ngemini.model=x\n").empty());
+  CHECK(errorOf("[C:\\a]\ncodex.permission-mode=acceptEdits\n")
+            .find(L"acceptEdits") != std::wstring::npos);
+  CHECK(errorOf("[praca]\n").find(L"riadok 1") == 0);
+  CHECK(!errorOf("[]\n").empty());
+  const std::wstring twice = errorOf("[C:\\a]\n\n[c:/A/]\n");
+  CHECK(twice.find(L"riadok 3") == 0);
+  CHECK(twice.find(L"riadku 1") != std::wstring::npos);
+  CHECK(!errorOf("[C:\\a]\nclaude.model=a\nclaude.model=b\n").empty());
+  // Ten isty kluc hore aj v sekcii nie je duplicita.
+  CHECK(errorOf("claude.model=a\n[C:\\a]\nclaude.model=b\n").empty());
+  // Neuzavreta zatvorka nie je sekcia.
+  CHECK(!errorOf("[C:\\a\n").empty());
+
+  // Zapis: novy kluc pred prvu sekciu, nie do poslednej.
+  app::Settings written = app::Settings::Parse(
+      "claude.model=a\r\n\r\n[C:\\a]\r\nclaude.model=b\r\n");
+  written.Set("last-update-check", "2026-11-09");
+  CHECK_EQ(written.Serialize(),
+           std::string("claude.model=a\r\nlast-update-check=2026-11-09\r\n\r\n"
+                       "[C:\\a]\r\nclaude.model=b\r\n"));
+  // A dalsi zapis trafi svoj riadok aj po posune.
+  written.Set("last-update-check", "2026-11-10");
+  written.Set("skipped-version", "2026.11.1");
+  const app::Settings reread = app::Settings::Parse(written.Serialize());
+  CHECK_EQ(reread.Get("last-update-check"), std::string("2026-11-10"));
+  CHECK_EQ(reread.Get("skipped-version"), std::string("2026.11.1"));
+  CHECK_EQ(reread.entries().size(), size_t{3});
+  CHECK_EQ(reread.ForProject(L"C:\\a", TestFolderKey).Get("claude.model"),
+           std::string("b"));
+  app::Settings onlySection = app::Settings::Parse("[C:\\a]\nclaude.model=b\n");
+  onlySection.Set("sounds", "0");
+  CHECK_EQ(onlySection.Serialize(),
+           std::string("sounds=0\n[C:\\a]\nclaude.model=b\n"));
+}
+
 // Zvukovy signal ako WAV v pamati (claude-gui-lkk.75).  PlaySoundW zly
 // subor odmietne ticho -- signal, ktory nezaznie, sa nikde neohlasi.
 void TestToneWave() {
@@ -6541,6 +6653,7 @@ int main(int argc, char** argv) {
   TestMergeRecentFolders();
   TestSettings();
   TestSettingsWrite();
+  TestSettingsProjects();
   TestToneWave();
   TestUpdateRules();
   TestPermissionModeReports();

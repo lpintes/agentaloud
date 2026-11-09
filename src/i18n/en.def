@@ -596,6 +596,10 @@ S(kHelp,
   L"  Another folder can still be typed.\n"
   L"  The file given with --settings comes before this one and must not\n"
   L"  hold language, last-update-check or skipped-version.\n"
+  L"  A line [C:\\project] starts a section for that folder and its\n"
+  L"  lines apply only to a session in it; a section may hold only\n"
+  L"  <backend>.permission-mode and <backend>.model.  A section in the\n"
+  L"  profile comes before one in this file, and both before the rest.\n"
   L"  {0} refuses an unknown key or mode and\n"
   L"  names the line, just as it does an unknown option.  A config folder\n"
   L"  beside {8}, when there is one, is used instead of the one in\n"
@@ -617,6 +621,11 @@ S(kSettingsRelativeRoot, L"projects: {0} is not a full path")
 S(kSettingsNotInProfile,
   L"{0} belongs only in the main settings file, not in one given with "
   L"--settings")
+S(kSettingsSectionFolder, L"[{0}] is not a full path to a folder")
+S(kSettingsSectionDuplicate, L"the folder {0} already has a section on line {1}")
+S(kSettingsNotInSection,
+  L"a folder's section may hold only <backend>.permission-mode and "
+  L"<backend>.model, not {0}")
 S(kSettingsProfileMissing, L"the settings file {0} does not exist")
 S(kNoRichEdit, L"Msftedit.dll could not be loaded.")
 S(kSessionStartFailed, L"The session could not be started.")

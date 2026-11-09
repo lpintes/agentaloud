@@ -132,8 +132,9 @@ bool NewSessionDialog::OnInit() {
     }
   }
   SendMessageW(backends, CB_SETCURSEL, selected, 0);
-  ShowModels(selected);
+  // The folder first: its section may say the model.
   SetText(IDC_NEW_PROJECT, session_->project);
+  ShowModels(selected);
   ListFolders();
   ListConversations();
   ListModels();
@@ -155,7 +156,28 @@ void NewSessionDialog::ShowModels(int backend) {
     return;
   }
   FillModels(backend);
-  SetText(IDC_NEW_MODEL, session_->backends[backend].model);
+  shownModel_ = ModelFor(backend);
+  SetText(IDC_NEW_MODEL, shownModel_);
+}
+
+std::wstring NewSessionDialog::ModelFor(int backend) const {
+  const auto& modelFor = session_->backends[backend].modelFor;
+  return modelFor ? modelFor(Expanded(Trimmed(GetText(IDC_NEW_PROJECT))))
+                  : std::wstring();
+}
+
+// The folder's section (claude-gui-lkk.56) is the reason, and only a field
+// nobody touched follows it: a model typed and then a folder chosen is still
+// the model typed.
+void NewSessionDialog::FollowFolderModel() {
+  const int backend = SelectedBackend();
+  if (backend < 0 || Trimmed(GetText(IDC_NEW_MODEL)) != Trimmed(shownModel_)) {
+    return;
+  }
+  const std::wstring model = ModelFor(backend);
+  if (model == shownModel_) return;
+  shownModel_ = model;
+  SetText(IDC_NEW_MODEL, model);
 }
 
 // The drop-down only.  CB_RESETCONTENT empties the edit part as well, and the
@@ -347,6 +369,7 @@ void NewSessionDialog::ListConversations() {
   if (name == listedBackend_ && project == listedProject_) return;
   listedBackend_ = name;
   listedProject_ = project;
+  FollowFolderModel();
   ++generation_;
   conversations_.clear();
 

@@ -68,6 +68,14 @@ Settings Settings::Parse(std::string_view text) {
     settings.lines_.emplace_back(raw);
     const std::string_view line = Trim(raw);
     if (line.empty() || line.front() == '#') continue;
+    if (line.front() == '[' && line.back() == ']') {
+      settings.sections_.push_back(
+          {Wide(Trim(line.substr(1, line.size() - 2))), number, {}});
+      continue;
+    }
+    std::map<std::string, Entry>& entries =
+        settings.sections_.empty() ? settings.entries_
+                                   : settings.sections_.back().entries;
     const size_t equals = line.find('=');
     const std::string key(Trim(line.substr(0, equals == std::string_view::npos
                                                    ? line.size()
@@ -81,22 +89,24 @@ Settings Settings::Parse(std::string_view text) {
     // line at the end and does not see the old one further up would get
     // whichever one this rule happens to prefer, and not know there was a
     // choice.
-    const auto known = settings.entries_.find(key);
-    if (known != settings.entries_.end()) {
+    const auto known = entries.find(key);
+    if (known != entries.end()) {
       settings.Complain(
           number, i18n::Format(i18n::Str::kSettingsDuplicate,
                                {Wide(key), std::to_wstring(known->second.line)}));
       continue;
     }
-    settings.entries_[key] = {std::string(Trim(line.substr(equals + 1))), number};
+    entries[key] = {std::string(Trim(line.substr(equals + 1))), number};
   }
   return settings;
 }
 
 std::string Settings::Get(const std::string& key) const {
-  const auto over = overlay_.find(key);
-  if (over != overlay_.end() && !over->second.value.empty()) {
-    return over->second.value;
+  for (const auto* layer : {&projectOverlay_, &project_, &overlay_}) {
+    const auto found = layer->find(key);
+    if (found != layer->end() && !found->second.value.empty()) {
+      return found->second.value;
+    }
   }
   const auto found = entries_.find(key);
   return found == entries_.end() ? std::string() : found->second.value;
@@ -120,7 +130,38 @@ std::vector<std::string> Settings::Keys() const {
   return keys;
 }
 
-void Settings::Overlay(const Settings& profile) { overlay_ = profile.entries_; }
+void Settings::Overlay(const Settings& profile) {
+  overlay_ = profile.entries_;
+  overlaySections_ = profile.sections_;
+}
+
+const Settings::Section* Settings::FindSection(
+    const std::vector<Section>& sections, const std::wstring& folder,
+    FolderKeyFn folderKey) {
+  const std::wstring wanted = folderKey ? folderKey(folder) : folder;
+  for (const Section& section : sections) {
+    if ((folderKey ? folderKey(section.folder) : section.folder) == wanted) {
+      return &section;
+    }
+  }
+  return nullptr;
+}
+
+Settings Settings::ForProject(const std::wstring& folder,
+                              FolderKeyFn folderKey) const {
+  Settings settings = *this;
+  settings.project_.clear();
+  settings.projectOverlay_.clear();
+  // No folder yet -- the dialog's field is empty -- is no project.
+  if (folder.empty()) return settings;
+  if (const Section* own = FindSection(sections_, folder, folderKey)) {
+    settings.project_ = own->entries;
+  }
+  if (const Section* profile = FindSection(overlaySections_, folder, folderKey)) {
+    settings.projectOverlay_ = profile->entries;
+  }
+  return settings;
+}
 
 void Settings::Set(const std::string& key, const std::string& value) {
   // A file that ends its lines in CRLF gets a CRLF line; Notepad would cope
@@ -134,11 +175,28 @@ void Settings::Set(const std::string& key, const std::string& value) {
     found->second.value = value;
     return;
   }
-  // The last line had no newline; it gets one now, or the new line would be
-  // glued onto it.
-  finalNewline_ = true;
-  lines_.push_back(std::move(line));
-  entries_[key] = {value, static_cast<int>(lines_.size())};
+  if (sections_.empty()) {
+    // The last line had no newline; it gets one now, or the new line would
+    // be glued onto it.
+    finalNewline_ = true;
+    lines_.push_back(std::move(line));
+    entries_[key] = {value, static_cast<int>(lines_.size())};
+    return;
+  }
+  // Before the blank lines that part the top of the file from the first
+  // section, so they keep parting it.  Every line below moves one down.
+  size_t at = static_cast<size_t>(sections_.front().line - 1);
+  while (at > 0 && Trim(lines_[at - 1]).empty()) --at;
+  const int moved = static_cast<int>(at) + 1;
+  for (Section& section : sections_) {
+    if (section.line >= moved) ++section.line;
+    for (auto& [name, entry] : section.entries) {
+      if (entry.line >= moved) ++entry.line;
+    }
+  }
+  lines_.insert(lines_.begin() + static_cast<std::ptrdiff_t>(at),
+                std::move(line));
+  entries_[key] = {value, moved};
 }
 
 std::string Settings::Serialize() const {
@@ -154,9 +212,30 @@ bool Settings::CheckUpdates() const { return Get(kCheckUpdatesKey) != "0"; }
 
 bool Settings::Sounds() const { return Get(kSoundsKey) != "0"; }
 
-void Settings::Check(const std::map<std::string, agent::Capabilities>& backends) {
+void Settings::Check(const std::map<std::string, agent::Capabilities>& backends,
+                     FolderKeyFn folderKey) {
   std::vector<std::string> names;
   for (const auto& [name, capabilities] : backends) names.push_back(name);
+  const auto checkMode = [this](const Entry& entry,
+                                const agent::Capabilities& capabilities) {
+    if (entry.value.empty() || agent::FindMode(capabilities, entry.value)) {
+      return;
+    }
+    std::vector<std::string> valid;
+    for (const agent::Mode& mode : capabilities.modes) valid.push_back(mode.id);
+    Complain(entry.line,
+             i18n::Format(i18n::Str::kUnknownMode,
+                          {Wide(entry.value), Wide(capabilities.agentName),
+                           Joined(valid)}));
+  };
+  // "codex.model" is the codex backend and its key "model"; end() when the
+  // part before the dot is no backend.
+  const auto split = [&backends](const std::string& key, std::string* name) {
+    const size_t dot = key.find('.');
+    *name = dot == std::string::npos ? "" : key.substr(dot + 1);
+    return dot == std::string::npos ? backends.end()
+                                    : backends.find(key.substr(0, dot));
+  };
   for (const auto& [key, entry] : entries_) {
     // An empty value is a template line (see Get) and has nothing to check --
     // but its key does: a misspelt key left empty is still a misspelt key, and
@@ -204,11 +283,8 @@ void Settings::Check(const std::map<std::string, agent::Capabilities>& backends)
       }
       continue;
     }
-    const size_t dot = key.find('.');
-    const auto backend = dot == std::string::npos
-                             ? backends.end()
-                             : backends.find(key.substr(0, dot));
-    const std::string name = dot == std::string::npos ? "" : key.substr(dot + 1);
+    std::string name;
+    const auto backend = split(key, &name);
     const bool env = name.starts_with(kEnvPrefix) &&
                      name.size() > std::string_view(kEnvPrefix).size();
     if (backend == backends.end() ||
@@ -237,16 +313,35 @@ void Settings::Check(const std::map<std::string, agent::Capabilities>& backends)
     if (name == kExecutableKey) continue;
     // The model is not checked, for the reason --model is not: the list is
     // the CLI's and changes with every release.
-    if (!empty && name == kPermissionModeKey &&
-        agent::FindMode(backend->second, entry.value) == nullptr) {
-      std::vector<std::string> valid;
-      for (const agent::Mode& mode : backend->second.modes) {
-        valid.push_back(mode.id);
+    if (name == kPermissionModeKey) checkMode(entry, backend->second);
+  }
+  for (const Section& section : sections_) {
+    // Relative to what, nobody could say -- and a section that matches no
+    // folder looks exactly like a project with nothing set.
+    if (IsRelative(section.folder)) {
+      Complain(section.line, i18n::Format(i18n::Str::kSettingsSectionFolder,
+                                          {section.folder}));
+      continue;
+    }
+    // Twice is refused for the reason a key twice is: which of the two
+    // applies would be this rule's choice, made where nobody sees it.
+    const Section* first = FindSection(sections_, section.folder, folderKey);
+    if (first != &section) {
+      Complain(section.line,
+               i18n::Format(i18n::Str::kSettingsSectionDuplicate,
+                            {section.folder, std::to_wstring(first->line)}));
+      continue;
+    }
+    for (const auto& [key, entry] : section.entries) {
+      std::string name;
+      const auto backend = split(key, &name);
+      if (backend == backends.end() ||
+          (name != kPermissionModeKey && name != kModelKey)) {
+        Complain(entry.line,
+                 i18n::Format(i18n::Str::kSettingsNotInSection, {Wide(key)}));
+        continue;
       }
-      Complain(entry.line,
-               i18n::Format(i18n::Str::kUnknownMode,
-                            {Wide(entry.value),
-                             Wide(backend->second.agentName), Joined(valid)}));
+      if (name == kPermissionModeKey) checkMode(entry, backend->second);
     }
   }
 }
