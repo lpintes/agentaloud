@@ -45,26 +45,31 @@ bool WriteToParentConsole(const std::wstring& text) {
   // A redirection is already here: cmd.exe hands the file or pipe over in the
   // standard handles even to a GUI process, and it must win over the console,
   // or `--help > help.txt` would print to the screen and leave an empty file.
+  //
+  // A handle that is there is not always one that takes the text: PowerShell 7
+  // gives a GUI process a pipe for `>` and `$x = & ...`, does not wait for it,
+  // and the write fails.  The console the command was typed in is still the
+  // right place then, and the dialog is not.
   HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
-  if (Usable(out)) return Write(out, text);
+  if (Usable(out) && Write(out, text)) return true;
 
   if (!AttachConsole(ATTACH_PARENT_PROCESS)) return false;
   // Attaching does not fill in the standard handles of a process that started
-  // without them, so the newly attached screen buffer has to be opened by
-  // name.  CONOUT$ always means "the console this process is attached to".
-  out = GetStdHandle(STD_OUTPUT_HANDLE);
-  if (!Usable(out)) {
-    out = CreateFileW(L"CONOUT$", GENERIC_WRITE,
-                      FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
-                      OPEN_EXISTING, 0, nullptr);
-    if (!Usable(out)) return false;
-  }
+  // without them, and the one it started with may be the pipe that just
+  // refused the text, so the screen buffer is opened by name.  CONOUT$ always
+  // means "the console this process is attached to".
+  out = CreateFileW(L"CONOUT$", GENERIC_WRITE,
+                    FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                    OPEN_EXISTING, 0, nullptr);
+  if (!Usable(out)) return false;
   // The shell gave up on this process the moment it started it -- it is a GUI
   // program, so cmd.exe does not wait -- and has printed its next prompt by
   // now.  The text would otherwise begin halfway along that prompt.  It is
   // cosmetic and it is the known price of this approach; the blank line is
   // what makes it look deliberate rather than broken.
-  return Write(out, L"\n" + text);
+  const bool written = Write(out, L"\n" + text);
+  CloseHandle(out);
+  return written;
 }
 
 }  // namespace win

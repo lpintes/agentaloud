@@ -342,7 +342,9 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
     (nie mtime) a pošle `--resume <id>`. Projekt bez rozhovoru = nová session
     bez hlášky.
 16. **Appka nemá stdout** (`-mwindows`): `win::WriteToParentConsole` —
-    štandardný výstup → konzola rodiča → dialóg. Neznáma voľba s pomlčkou sa
+    štandardný výstup → (aj keď zápis zlyhá) konzola rodiča cez `CONOUT$` →
+    dialóg. PowerShell `>` z GUI procesu súbor nenaplní; `| Out-File` áno.
+    Neznáma voľba s pomlčkou sa
     odmietne (kód 2), nikdy sa nestane priečinkom. Voľby pre CLI len za `--`.
     `--backend` predvolene `claude`; `--permission-mode` sa overuje proti
     `Capabilities::modes` (`app::CheckMode`). Parser a `HelpText` v

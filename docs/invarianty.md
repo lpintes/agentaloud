@@ -887,8 +887,11 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
         inak by `agentaloud --help > help.txt` napísalo na obrazovku a nechalo
         prázdny súbor. Odmerané: cmd.exe aj powershell.exe odovzdajú GUI
         procesu svoje konzolové handle, takže v bežnom prípade sa končí tu.
-      • **Konzola rodiča** cez `AttachConsole(ATTACH_PARENT_PROCESS)`, a keď
-        ani potom nie sú štandardné handle vyplnené, `CONOUT$` menom.
+        Keď zápis do štandardného výstupu zlyhá, pokračuje sa ďalším bodom,
+        nie dialógom.
+      • **Konzola rodiča** cez `AttachConsole(ATTACH_PARENT_PROCESS)` a vždy
+        `CONOUT$` menom — štandardný handle môže byť práve tá rúra, ktorá
+        zápis odmietla.
         Odmerané vynútením prázdnych handle (`STARTF_USESTDHANDLES` s `NULL`):
         vetva funguje a text pribudne pod už vypísaný prompt shellu — shell na
         GUI proces nečaká. Preto sa v tejto vetve, a len v nej, predradí
@@ -898,6 +901,18 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
         `AllocConsole` je horšia odpoveď: okno, ktoré vyrobí, zomrie s
         procesom, takže by text blikol a zmizol, čo je to isté ako nevypísať
         ho.
+
+    **PowerShell `>` z GUI procesu súbor nenaplní** (claude-gui-lkk.48,
+    odmerané 9. 11. 2026 na `--version`, pwsh 7.6 a Windows PowerShell 5.1,
+    každý beh vo vlastnej konzole). `agentaloud --version > f.txt` aj
+    `$x = & agentaloud --version` nechajú prázdny súbor či premennú v oboch.
+    pwsh 7 dá procesu rúru, na ktorú nečaká, a zápis zlyhá — kým sa po
+    zlyhaní skákalo rovno do dialógu, ukázal sa dialóg; teraz text pristane
+    v konzole. Windows PowerShell 5.1 zápis prijme a zahodí: nie je v súbore,
+    v konzole ani v dialógu, a appka to zistiť nemôže. Fungujú
+    `agentaloud --help | Out-File help.txt`,
+    `Start-Process agentaloud --help -Wait -RedirectStandardOutput help.txt`
+    a `cmd /c "agentaloud --help > help.txt"`, v oboch PowerShelloch.
 
     Kódovanie sa pýta rovnako: `WriteConsoleW` berie UTF-16 a codepage si
     vyrieši sám, do súboru či rúry sa píše UTF-8. Rozlišuje sa podľa toho, či
