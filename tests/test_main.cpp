@@ -230,6 +230,32 @@ void TestCatalog() {
   i18n::SetLanguage(i18n::Lang::kSlovak);
 }
 
+void TestClearCommand() {
+  TEST("agent: /clear sa rozpozna aj s menom, /clearer nie");
+  std::string name = "x";
+  CHECK(agent::ParseClearCommand("/clear", &name));
+  CHECK_EQ(name, std::string());
+  // F4 vklada "/clear " s medzerou, lebo prikaz berie meno.
+  CHECK(agent::ParseClearCommand("  /clear \r\n", &name));
+  CHECK_EQ(name, std::string());
+  CHECK(agent::ParseClearCommand("/clear  nova uloha \n", &name));
+  CHECK_EQ(name, std::string("nova uloha"));
+  CHECK(agent::ParseClearCommand("/clear\tmeno", &name));
+  CHECK_EQ(name, std::string("meno"));
+  CHECK(!agent::ParseClearCommand("/clearer", &name));
+  CHECK(!agent::ParseClearCommand("/compact", &name));
+  CHECK(!agent::ParseClearCommand("prosim /clear", &name));
+  CHECK(!agent::ParseClearCommand("", &name));
+
+  // Codex ho ma v zozname F4 a odmieta ho mimo pokoja; Claude nie.
+  const agent::SlashCommand clear = proto::codex::ClearCommand();
+  CHECK(clear.name == "clear" && !clear.argumentHint.empty() &&
+        !clear.description.empty());
+  CHECK(proto::codex::CodexCapabilities().clearOnlyWhenIdle);
+  CHECK(proto::codex::CodexCapabilities().slashCommands);
+  CHECK(!proto::ClaudeCapabilities().clearOnlyWhenIdle);
+}
+
 void TestRangeMap() {
   TEST("transcript: mapa rozsahov pri zbaleni a rozbaleni");
   model::Transcript transcript;
@@ -6626,6 +6652,7 @@ int main(int argc, char** argv) {
 
   TestUtfRoundTrip();
   TestCatalog();
+  TestClearCommand();
   TestRangeMap();
   TestFullTextForFile();
   TestBlockAtAndNavigation();

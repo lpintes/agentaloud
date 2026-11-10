@@ -353,7 +353,10 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
     a nemusí ho vykonať vôbec. F4 (`ShowCommands`) príkaz vloží do promptu,
     neodošle. Zoznam len z odpovede na `initialize`; „ešte nie je" sa povie.
     Výnimka: `/clear` vykoná CLI samo — `conversation_reset`, potom nové
-    `session_id` (`Session` ho prevezme) a kontext sa vynuluje.
+    `session_id` (`Session` ho prevezme) a kontext sa vynuluje. Codex slash
+    príkazy nepozná; `/clear` robí `CodexBackend` (nové vlákno v tom istom
+    app-serveri, `sessionStartSource: "clear"`, zvyšok = meno) a počas ťahu
+    či úloh ho odmietne panel (`Capabilities::clearOnlyWhenIdle`).
 18. **História z disku ide tými istými volaniami ako živý ťah**:
     `ReadSessionRecords` (len `user`/`assistant`, bez sidechainov; vstrebaný
     prompt počas ťahu je len `attachment` `queued_command` → `user`) →

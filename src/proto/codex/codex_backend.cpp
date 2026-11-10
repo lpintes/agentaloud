@@ -370,13 +370,47 @@ void CodexBackend::SteerAwaitingLocked() {
 
 bool CodexBackend::SendPrompt(const std::string& utf8Text) {
   std::lock_guard<std::mutex> lock(mutex_);
-  if (threadId_.empty()) {
+  if (threadId_.empty() || clearing_) {
     turnInFlight_ = true;
     queued_.push_back(utf8Text);
     return true;
   }
+  // The pane refuses /clear during a turn (clearOnlyWhenIdle).  One that
+  // gets here anyway -- a turn the agent began a moment before -- goes to
+  // the model as text, as it did before /clear was ours.
+  std::string name;
+  if (!turnInFlight_ && agent::ParseClearCommand(utf8Text, &name)) {
+    ClearLocked(name);
+    return true;
+  }
   PromptLocked(utf8Text);
   return true;
+}
+
+void CodexBackend::ClearLocked(const std::string& name) {
+  // A turn to the pane, which waits for its end as for any prompt's; it ends
+  // with the answer to thread/start.
+  turnInFlight_ = true;
+  clearing_ = true;
+  clearName_ = name;
+  // What the session has now goes on in the new thread: the mode -- plan
+  // only by thread/settings/update, after it opens -- the model, the effort.
+  // thread/start takes no effort, so the first turn carries it.
+  const std::string mode = mode_.current();
+  ModeSettings settings;
+  if (SettingsForMode(mode, &settings) && !settings.permissions) {
+    modeAfterOpen_ = mode;
+  }
+  if (!effort_.empty()) turnEffort_ = effort_;
+  Json params = ThreadParams(mode);
+  if (!model_.empty()) params["model"] = model_;
+  // The terminal's /clear (tui/src/app/session_lifecycle.rs): the server
+  // runs the SessionStart hook with source "clear" and is otherwise as for a
+  // new thread.  The old thread is neither unsubscribed nor interrupted.
+  params["sessionStartSource"] = "clear";
+  const long long id = nextId_++;
+  pending_[id] = Purpose::ClearThread;
+  Send({{"id", id}, {"method", "thread/start"}, {"params", std::move(params)}});
 }
 
 bool CodexBackend::Interrupt() {
@@ -868,6 +902,42 @@ void CodexBackend::OnResponse(const Json& message) {
     case Purpose::ResumeThread:
       if (!failed) OnThreadOpened(result, purpose == Purpose::ResumeThread);
       break;
+    case Purpose::ClearThread: {
+      bool more = false;
+      if (failed) {
+        // The old thread is still ours; what was typed meanwhile goes to it.
+        std::vector<std::string> queued;
+        {
+          std::lock_guard<std::mutex> lock(mutex_);
+          clearing_ = false;
+          clearName_.clear();
+          modeAfterOpen_.clear();
+          queued.swap(queued_);
+          turnInFlight_ = false;
+          for (const std::string& text : queued) PromptLocked(text);
+          more = !queued.empty();
+        }
+        if (!more) TurnOver();
+        Emit({agent::TurnEnded{agent::TurnOutcome::Failed, more}});
+        break;
+      }
+      std::string name;
+      {
+        std::lock_guard<std::mutex> lock(mutex_);
+        name.swap(clearName_);
+      }
+      more = OnThreadOpened(result, false);
+      if (!name.empty()) {
+        Request(Purpose::NameThread, "thread/name/set",
+                {{"threadId", conversationId()}, {"name", name}});
+      }
+      if (!more) TurnOver();
+      // The old thread's context size stays on the bar until the new one's
+      // first answer otherwise; zero is "not known", as after Claude's /clear.
+      Emit({agent::ContextUsed{0, 0},
+            agent::TurnEnded{agent::TurnOutcome::Completed, more}});
+      break;
+    }
     case Purpose::StartTurn: {
       if (failed) {
         // The turn never started, so nothing else will end it -- except for
@@ -991,6 +1061,8 @@ void CodexBackend::OnResponse(const Json& message) {
     }
     // Refused, the thread keeps the model it had; the status bar never
     // stopped naming it.
+    // Refused, the thread is still there, only without the name.
+    case Purpose::NameThread:
     case Purpose::SetModel:
     case Purpose::SetEffort:
     case Purpose::CancelSignIn:
@@ -1000,7 +1072,7 @@ void CodexBackend::OnResponse(const Json& message) {
   }
 }
 
-void CodexBackend::OnThreadOpened(const Json& result, bool resumed) {
+bool CodexBackend::OnThreadOpened(const Json& result, bool resumed) {
   const Json& thread = Field(result, "thread");
   const std::string model = StringField(result, "model");
   if (resumed) {
@@ -1014,6 +1086,8 @@ void CodexBackend::OnThreadOpened(const Json& result, bool resumed) {
   {
     std::lock_guard<std::mutex> lock(mutex_);
     threadId_ = StringField(thread, "id");
+    // From here a prompt goes to this thread, not to queued_.
+    clearing_ = false;
     if (!model.empty()) model_ = model;
     // What SetEffort took meanwhile is still on its way to the first turn.
     if (turnEffort_.empty()) effort_ = StringField(result, "reasoningEffort");
@@ -1036,6 +1110,11 @@ void CodexBackend::OnThreadOpened(const Json& result, bool resumed) {
     for (const std::string& text : queued) PromptLocked(text);
   }
   Emit({});
+  return !queued.empty();
+}
+
+std::vector<agent::SlashCommand> CodexBackend::commands() const {
+  return {ClearCommand()};
 }
 
 void CodexBackend::OnServerRequest(const Json& message) {

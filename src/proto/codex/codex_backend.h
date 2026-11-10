@@ -98,7 +98,9 @@ class CodexBackend : public agent::Backend {
   // is kept: ModeTracker falls back and the next press tries again.
   std::vector<std::string> refusedModes() const override { return {}; }
   agent::Account account() const override;
-  std::vector<agent::SlashCommand> commands() const override { return {}; }
+  // app-server knows no slash command; /clear is the one this adapter does
+  // itself, as the terminal does (ClearCommand).
+  std::vector<agent::SlashCommand> commands() const override;
   std::vector<agent::ModelChoice> modelCatalog() const override;
   std::string effort() const override;
   bool ready() const override;
@@ -140,6 +142,11 @@ class CodexBackend : public agent::Backend {
     // answer the mode tracker weighs.
     SetModel,
     SetEffort,
+    // thread/start for /clear: the new thread takes over from the old one,
+    // which stays loaded and is left alone, as the terminal leaves it.
+    ClearThread,
+    // thread/name/set after /clear with a name.
+    NameThread,
   };
 
   bool Request(Purpose purpose, const char* method, Json params);
@@ -164,7 +171,11 @@ class CodexBackend : public agent::Backend {
   void OnLine(std::string_view line);
   void OnResponse(const Json& message);
   void OnServerRequest(const Json& message);
-  void OnThreadOpened(const Json& result, bool resumed);
+  // True when prompts were waiting for the thread and a turn has started
+  // for them.
+  bool OnThreadOpened(const Json& result, bool resumed);
+  // /clear: a new thread in this same process.  mutex_ held.
+  void ClearLocked(const std::string& name);
   void Emit(std::vector<agent::Event> batch);
   void TurnOver();
   // `codex app-server` as the command line starts it: the program, then the
@@ -216,8 +227,13 @@ class CodexBackend : public agent::Backend {
   std::map<std::string, std::string> processes_;
   // Subagents asked to stop before their turn had an id.
   std::vector<std::string> stopWanted_;
-  // Prompts sent before the thread existed, in order.
+  // Prompts sent before the thread existed, or while /clear was opening the
+  // next one, in order.
   std::vector<std::string> queued_;
+  // From /clear until the answer to its thread/start.
+  bool clearing_ = false;
+  // The name /clear gave the new thread; empty for none.
+  std::string clearName_;
   // Prompts sent while a turn was asked for and had no id to steer by yet.
   std::vector<std::string> awaitingTurn_;
   // Steers not echoed yet, and the text of each turn/steer not answered.

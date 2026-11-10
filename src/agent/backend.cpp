@@ -1,6 +1,7 @@
 #include "agent/backend.h"
 
 #include <algorithm>
+#include <string_view>
 
 namespace agent {
 
@@ -77,6 +78,25 @@ const Mode* FindMode(const Capabilities& capabilities, const std::string& id) {
     if (mode.id == id) return &mode;
   }
   return nullptr;
+}
+
+bool ParseClearCommand(const std::string& prompt, std::string* name) {
+  constexpr std::string_view kSpace = " \t\r\n";
+  const size_t first = prompt.find_first_not_of(kSpace);
+  if (first == std::string::npos) return false;
+  const size_t last = prompt.find_last_not_of(kSpace);
+  const std::string_view text =
+      std::string_view(prompt).substr(first, last - first + 1);
+  constexpr std::string_view kClear = "/clear";
+  if (text.substr(0, kClear.size()) != kClear) return false;
+  const std::string_view rest = text.substr(kClear.size());
+  if (!rest.empty() && kSpace.find(rest.front()) == std::string_view::npos) {
+    return false;
+  }
+  const size_t start = rest.find_first_not_of(kSpace);
+  name->assign(start == std::string_view::npos ? std::string_view()
+                                               : rest.substr(start));
+  return true;
 }
 
 const ModelChoice* FindModel(const std::vector<ModelChoice>& catalog,

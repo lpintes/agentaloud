@@ -91,6 +91,12 @@ struct Capabilities {
   // The plan's limits can be asked for on demand, without a prompt:
   // RefreshRateLimits, F6.
   bool refreshLimits = false;
+  // /clear is refused while a turn or a background task runs, and the pane
+  // says so instead of sending it.  Codex: the terminal refuses it during a
+  // turn, and tasks of the old thread would go on talking about a thread
+  // the session has left (tools/probe_codex_clear.notes.md).  Claude's CLI
+  // takes /clear any time and needs no such guard.
+  bool clearOnlyWhenIdle = false;
   // Where the CLI keeps its sign-in and settings, for the sentences that say
   // why it will not answer (claude-gui-lkk.73).  Per backend, not per CLI:
   // the adapter fills it in from its Program when it is made.
@@ -109,6 +115,11 @@ std::string NextMode(const Capabilities& capabilities,
 
 // The mode's entry, or nullptr.
 const Mode* FindMode(const Capabilities& capabilities, const std::string& id);
+
+// Whether a prompt is /clear: the word alone, or followed by whitespace and
+// the rest, which goes to `name` trimmed (empty when there is none).
+// "/clearer" is not it.
+bool ParseClearCommand(const std::string& prompt, std::string* name);
 
 struct SlashCommand {
   std::string name;

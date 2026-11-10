@@ -999,7 +999,20 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
         `conversation_reset`, ale to zo záznamov po ňom; `Session` preto pri
         `conversation_reset` id zabudne a vezme ďalšie. Kontext adaptér
         vynuluje (`ContextUsed{0}` = neznámy), lebo inak ho počíta len zo
-        záznamu `assistant`. Codex `/clear` nepozná.
+        záznamu `assistant`. **Codex app-server slash príkazy nepozná
+        vôbec, `/clear` preto robí adaptér** (claude-gui-lkk.98, odmerané
+        10. 11. 2026, `tools/probe_codex_clear.notes.md`): `CodexBackend`
+        prompt `/clear` modelu nepošle, otvorí nové vlákno v tom istom
+        procese (`thread/start` so `sessionStartSource: "clear"`, ako TUI)
+        a text za príkazom je jeho meno (`thread/name/set`). Režim, model
+        a effort prenesie, kontext vynuluje, a ťah ukončí `TurnEnded`.
+        Staré vlákno sa neodhlasuje ani neprerušuje; jeho úlohy na pozadí by
+        bežali ďalej a hlásili sa s `threadId`, ktoré už nie je vlastné.
+        Preto `/clear` počas ťahu a pri bežiacich úlohách odmietne panel
+        (`Capabilities::clearOnlyWhenIdle`, `agent::ParseClearCommand`,
+        hláška `kClearNotNow`, text zostane v poli) — terminál ho počas ťahu
+        tiež nepustí. F4 pri Codexe ponúkne práve `/clear`
+        (`proto::codex::ClearCommand`).
         V zozname od CLI sú (79 položiek, z toho 43
         skillov), ale nič ich neodlišuje: položka má len `name`,
         `description`, `argumentHint` a niekedy `aliases`. Appka ich preto

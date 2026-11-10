@@ -113,6 +113,9 @@ S(kCodexModeFullAccess, L"plný prístup")
 S(kCodexModeFullAccessGloss, L"nepýta sa na nič a siaha kamkoľvek")
 S(kCodexModeCustom, L"vlastný")
 S(kCodexModeCustomGloss, L"nastavenie z konfigurácie Codexu")
+S(kCodexClearGloss,
+  L"začne nový rozhovor bez doterajšieho kontextu; text za príkazom je jeho meno")
+S(kCodexClearHint, L"[meno]")
 
 // ui/session_pane
 S(kLabelTranscript, L"Prepis:")
@@ -166,6 +169,8 @@ S(kStopTasksConfirm, L"{0}; ďalšie Esc všetko zastaví")
 S(kStoppingTasks, L"zastavujem úlohy na pozadí")
 S(kTasksStopped, L"úlohy na pozadí zastavené")
 S(kStopTasksUnsupported, L"tento agent úlohy na pozadí zastaviť nevie")
+S(kClearNotNow,
+  L"/clear teraz nejde: beží ťah alebo úlohy na pozadí. Ťah zastaví Esc, úlohy dvakrát Esc.")
 S(kRequestFailed, L"požiadavku sa nepodarilo poslať")
 S(kBackgrounding, L"presúvam do pozadia")
 S(kBackgroundMoved, L"presunuté do pozadia")

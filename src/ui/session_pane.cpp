@@ -1543,6 +1543,13 @@ void SessionPane::Send() {
     Announce(i18n::Text(Str::kPromptEmpty));
     return;
   }
+  std::string clearName;
+  if (backend_->capabilities().clearOnlyWhenIdle &&
+      (busy_ || !tasks_.empty()) &&
+      agent::ParseClearCommand(model::Utf8FromUtf16(text), &clearName)) {
+    Announce(i18n::Text(Str::kClearNotNow));
+    return;
+  }
   SendText(text);
   SetWindowTextW(prompt_, L"");
 }

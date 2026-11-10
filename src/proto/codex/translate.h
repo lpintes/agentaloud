@@ -67,6 +67,10 @@ extern const char kModeCustom[];
 
 agent::Capabilities CodexCapabilities();
 
+// /clear as F4 lists it: the one command of this adapter.  The terminal's
+// /clear, a new thread in the same process; the rest becomes its name.
+agent::SlashCommand ClearCommand();
+
 // Which preset the four settings are.  `approvalPolicy` is a string or the
 // {granular: ...} object, `sandboxPolicy` the {type: ...} object as
 // thread/settings/updated and the answer to thread/start carry them,

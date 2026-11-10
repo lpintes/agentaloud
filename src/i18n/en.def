@@ -110,6 +110,9 @@ S(kCodexModeFullAccess, L"full access")
 S(kCodexModeFullAccessGloss, L"never asks and reaches anywhere")
 S(kCodexModeCustom, L"custom")
 S(kCodexModeCustomGloss, L"settings from Codex's configuration")
+S(kCodexClearGloss,
+  L"starts a new conversation without the context so far; text after the command names it")
+S(kCodexClearHint, L"[name]")
 
 // ui/session_pane
 S(kLabelTranscript, L"Transcript:")
@@ -164,6 +167,8 @@ S(kStopTasksConfirm, L"{0}; Esc again stops all of it")
 S(kStoppingTasks, L"stopping background tasks")
 S(kTasksStopped, L"background tasks stopped")
 S(kStopTasksUnsupported, L"this agent cannot stop background tasks")
+S(kClearNotNow,
+  L"/clear cannot run now: a turn or background tasks are running. Esc stops the turn, Esc twice the tasks.")
 S(kRequestFailed, L"the request could not be sent")
 S(kBackgrounding, L"moving to the background")
 S(kBackgroundMoved, L"moved to the background")

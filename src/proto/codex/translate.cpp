@@ -348,8 +348,11 @@ agent::Capabilities CodexCapabilities() {
   };
   capabilities.questions = true;
   // app-server has no list of slash commands: they belong to the terminal
-  // client, and what they do is RPC (claude-gui-lkk.44.1).
-  capabilities.slashCommands = false;
+  // client, and what they do is RPC (claude-gui-lkk.44.1).  The list is the
+  // one this adapter runs itself, ClearCommand.
+  capabilities.slashCommands = true;
+  // The terminal refuses it during a turn too (available_during_task false).
+  capabilities.clearOnlyWhenIdle = true;
   capabilities.resume = true;
   capabilities.allowForSession = true;
   capabilities.stopTask = true;
@@ -367,6 +370,14 @@ agent::Capabilities CodexCapabilities() {
   // needs app-server running.  A name written here from memory would go
   // stale with the next release, silently.
   return capabilities;
+}
+
+agent::SlashCommand ClearCommand() {
+  agent::SlashCommand command;
+  command.name = "clear";
+  command.description = i18n::Utf8(i18n::Str::kCodexClearGloss);
+  command.argumentHint = i18n::Utf8(i18n::Str::kCodexClearHint);
+  return command;
 }
 
 std::string ModeFromSettings(const Json& approvalPolicy,
