@@ -123,7 +123,7 @@ std::wstring KeysText(const agent::Capabilities& capabilities) {
   text += i18n::Text(capabilities.signIn ? Str::kKeysSignIn
                                          : Str::kKeysNoSignIn);
   text += i18n::Text(Str::kKeysSave);
-  text += i18n::Text(Str::kKeysCopyId);
+  text += i18n::Text(Str::kKeysCopyCode);
   text += i18n::Text(Str::kKeysSessions);
   return text;
 }

@@ -4,7 +4,13 @@
 
 namespace win {
 
-bool SetClipboardText(HWND owner, const std::wstring& text) {
+bool SetClipboardText(HWND owner, const std::wstring& lines) {
+  std::wstring text;
+  text.reserve(lines.size());
+  for (wchar_t c : lines) {
+    if (c == L'\n') text += L'\r';
+    text += c;
+  }
   const std::size_t bytes = (text.size() + 1) * sizeof(wchar_t);
   HGLOBAL block = GlobalAlloc(GMEM_MOVEABLE, bytes);
   if (!block) return false;

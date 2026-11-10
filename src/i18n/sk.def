@@ -191,8 +191,11 @@ S(kModeNotKnownYet, L"režim zatiaľ nie je známy, CLI ešte štartuje")
 S(kModeFixed, L"režim sa za behu prepnúť nedá")
 S(kModeSwitchFailed, L"režim sa nepodarilo prepnúť")
 S(kSessionIdUnknown, L"id session zatiaľ nie je známe, pošlite najprv prompt")
-S(kClipboardFailed, L"schránku sa nepodarilo otvoriť, id skopírované nebolo")
+S(kClipboardFailed, L"schránku sa nepodarilo otvoriť, nič sa neskopírovalo")
 S(kIdCopied, L"id skopírované")
+S(kNoCode, L"v prepise nie je žiadny kód")
+S(kCodeCopied, L"skopírované: {0}")
+S(kCodeBlockCopied, L"skopírovaný blok, {0}: {1}")
 S(kSaveTranscriptTitle, L"Uložiť prepis ako")
 S(kFilterTextFiles, L"Textové súbory (*.txt)")
 S(kFilterAllFiles, L"Všetky súbory (*.*)")
@@ -290,7 +293,11 @@ S(kKeysNoSignIn,
 S(kKeysSave,
   L"Ctrl+S — uloží celý prepis do textového súboru, aj obsah zbalených "
   L"blokov. Meno súboru zadáte zakaždým.\n")
-S(kKeysCopyId, L"Ctrl+Shift+C — skopíruje id session do schránky.")
+S(kKeysCopyCode,
+  L"Ctrl+Shift+C — skopíruje do schránky kód z prepisu, na ktorom stojí kurzor, "
+  L"inak prvý za ním (ak za ním už žiadny nie je, posledný pred ním): "
+  L"text medzi spätnými apostrofmi alebo celý blok medzi ```. "
+  L"Id session skopírujete v dialógu F2.")
 S(kKeysSessions,
   L"\n\n"
   L"Viac sessions:\n"

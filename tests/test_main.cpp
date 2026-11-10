@@ -46,6 +46,7 @@
 #include "model/bookmarks.h"
 #include "model/history.h"
 #include "model/links.h"
+#include "model/code.h"
 #include "model/transcript.h"
 #include "model/utf.h"
 #include "proto/claude/ask.h"
@@ -1018,6 +1019,92 @@ void TestLinksInText() {
   CHECK(titled[2].title.empty());
   CHECK(titled[3].title.empty());
   CHECK(model::FindLinks(L"https://a.org")[0].title.empty());
+}
+
+void TestCodeInText() {
+  TEST("code: inline a ohradene bloky v markdowne (lkk.100)");
+  auto codes = [](const std::wstring& text) {
+    std::vector<std::wstring> found;
+    for (const model::CodeSpan& span : model::FindCode(text)) {
+      found.push_back(span.code);
+    }
+    return found;
+  };
+  using Codes = std::vector<std::wstring>;
+  CHECK(codes(L"spusti `make check` a potom `ls`") ==
+        (Codes{L"make check", L"ls"}));
+  // Dlhsi beh backtickov zatvori len rovnako dlhy; medzera po stranach odide.
+  CHECK(codes(L"``a ` b`` a `` `x` ``") == (Codes{L"a ` b", L"`x`"}));
+  // Osamely backtick je pismeno a inline kod neprejde cez zlom riadku.
+  CHECK(codes(L"it`s\nzle `ok`") == (Codes{L"ok"}));
+  CHECK(codes(L"prazdne `` a ` `").empty());
+
+  const std::wstring text =
+      L"Uloz toto:\n  ```bash\n  echo `a`\n    odsadene\n  ```\nkoniec `x`";
+  const std::vector<model::CodeSpan> spans = model::FindCode(text);
+  CHECK_EQ(spans.size(), size_t{2});
+  CHECK(spans[0].fenced);
+  // Odsadenie plotu ide dole, hlbsie odsadenie zostane; backtick vnutri nie
+  // je inline kod.
+  CHECK(spans[0].code == L"echo `a`\n  odsadene");
+  CHECK_EQ(spans[0].start, size_t{11});
+  CHECK(text.substr(spans[0].start, spans[0].length) ==
+        L"  ```bash\n  echo `a`\n    odsadene\n  ```");
+  CHECK(!spans[1].fenced);
+  CHECK(spans[1].code == L"x");
+
+  // ```bash blok nezatvori, ~~~ aj dlhsi plot ano; neuzavrety plot nie je
+  // kod a jeho riadok sa cita ako proza.
+  CHECK(codes(L"```\na\n```bash\nb\n````") == (Codes{L"a\n```bash\nb"}));
+  CHECK(codes(L"~~~\nc\n~~~") == (Codes{L"c"}));
+  CHECK(codes(L"```py\nnedopisane `y`") == (Codes{L"y"}));
+  CHECK(codes(L"```x``` a") == (Codes{L"x"}));
+  CHECK(codes(L"```\n\n```").empty());
+
+  // Kurzor na kode alebo tesne za nim, inak prvy za kurzorom, inak posledny.
+  const std::wstring prose = L"a `b`\nspusti `c` alebo `d`\n\nkoniec";
+  const std::vector<model::CodeSpan> all = model::FindCode(prose);
+  auto at = [&](size_t offset) {
+    const auto span = model::CodeAtOrAfter(all, offset);
+    return span ? span->code : std::wstring(L"<nic>");
+  };
+  CHECK(at(0) == L"b");
+  CHECK(at(2) == L"b");
+  CHECK(at(5) == L"b");
+  // Zaciatok riadku: `b` na konci predosleho je blizsie, ale ide sa dopredu.
+  CHECK(at(6) == L"c");
+  CHECK(at(16) == L"c");
+  // Za `c`, blizsie k nemu nez k `d` -- a predsa `d`.
+  CHECK(at(17) == L"d");
+  CHECK(at(26) == L"d");
+  // Za poslednym kodom uz nic nie je: posledny.
+  CHECK(at(28) == L"d");
+  CHECK(at(prose.size()) == L"d");
+  CHECK(!model::CodeAtOrAfter({}, 3).has_value());
+}
+
+void TestCodeInTranscript() {
+  TEST("code: offsety v prepise, meno hovoriaceho a zbalene bloky");
+  model::Transcript transcript;
+  transcript.SetAgentName(L"Claude");
+  transcript.AppendUserPrompt(L"ako?");
+  transcript.Append(proto::TranslateRecord(proto::Json::parse(R"({
+    "type": "assistant",
+    "message": {"content": [
+      {"type": "text", "text": "```\nmake\n```\nalebo `ls`"},
+      {"type": "tool_use", "id": "toolu_1", "name": "Bash",
+       "input": {"command": "echo `x`"}}
+    ]}
+  })")));
+  const std::vector<model::CodeSpan> spans = model::FindCode(transcript);
+  // Plot stoji za menom hovoriaceho, a predsa je to plot.  Zbalene volanie
+  // nastroja neponuka nic.
+  CHECK_EQ(spans.size(), size_t{2});
+  CHECK(spans[0].fenced);
+  CHECK(spans[0].code == L"make");
+  CHECK(transcript.Text().substr(spans[0].start, spans[0].length) ==
+        L"```\nmake\n```");
+  CHECK(transcript.Text().substr(spans[1].start, spans[1].length) == L"`ls`");
 }
 
 void TestRateLimitParsing() {
@@ -6668,6 +6755,8 @@ int main(int argc, char** argv) {
   TestBookmarkIntoCollapsedBlock();
   TestFindSearchesCollapsedBlocks();
   TestLinksInText();
+  TestCodeInText();
+  TestCodeInTranscript();
   TestRateLimitParsing();
   TestUsageResponseParsing();
   TestResetToSayPicksShortestUnlessExhausted();

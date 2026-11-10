@@ -192,11 +192,16 @@ class SessionPane {
   // without the dialog, and open it when nothing has been searched for yet.
   void ShowFind();
   void FindNext(bool backwards);
-  // Ctrl+Shift+C: the session id onto the clipboard, so that `claude -r <id>`
-  // in a terminal reaches the same conversation.  Its own key and not just a
-  // button in the dialog, because it is the one thing in there that is never
-  // read -- it is pasted.
+  // The session id onto the clipboard, so that `claude -r <id>` in a terminal
+  // reaches the same conversation.  A button in the F2 dialog: it had
+  // Ctrl+Shift+C until claude-gui-lkk.100, and was pasted far less often than
+  // the commands an answer tells the reader to run.
   void CopySessionId();
+  // Ctrl+Shift+C, from either box (claude-gui-lkk.100): the code nearest the
+  // transcript's caret onto the clipboard -- see model/code.h for which one.
+  // From the prompt, untouched since the turn, the caret stands just before
+  // the last answer (see Following), so it is that answer's first code.
+  void CopyCode();
   // Ctrl+L and the menu: signs the agent in to its account, in a dialog that
   // shows where to go and says how it ended (ui/sign_in_dialog.h).  The key
   // is the frame's, like F1, so that the menu item and the key are one.

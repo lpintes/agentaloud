@@ -18,6 +18,10 @@ namespace win {
 // it -- or when the memory for the copy could not be had.  The caller has to
 // say so: a copy that silently did not happen is found out at paste time, in
 // another program, with the wrong text.
+//
+// `text` breaks lines with '\n' alone; they go onto the clipboard as "\r\n",
+// which is what CF_UNICODETEXT means and what Notepad's older siblings and
+// many an edit box paste as a line break rather than as nothing.
 bool SetClipboardText(HWND owner, const std::wstring& text);
 
 }  // namespace win

@@ -189,8 +189,11 @@ S(kModeNotKnownYet, L"the mode is not known yet, the CLI is still starting")
 S(kModeFixed, L"the mode cannot be switched while running")
 S(kModeSwitchFailed, L"the mode could not be switched")
 S(kSessionIdUnknown, L"the session id is not known yet, send a prompt first")
-S(kClipboardFailed, L"the clipboard could not be opened, the id was not copied")
+S(kClipboardFailed, L"the clipboard could not be opened, nothing was copied")
 S(kIdCopied, L"id copied")
+S(kNoCode, L"there is no code in the transcript")
+S(kCodeCopied, L"copied: {0}")
+S(kCodeBlockCopied, L"copied a block, {0}: {1}")
 S(kSaveTranscriptTitle, L"Save transcript as")
 S(kFilterTextFiles, L"Text files (*.txt)")
 S(kFilterAllFiles, L"All files (*.*)")
@@ -289,7 +292,11 @@ S(kKeysNoSignIn,
 S(kKeysSave,
   L"Ctrl+S — saves the whole transcript to a text file, the contents of "
   L"collapsed blocks included. You name the file every time.\n")
-S(kKeysCopyId, L"Ctrl+Shift+C — copies the session id to the clipboard.")
+S(kKeysCopyCode,
+  L"Ctrl+Shift+C — copies the code the caret is on in the transcript, else the "
+  L"first after it (with none left after it, the last before it), to the "
+  L"clipboard: text between backticks, or a whole block between ```. "
+  L"The session id is copied in the F2 dialog.")
 S(kKeysSessions,
   L"\n\n"
   L"More sessions:\n"

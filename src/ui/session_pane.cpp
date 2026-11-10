@@ -10,6 +10,7 @@
 #include "app_name.h"
 #include "i18n/i18n.h"
 #include "model/background.h"
+#include "model/code.h"
 #include "model/history.h"
 #include "model/links.h"
 #include "model/utf.h"
@@ -194,7 +195,7 @@ bool IsJumpChord(WPARAM key) {
 // Ctrl down there is no character left in WM_CHAR to switch on.  Not plain
 // Ctrl+C -- in the transcript that is RichEdit's own "copy the selection", and
 // taking it would be taking away the obvious way to quote what is on screen.
-bool IsCopyIdChord(WPARAM key) {
+bool IsCopyCodeChord(WPARAM key) {
   if (GetKeyState(VK_CONTROL) >= 0 || GetKeyState(VK_SHIFT) >= 0) return false;
   return key == 'C';
 }
@@ -1828,6 +1829,32 @@ void SessionPane::CopySessionId() {
   Announce(i18n::Text(Str::kIdCopied));
 }
 
+void SessionPane::CopyCode() {
+  const std::optional<model::CodeSpan> span =
+      model::CodeAtOrAfter(model::FindCode(model_), CaretOffset(transcript_));
+  if (!span.has_value()) {
+    Announce(i18n::Text(Str::kNoCode));
+    return;
+  }
+  if (!win::SetClipboardText(host_, span->code)) {
+    Announce(i18n::Text(Str::kClipboardFailed));
+    return;
+  }
+  // What was taken, because "nearest" is a guess and the caret does not move
+  // to show which.  Inline code is short and said whole; a block by its size
+  // and first line, which is enough to tell it from the one next to it.
+  if (!span->fenced) {
+    Announce(i18n::Format(Str::kCodeCopied, {span->code}));
+    return;
+  }
+  const size_t lines =
+      std::count(span->code.begin(), span->code.end(), L'\n') + 1;
+  Announce(i18n::Format(
+      Str::kCodeBlockCopied,
+      {i18n::Count(i18n::Plural::kLines, static_cast<long long>(lines)),
+       span->code.substr(0, span->code.find(L'\n'))}));
+}
+
 void SessionPane::SaveTranscript() {
   // Said here because the focus has not moved yet; a file with nothing in it
   // would be a dialog for nothing.
@@ -2152,8 +2179,8 @@ LRESULT CALLBACK SessionPane::PromptProc(HWND window, UINT message,
       pane->FindNext(GetKeyState(VK_SHIFT) < 0);
       return 0;
     }
-    if (IsCopyIdChord(wParam)) {
-      pane->CopySessionId();
+    if (IsCopyCodeChord(wParam)) {
+      pane->CopyCode();
       return 0;
     }
     const size_t slot = BookmarkSlot(wParam);
@@ -2180,6 +2207,12 @@ LRESULT CALLBACK SessionPane::PromptProc(HWND window, UINT message,
   }
   // Ctrl+Space types a space, like any chord its character.
   if (message == WM_CHAR && wParam == L' ' && GetKeyState(VK_CONTROL) < 0) {
+    return 0;
+  }
+  // Ctrl+Shift+C's 0x03 is the EDIT box's own Ctrl+C: with text selected in
+  // the prompt it would copy that over the code just put on the clipboard.
+  // Plain Ctrl+C keeps it.
+  if (message == WM_CHAR && wParam == 0x03 && GetKeyState(VK_SHIFT) < 0) {
     return 0;
   }
   // Neither of these may reach the box as a character.  TranslateMessage runs
@@ -2262,8 +2295,8 @@ LRESULT CALLBACK SessionPane::TranscriptProc(HWND window, UINT message,
     pane->RefreshLimit();
     return 0;
   }
-  if (message == WM_KEYDOWN && IsCopyIdChord(wParam)) {
-    pane->CopySessionId();
+  if (message == WM_KEYDOWN && IsCopyCodeChord(wParam)) {
+    pane->CopyCode();
     return 0;
   }
   if (message == WM_KEYDOWN && IsFindChord(wParam)) {
