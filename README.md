@@ -62,8 +62,13 @@ differently:
   npm only puts script shims on the PATH, and those cannot be started
   directly. A portable `codex-x86_64-pc-windows-msvc.exe` works too, through
   `codex.executable`.
-- **NVDA** (optional) for speech. Without NVDA running, the application works
-  silently; without `nvdaControllerClient.dll` beside the EXE it says so at
+- **A screen reader** (optional) for speech. NVDA is spoken to directly;
+  JAWS, Narrator, ZDSR and the other readers [prism](https://github.com/ethindp/prism)
+  supports are reached through `prism.dll` when NVDA is not running. Only
+  NVDA tells the application when it has finished a sentence, so with the
+  others the end-of-turn tone can come while "done" is still being said.
+  Without a reader the application works silently and never uses a voice of
+  its own; without `nvdaControllerClient.dll` beside the EXE it says so at
   start-up.
 
 ## Installing
@@ -152,7 +157,7 @@ pacman -S mingw-w64-ucrt-x86_64-gcc make git
 
 `./build.sh` compiles on all cores; `-j1` gives a readable error output.
 The result is `bin/agentaloud.exe`, a single statically linked EXE, with
-`nvdaControllerClient.dll` copied beside it. The version comes from
+`nvdaControllerClient.dll` and `prism.dll` copied beside it. The version comes from
 `git describe`, not from any file.
 
 `CLAUDE.md` is the project's design notes and rules, with the full wording
@@ -163,4 +168,7 @@ They are in Slovak.
 
 MIT — see `LICENSE.txt`. `nvdaControllerClient.dll` is part of NVDA and is
 distributed under the GNU LGPL 2.1 (`vendor/nvda/LICENSE.txt`); it is loaded
-at run time and not linked in.
+at run time and not linked in. `prism.dll` is prism 0.18.3, unmodified,
+under the Mozilla Public License 2.0, with the licences of the libraries
+built into it (`prism-NOTICE.txt` and `prism-LICENSES` in the package,
+`vendor/prism/` in the source); it is loaded the same way.

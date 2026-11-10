@@ -425,6 +425,13 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
     prerušenie ťahu nezastaví subagentov ani príkazy, ani príkaz
     prerušeného subagenta — `StopTask` subagenta = `turn/interrupt` +
     `backgroundTerminals/clean` na jeho vlákno.
+27. **Iné čítače než NVDA idú cez prism, len keď NVDA nebeží, a len čítače**
+    (`ui::Speech`, `kReaders` — nikdy SAPI ani OneCore, nikdy prism pre
+    NVDA). Kontext prismu jeden na proces. **Narrator nenastavuje
+    `SPI_GETSCREENREADER`**, podľa ktorého ho prism hľadá — rozhoduje aj
+    proces `Narrator.exe`. UIA sa inicializuje až pri prvej vete (chce
+    viditeľné okno). `SayThen` cez prism: tón hneď. `WarnIfMute` len o DLL
+    od NVDA.
 
 **NESÚLAD MAPY ROZSAHOV** v titulku session znamená, že dĺžka modelu
 nesedí s `EM_GETTEXTLENGTHEX` — neladí invariant 3, 4 alebo 8. Hľadaj znak,

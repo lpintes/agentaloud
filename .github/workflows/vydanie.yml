@@ -99,7 +99,9 @@ jobs:
 
       # Vyslovny zoznam suborov, nie "zabal bin\": tam lezia aj testy a spike.
       # Licencia DLL ide pod vlastnym menom -- vedla LICENSE.txt projektu by
-      # mali dve rovnake mena.  README ide ako .txt: .md nema na Windows istu
+      # mali dve rovnake mena.  Prism ma licencii viac (MPL-2.0 a kniznice,
+      # ktore su v jeho DLL), preto cely jeho priecinok LICENSES a NOTICE,
+      # ako ich da jeho vlastne vydanie.  README ide ako .txt: .md nema na Windows istu
       # asociaciu, takze dvojklik by sa pytal, cim ho otvorit, kym .txt otvori
       # Notepad.  Markdown je citatelny aj tak.
       - name: Balík
@@ -108,8 +110,10 @@ jobs:
           $name = "AgentAloud-$($env:ZNACKA.Substring(1))"
           $stage = "balik\$name"
           New-Item -ItemType Directory -Force $stage | Out-Null
-          Copy-Item vydanie\agentaloud.exe, vydanie\nvdaControllerClient.dll, LICENSE.txt $stage
+          Copy-Item vydanie\agentaloud.exe, vydanie\nvdaControllerClient.dll, vydanie\prism.dll, LICENSE.txt $stage
           Copy-Item vendor\nvda\LICENSE.txt "$stage\nvdaControllerClient-LICENSE.txt"
+          Copy-Item vendor\prism\NOTICE "$stage\prism-NOTICE.txt"
+          Copy-Item vendor\prism\LICENSES "$stage\prism-LICENSES" -Recurse
           Copy-Item README.md "$stage\README.txt"
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           [IO.Compression.ZipFile]::CreateFromDirectory((Resolve-Path balik).Path,
@@ -119,7 +123,7 @@ jobs:
           # kazde vydanie malo inu adresu a rozposlany odkaz by zastaral.
           Copy-Item "vydanie\$name.zip" vydanie\AgentAloud.zip
           # Holy exe a DLL vedla ZIP-u nejdu: von ide len balik.
-          Remove-Item vydanie\agentaloud.exe, vydanie\nvdaControllerClient.dll
+          Remove-Item vydanie\agentaloud.exe, vydanie\nvdaControllerClient.dll, vydanie\prism.dll
 
       - name: Kontrolné súčty
         shell: pwsh

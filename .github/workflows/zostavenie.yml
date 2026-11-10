@@ -99,7 +99,8 @@ jobs:
       - name: Testy
         run: ./build.sh check
 
-      # Exe a DLL vedla neho: bez nej nema appka hlas (invariant 6).
+      # Exe a DLL vedla neho: bez nich nema appka hlas (invariant 6) --
+      # nvdaControllerClient pre NVDA, prism pre ostatne citacky.
       # v6 a nie v4/v5: tie bezia na Node 20, ktory GitHub vyraduje.
       - name: Uloženie artefaktu
         uses: actions/upload-artifact@v6
@@ -108,5 +109,6 @@ jobs:
           path: |
             bin/agentaloud.exe
             bin/nvdaControllerClient.dll
+            bin/prism.dll
           if-no-files-found: error
           retention-days: 30

@@ -14,7 +14,16 @@
 // nvdaControllerClient.dll is LGPL while this is MIT -- loading it dynamically
 // and shipping it unmodified beside its licence keeps those apart.
 //
-// When NVDA is not running every call here does nothing.  That is deliberate:
+// When NVDA is not running, the same calls go to whichever other screen reader
+// is running -- JAWS, Narrator, ZDSR and the rest -- through prism.dll
+// (claude-gui-lkk.54), loaded the same way and for the same reasons (MPL-2.0).
+// NVDA keeps its own path because prism cannot do two things this code relies
+// on: SSML with a report of when speech ended (SayThen), and noticing that
+// NVDA was restarted.  Only screen readers, never a speech engine: a voice of
+// our own talking over a reader that is not one prism knows would be worse
+// than silence, and a machine with no reader at all wants no voice.
+//
+// When no reader is running every call here does nothing.  That is deliberate:
 // a caller should never have to ask first.
 
 #define WIN32_LEAN_AND_MEAN
@@ -26,14 +35,16 @@ namespace ui {
 
 class Speech {
  public:
-  // Safe to call more than once.  Returns false when NVDA is not there, which
+  // Safe to call more than once.  Returns false when no reader is there, which
   // is a fact about the machine and not an error.
   bool Open();
-  bool available() const { return speak_ != nullptr && Running(); }
-  // Whether the client library was found at all.  Not the same question as
+  bool available() const;
+  // Whether NVDA's client library was found at all.  Not the same question as
   // available(): NVDA not running is a fact about the moment and nothing is
   // wrong, but a missing DLL is a broken installation that will never speak,
-  // and one the application cannot report in its own voice.
+  // and one the application cannot report in its own voice.  prism.dll is not
+  // asked about: without it only the other readers go quiet, and those users
+  // hear the dialog this is for no better than its absence.
   bool loaded() const { return library_ != nullptr; }
 
   // interrupt: stop what is being said first.  Use it for something the
@@ -54,10 +65,12 @@ class Speech {
   // and with it everything queued before it -- or the reader cut it short.
   // For a tone that has to come after the speech and not in the middle of it
   // (claude-gui-lkk.75).  `then` runs on a thread of its own.  Without the
-  // SSML half of the API (NVDA before 2024.1) it runs at once.
+  // SSML half of the API (NVDA before 2024.1), and with any reader other than
+  // NVDA, it runs at once.
   void SayThen(const std::wstring& text, void (*then)());
 
  private:
+  // NVDA itself, not any reader.
   bool Running() const;
 
   using SpeakText = long(__stdcall*)(const wchar_t*);

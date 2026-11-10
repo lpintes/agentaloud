@@ -58,8 +58,10 @@ GUI_SUBSYSTEM := -mwindows
 # neposielaju.
 STRIPFLAG ?= -s
 
-# -I$(BUILD) kvoli vygenerovanej hlavicke s verziou, nizsie.
-CXXFLAGS := -std=c++20 -O2 $(WARN) -I. -Isrc -I$(BUILD) \
+# -I$(BUILD) kvoli vygenerovanej hlavicke s verziou, nizsie.  -isystem pre
+# prism: jeho hlavicka si prism_version.h taha v <>, a varovania z nej nie su
+# nase.
+CXXFLAGS := -std=c++20 -O2 $(WARN) -I. -Isrc -I$(BUILD) -isystem vendor/prism \
             -DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00 -DUNICODE -D_UNICODE
 # winmm je kvoli PlaySound: zvuk pre cakajuci modal sa neda dat cez
 # MessageBeep, oba jeho pouzitelne zvuky uz maju iny vyznam (invariant 11).
@@ -160,10 +162,14 @@ TEST_OBJS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(TEST_SRCS)) \
 all: app spike test
 # Aplikacia potrebuje DLL vedla seba, nie na PATH: LoadLibrary ho hlada najprv
 # v adresari .exe.  Kopiruje sa, nelinkuje -- je pod LGPL, kym AgentAloud je
-# pod MIT, a nacitanie za behu tie dve licencie drzi oddelene.
-app: $(BIN)/agentaloud.exe $(BIN)/nvdaControllerClient.dll
+# pod MIT, a nacitanie za behu tie dve licencie drzi oddelene.  To iste plati
+# pre prism.dll (MPL-2.0, hotove MSVC zostavenie z vydania prism, len C API).
+app: $(BIN)/agentaloud.exe $(BIN)/nvdaControllerClient.dll $(BIN)/prism.dll
 
 $(BIN)/nvdaControllerClient.dll: vendor/nvda/nvdaControllerClient.dll | $(BIN)
+	@echo "  COPY   $@"
+	$(Q)cp $< $@
+$(BIN)/prism.dll: vendor/prism/prism.dll | $(BIN)
 	@echo "  COPY   $@"
 	$(Q)cp $< $@
 spike: $(BIN)/spike_console.exe

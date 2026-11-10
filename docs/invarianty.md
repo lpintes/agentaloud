@@ -1663,6 +1663,41 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     `ShutDown()`. Veta „zastavené: …" z Ctrl+T sa hovorí aj vtedy, keď je
     v popredí dialóg úloh, nie rám — `InForeground()` na ňu povie nie.
 
+27. **Iné čítače než NVDA idú cez prism, ale len keď NVDA nebeží, a len
+    čítače** (claude-gui-lkk.54). `ui::Speech` sa najprv pýta NVDA vlastnou
+    cestou; až keď NVDA nebeží, ide veta cez `prism.dll` (0.18.3, hotové MSVC
+    zostavenie, len C API cez `GetProcAddress`). Vlastná cesta k NVDA zostáva,
+    lebo prism nevie dve veci, na ktorých appka stojí: SSML s ohlásením konca
+    reči (`SayThen`, tón až po „hotovo") a znovupripojenie po reštarte NVDA.
+    S iným čítačom príde tón hneď za vetou.
+
+    Backend sa vyberá zo zoznamu `kReaders` v `speech.cpp` (JAWS, UIA
+    = Narrator, ZDSR, ZoomText a ďalšie), nie príznakom prismu
+    `IS_SCREEN_READER` — ten pribudol až po 0.18.3. NVDA tam nie je zámerne,
+    SAPI ani OneCore nikdy: vlastný hlas cez čítač, ktorý prism nepozná, by bol
+    horší než ticho. `prism_registry_acquire_best` sa nepoužíva, lebo
+    `IS_SUPPORTED_AT_RUNTIME` nekontroluje — UIA sa inicializuje aj bez
+    Narratora. Kontext prismu je jeden na proces (`OtherReaders()`), nie na
+    `Speech`: každý panel má vlastný `Speech` a UIA drží skryté okno a vlákno
+    na inštanciu. Volá sa len z vlákna okna.
+
+    **Narrator nenastavuje `SPI_GETSCREENREADER`**, a práve podľa neho UIA
+    backend prismu hlási, že beží. Odmerané 10. 11. 2026 na Windows 11:
+    príznak bol 0 celý čas, čo Narrator hovoril, prism UIA nikdy neponúkol
+    a každé `Announce` pípalo. Preto pri UIA rozhoduje aj proces
+    `Narrator.exe` (`NarratorRunning`, snímka procesov, odpoveď platí 1 s);
+    `speak` ani `initialize` prismu príznak nekontrolujú. UIA sa inicializuje
+    až pri prvej vete, nie v `Open` — potrebuje viditeľné okno appky
+    v popredí, pri štarte vráti `PRISM_ERROR_INVALID_PARAM`. Hľadanie čítača
+    beží najviac raz za 2 s (na stroji bez čítača by inak každý kláves prešiel
+    všetky backendy); čítač, ktorý reč odmietne, sa zabudne.
+
+    Overiť sa to dá aj s bežiacou NVDA: tá `SPI_GETSCREENREADER` nastavuje
+    a je klientom UIA, takže UIA backend ju berie ako bežiaci čítač a NVDA
+    notifikáciu UIA z okna v popredí prečíta. Stačí dočasne obísť cestu cez
+    NVDA v `Speech::Running` a odchytiť reč cez MCP screenreader.
+    `loaded()` a `WarnIfMute` sa týkajú len DLL od NVDA.
+
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa
 rozídu, titulok tej session sa zmení na **„<cesta> — NESÚLAD MAPY ROZSAHOV"**
