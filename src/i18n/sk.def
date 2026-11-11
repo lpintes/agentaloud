@@ -28,6 +28,7 @@ S(kCreated, L"vytvorené")
 S(kOutput, L"výstup")
 S(kError, L"chyba")
 S(kBlock, L"blok")
+S(kLink, L"odkaz")
 S(kOutputEmpty, L"výstup (prázdny)")
 S(kErrorEmpty, L"chyba (prázdna)")
 S(kExpanded, L"{0}, rozbalené")
@@ -250,7 +251,8 @@ S(kKeysMoving,
   L"K — ďalšie premýšľanie, Shift+K — predchádzajúce.\n"
   L"E — ďalšia chyba alebo zamietnuté volanie, Shift+E — predchádzajúce.\n"
   L"B — ďalší blok akéhokoľvek druhu, Shift+B — predchádzajúci.\n"
-  L"Shift znamená dozadu. Týchto sedem písmen platí len v prepise.\n"
+  L"L — ďalší odkaz, Shift+L — predchádzajúci. To, čo zbalený blok skrýva, preskočí.\n"
+  L"Shift znamená dozadu. Týchto osem písmen platí len v prepise.\n"
   L"Ctrl+Shift+T, R, P, A, K, E, B — to isté dopredu, aj z poľa Prompt.\n"
   L"Enter — zbalí alebo rozbalí blok pod kurzorom. Len v prepise.\n"
   L"Alt+Enter — otvorí v prehliadači odkaz pod kurzorom, inak ponúkne zoznam odkazov v bloku. Len v prepise.\n"

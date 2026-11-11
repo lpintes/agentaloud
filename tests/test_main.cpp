@@ -957,6 +957,54 @@ void TestFindSearchesCollapsedBlocks() {
   CHECK(!transcript.Find(L"", 0, false, fold).has_value());
 }
 
+void TestNextLinkSkipsFoldedText() {
+  TEST("links: L ide len po viditelnych odkazoch, nepretoci sa (lkk.101)");
+  model::Transcript transcript;
+  transcript.AppendUserPrompt(L"prompt https://p.org");
+  proto::Json assistant = proto::Json::parse(R"({
+    "type": "assistant",
+    "message": {"content": [
+      {"type": "thinking", "thinking": "uvaha\npozri https://k.org/a"},
+      {"type": "text", "text": "prva https://a.org a\ndruha https://b.org."}
+    ]}
+  })");
+  transcript.Append(proto::TranslateRecord(assistant));
+  CHECK_EQ(transcript.blocks().size(), size_t{3});
+  CHECK(transcript.blocks()[1].collapsed);
+  const std::wstring& text = transcript.Text();
+  auto url = [](const std::optional<model::Link>& link) {
+    return link ? link->url : std::wstring(L"<ziadny>");
+  };
+
+  // Odkaz v zbalenom premyslani sa preskoci: prompt, potom rovno odpoved.
+  const std::optional<model::Link> prompt = model::NextLink(text, 0);
+  CHECK(url(prompt) == L"https://p.org");
+  const std::optional<model::Link> first =
+      model::NextLink(text, prompt->start);
+  CHECK(url(first) == L"https://a.org");
+  CHECK(transcript.blocks()[1].collapsed);
+  // Bodka na konci vety nie je sucast; za poslednym nic, ziadne pretocenie.
+  const std::optional<model::Link> second =
+      model::NextLink(text, first->start);
+  CHECK(url(second) == L"https://b.org");
+  CHECK(!model::NextLink(text, second->start).has_value());
+
+  // Dozadu: z prostriedku adresy na jej zaciatok, potom predosla, mimo
+  // zbaleneho bloku; pred prvou nic.
+  CHECK_EQ(model::PreviousLink(text, second->start + 5)->start,
+           second->start);
+  CHECK(url(model::PreviousLink(text, first->start)) == L"https://p.org");
+  CHECK(!model::PreviousLink(text, prompt->start).has_value());
+
+  // Rozbaleny blok uz svoj odkaz ponukne.
+  CHECK(!transcript.SetCollapsed(1, false).empty());
+  CHECK(url(model::NextLink(transcript.Text(), prompt->start)) ==
+        L"https://k.org/a");
+
+  CHECK(!model::NextLink(L"", 0).has_value());
+  CHECK(!model::PreviousLink(L"", 0).has_value());
+}
+
 void TestLinksInText() {
   TEST("links: hranice adresy v texte (lkk.74)");
   auto only = [](const std::wstring& text) {
@@ -6754,6 +6802,7 @@ int main(int argc, char** argv) {
   TestBookmarksSurviveCollapsing();
   TestBookmarkIntoCollapsedBlock();
   TestFindSearchesCollapsedBlocks();
+  TestNextLinkSkipsFoldedText();
   TestLinksInText();
   TestCodeInText();
   TestCodeInTranscript();

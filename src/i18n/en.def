@@ -27,6 +27,7 @@ S(kCreated, L"created")
 S(kOutput, L"output")
 S(kError, L"error")
 S(kBlock, L"block")
+S(kLink, L"link")
 S(kOutputEmpty, L"output (empty)")
 S(kErrorEmpty, L"error (empty)")
 S(kExpanded, L"{0}, expanded")
@@ -249,7 +250,8 @@ S(kKeysMoving,
   L"K — next thinking, Shift+K — previous.\n"
   L"E — next error or denied call, Shift+E — previous.\n"
   L"B — next block of any kind, Shift+B — previous.\n"
-  L"Shift means backwards. These seven letters work only in the transcript.\n"
+  L"L — next link, Shift+L — previous. What a collapsed block hides is skipped.\n"
+  L"Shift means backwards. These eight letters work only in the transcript.\n"
   L"Ctrl+Shift+T, R, P, A, K, E, B — the same forwards, from the Prompt field too.\n"
   L"Enter — collapses or expands the block under the cursor. Only in the transcript.\n"
   L"Alt+Enter — opens the link under the cursor in the browser, otherwise offers the links in the block. Only in the transcript.\n"

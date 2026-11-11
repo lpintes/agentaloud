@@ -39,6 +39,16 @@ std::vector<Link> FindLinks(const std::wstring& text);
 // whatever follows.
 std::optional<Link> LinkAt(const std::wstring& text, size_t offset);
 
+// L and Shift+L (claude-gui-lkk.101): the first address starting after
+// `offset`, or the last one starting before it.  Searched in the text as it
+// is on screen, never in what a collapsed block hides: the caret lands on the
+// address for Alt+Enter, and a jump that unfolded a block to get there would
+// put the reader on a page they never read, one key away from opening it.
+// The reader who wants a block's links expands it, or asks Alt+Enter for its
+// list.  Does not wrap, as no letter key does.
+std::optional<Link> NextLink(const std::wstring& text, size_t offset);
+std::optional<Link> PreviousLink(const std::wstring& text, size_t offset);
+
 // The links of FindLinks, each address once, in the order they first appear.
 // A list that offers the same page twice makes the reader compare them.  The
 // title is the first one the address was given, if any was.

@@ -185,6 +185,10 @@ bool IsBlank(const std::wstring& text) {
 // in WM_CHAR as a control code, with nothing left to switch on.  The VK codes
 // for these letters sit where the US layout puts them on the Slovak one too --
 // QWERTZ moves only Y and Z.
+//
+// Not L, the jump to a link (claude-gui-lkk.101): a link is reached to be
+// opened with Alt+Enter, which works in the transcript only, and from the
+// prompt the agent can be asked to open it.
 bool IsJumpChord(WPARAM key) {
   if (GetKeyState(VK_CONTROL) >= 0 || GetKeyState(VK_SHIFT) >= 0) return false;
   return key == 'T' || key == 'R' || key == 'P' || key == 'A' || key == 'K' ||
@@ -1186,6 +1190,10 @@ bool SessionPane::Navigate(wchar_t key) {
   const bool backwards = key >= L'A' && key <= L'Z';
   const wchar_t lower =
       backwards ? static_cast<wchar_t>(key - L'A' + L'a') : key;
+  if (lower == L'l') {
+    GoToLink(backwards);
+    return true;
+  }
 
   model::Transcript::BlockPredicate match;
   std::wstring what;
@@ -1326,6 +1334,25 @@ void SessionPane::ToggleBlockAtCaret() {
   // that now is -- NVDA does not announce a caret it did not move itself,
   // confirmed by trying it, so without that the key answers with silence.
   GoToBlock(*index);
+}
+
+void SessionPane::GoToLink(bool backwards) {
+  // What is on screen, as for Alt+Enter itself: a collapsed block is not
+  // opened to find one (see model/links.h).
+  const size_t caret = CaretOffset(transcript_);
+  const std::optional<model::Link> link =
+      backwards ? model::PreviousLink(model_.Text(), caret)
+                : model::NextLink(model_.Text(), caret);
+  if (!link.has_value()) {
+    Announce(i18n::Format(backwards ? Str::kNoPreviousMatch : Str::kNoNextMatch,
+                          {i18n::Text(Str::kLink)}));
+    return;
+  }
+  // anchor_ is left alone, as in GoToBlock: a jump is the reader reading.
+  PutCaret(transcript_, link->start);
+  // The line and not the address alone: what the model wrote round it is
+  // what says which of several pages this one is.
+  Announce(model_.LineAt(CaretOffset(transcript_)));
 }
 
 void SessionPane::OpenAtCaret() {

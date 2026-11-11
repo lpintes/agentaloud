@@ -126,6 +126,24 @@ std::optional<Link> LinkAt(const std::wstring& text, size_t offset) {
   return std::nullopt;
 }
 
+std::optional<Link> NextLink(const std::wstring& text, size_t offset) {
+  for (const Link& link : FindLinks(text)) {
+    if (link.start > offset) return link;
+  }
+  return std::nullopt;
+}
+
+// Before, not at: from the middle of an address the jump back is to its own
+// start, which is where Alt+Enter and a reader both expect it to begin.
+std::optional<Link> PreviousLink(const std::wstring& text, size_t offset) {
+  std::optional<Link> found;
+  for (const Link& link : FindLinks(text)) {
+    if (link.start >= offset) break;
+    found = link;
+  }
+  return found;
+}
+
 std::vector<Link> DistinctLinks(const std::wstring& text) {
   std::vector<Link> distinct;
   for (const Link& link : FindLinks(text)) {

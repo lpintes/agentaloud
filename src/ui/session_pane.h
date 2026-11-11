@@ -132,6 +132,11 @@ class SessionPane {
   // between the first two.
   void OpenAtCaret();
 
+  // L and Shift+L (claude-gui-lkk.101): the caret onto the next or previous
+  // web address on screen, so that Alt+Enter opens it.  Collapsed blocks are
+  // passed over, not expanded.
+  void GoToLink(bool backwards);
+
   // Esc, from either box.  Stops the turn in flight and writes a mark into
   // the transcript where it was stopped.  Says so out loud in both cases,
   // including the case where nothing was running: a key that answers with
