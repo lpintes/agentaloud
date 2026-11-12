@@ -1777,9 +1777,20 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     rozhovoru ide sám: `TrackSessionId` po resete id vyprázdni
     a `FollowConversation` pri prázdnom id bloky nepriradí. Overené naostro
     (haiku): záložka na „/clear" v súbore nového rozhovoru, `--resume`,
-    Ctrl+1 na ňu skočí. Ostatné lokálne príkazy (`/context`) v streame nič
-    s uuid nemajú; záložka na nich sa ohlási ako uložená, ale do súboru
-    nepríde (otvorené).
+    Ctrl+1 na ňu skočí.
+  - **Ostatné lokálne príkazy** (`/context`, `/usage` …) v streame nič
+    s uuid nemajú, ale ich záznam `<command-name>` je v súbore session skôr,
+    než čitateľ uvidí ich `result` (sonda `tools/probe_local_echo.py`,
+    CLI 2.1.322). `proto::SlashAnchors` si v `ClaudeBackend::SendPrompt`
+    zapamätá odoslaný slash príkaz; kotva z ozveny alebo z
+    `conversation_reset` ho odškrtne. Čo pri `result` ešte čaká, nájde
+    v súbore session podľa `SlashCommandText` a pošle `PromptAnchored`.
+    Berie sa len záznam, ktorého uuid ešte žiadny blok nemá (z histórie ani
+    zo streamu) — súbor drží každý `/context` rozhovoru a starší by
+    záložku vrátil na zlý riadok. Nenájdený čaká do ďalšieho `result`,
+    koniec procesu ho zahodí. Súbor sa číta len vtedy, keď niečo čaká.
+    Overené naostro (haiku): záložka na „ja: /context" má uuid jeho
+    záznamu, po `--resume` na ňu Ctrl+1 skočí.
 
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa

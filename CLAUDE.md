@@ -447,7 +447,8 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
     záznam so starým `session_id` — nové id len to, ktoré sa líši
     (`proto::TrackSessionId`). Slash príkaz Claudu: skill kotví ozvena cez
     `SlashCommandText`, `/clear` uuid `user_message_uuid` z
-    `conversation_reset`; ostatné lokálne príkazy kotvu nemajú. Meno
+    `conversation_reset`, ostatné lokálne príkazy záznam zo súboru session
+    pri `result` (`proto::SlashAnchors`, len uuid, ktoré žiadny blok nemá). Meno
     backendu do cesty dáva `main.cpp`, nie panel.
 
 **NESÚLAD MAPY ROZSAHOV** v titulku session znamená, že dĺžka modelu

@@ -7026,6 +7026,65 @@ void TestPromptAnchor(const std::string& dir) {
     CHECK(proto::HumanPromptText(records[1]).empty());
   }
 
+  // Lokalny prikaz okrem /clear sa neozve; kotvu najde adapter v subore
+  // session pri result (tools/probe_local_echo.notes.md).  Zaznam, ktoreho
+  // uuid uz blok ma, sa nevezme -- starsi /context s tym istym textom.
+  {
+    auto command = [](const char* uuid, const char* name) {
+      return proto::Json{
+          {"type", "user"},
+          {"uuid", uuid},
+          {"message",
+           {{"role", "user"},
+            {"content", std::string("<command-name>") + name +
+                            "</command-name>\n<command-message>x"
+                            "</command-message>\n<command-args>"
+                            "</command-args>"}}}};
+    };
+    proto::SlashAnchors slash;
+    slash.Anchored({}, "old");  // z historie
+    slash.Sent("ahoj");         // nie slash, kotvi ozvena
+    slash.Sent("  /context ");
+    slash.Sent("/clear");
+    slash.Sent("/context");
+    CHECK(slash.waiting());
+    slash.Anchored("/clear", "c1");  // conversation_reset
+    // Druhy /context este nie je zapisany: dostane kotvu az neskor, a nie
+    // tu staru.
+    std::vector<proto::Json> records = {command("old", "/context"),
+                                        command("c1", "/clear"),
+                                        command("n1", "/context")};
+    auto found = slash.Find(records);
+    CHECK_EQ(found.size(), size_t{1});
+    if (found.size() == 1) {
+      CHECK_EQ(found[0].text, std::string("/context"));
+      CHECK_EQ(found[0].sourceId, std::string("n1"));
+    }
+    CHECK(slash.waiting());
+    records.push_back(command("n2", "/context"));
+    found = slash.Find(records);
+    CHECK_EQ(found.size(), size_t{1});
+    if (found.size() == 1) CHECK_EQ(found[0].sourceId, std::string("n2"));
+    CHECK(!slash.waiting());
+    CHECK(slash.Find(records).empty());
+
+    // Dva rovnake naraz: v poradi, v akom su v subore.
+    slash.Sent("/usage");
+    slash.Sent("/usage");
+    records.push_back(command("s1", "/usage"));
+    records.push_back(command("s2", "/usage"));
+    found = slash.Find(records);
+    CHECK_EQ(found.size(), size_t{2});
+    if (found.size() == 2) {
+      CHECK_EQ(found[0].sourceId, std::string("s1"));
+      CHECK_EQ(found[1].sourceId, std::string("s2"));
+    }
+    // Koniec procesu: co caka, uz nepride.
+    slash.Sent("/cost");
+    slash.Clear();
+    CHECK(!slash.waiting());
+  }
+
   // Codex: kotvou je id itemu userMessage, ten isty v historii (overene,
   // tools/probe_anchor_codex.notes.md).  Prompt sa najprv napise, ako to
   // robi panel, a az potom prehra stream.

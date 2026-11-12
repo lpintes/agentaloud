@@ -219,6 +219,62 @@ std::string SlashCommandText(const Json& record) {
 
 namespace {
 
+std::string Trimmed(const std::string& text) {
+  const size_t from = text.find_first_not_of(" \t\r\n");
+  if (from == std::string::npos) return {};
+  return text.substr(from, text.find_last_not_of(" \t\r\n") + 1 - from);
+}
+
+}  // namespace
+
+void SlashAnchors::Sent(const std::string& utf8Text) {
+  std::string text = Trimmed(utf8Text);
+  if (!text.empty() && text[0] == '/') waiting_.push_back(std::move(text));
+}
+
+void SlashAnchors::Anchored(const std::string& utf8Text,
+                            const std::string& sourceId) {
+  if (!sourceId.empty()) taken_.push_back(sourceId);
+  const std::string text = Trimmed(utf8Text);
+  auto it = std::find(waiting_.begin(), waiting_.end(), text);
+  if (it != waiting_.end()) waiting_.erase(it);
+}
+
+std::vector<agent::PromptAnchored> SlashAnchors::Find(
+    const std::vector<Json>& records) {
+  std::vector<agent::PromptAnchored> found;
+  if (waiting_.empty()) return found;
+  // Newest command against newest record, so that two equal commands take
+  // their records in the order they were filed.
+  std::vector<bool> done(waiting_.size(), false);
+  size_t record = records.size();
+  for (size_t i = waiting_.size(); i-- > 0;) {
+    for (size_t r = record; r-- > 0;) {
+      if (!records[r].is_object()) continue;
+      const std::string uuid = records[r].value("uuid", std::string());
+      if (uuid.empty() ||
+          std::find(taken_.begin(), taken_.end(), uuid) != taken_.end() ||
+          SlashCommandText(records[r]) != waiting_[i]) {
+        continue;
+      }
+      found.push_back(agent::PromptAnchored{waiting_[i], uuid});
+      taken_.push_back(uuid);
+      done[i] = true;
+      record = r;
+      break;
+    }
+  }
+  std::reverse(found.begin(), found.end());
+  std::vector<std::string> left;
+  for (size_t i = 0; i < waiting_.size(); ++i) {
+    if (!done[i]) left.push_back(std::move(waiting_[i]));
+  }
+  waiting_ = std::move(left);
+  return found;
+}
+
+namespace {
+
 // A prompt sent during a turn that the CLI folded into that same turn is never
 // filed as a `user` record: the model got it as a system-reminder beside the
 // next tool result, and the file keeps only this attachment, at that very

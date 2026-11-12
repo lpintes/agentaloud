@@ -132,6 +132,41 @@ std::string HumanPromptText(const Json& record);
 // (tools/probe_local_echo.notes.md, the corpus 2026-11-12).
 std::string SlashCommandText(const Json& record);
 
+// The anchors of the slash commands the CLI runs itself, which it never
+// echoes: /context, /usage and the like (claude-gui-lkk.7.15).  /clear is not
+// echoed either, but conversation_reset names its record, and a skill is
+// echoed as any prompt is.  For the rest the session file is the only word:
+// by the time the reader sees the command's result its record is there
+// (tools/probe_local_echo.notes.md, CLI 2.1.322).
+//
+// A record is taken only if no block has its uuid yet.  The file keeps every
+// /context ever typed in the conversation, and the newest one with the same
+// text is not this one when this one is not written yet -- an old record
+// taken for it would bring the mark back to the wrong line.  So every anchor
+// the transcript got, from the history or the stream, is told here as well.
+//
+// No thread of its own; the adapter guards it.
+class SlashAnchors {
+ public:
+  // Only a slash command is kept; anything else the echo anchors.
+  void Sent(const std::string& utf8Text);
+  // Any anchor the transcript got.  The oldest waiting command of that text
+  // has its anchor now, and the uuid is no longer free.
+  void Anchored(const std::string& utf8Text, const std::string& sourceId);
+  bool waiting() const { return !waiting_.empty(); }
+  // At a result: anchors for the waiting commands that `records` (the
+  // session file) files under a free uuid, oldest command first, as
+  // Transcript::AnchorPrompt takes them.  A command not filed yet keeps
+  // waiting.
+  std::vector<agent::PromptAnchored> Find(const std::vector<Json>& records);
+  // The process is gone.  The uuids stay taken: the blocks still have them.
+  void Clear() { waiting_.clear(); }
+
+ private:
+  std::vector<std::string> waiting_;  // trimmed, oldest first
+  std::vector<std::string> taken_;
+};
+
 // Is this the CLI's own mark that a turn was cut short -- "[Request
 // interrupted by user]", with or without "for tool use" on the end?
 //

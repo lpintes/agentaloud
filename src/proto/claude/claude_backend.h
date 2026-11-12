@@ -18,6 +18,7 @@
 
 #include "agent/backend.h"
 #include "proto/claude/session.h"
+#include "proto/claude/sessions.h"
 #include "proto/claude/translate.h"
 
 namespace proto {
@@ -99,6 +100,9 @@ class ClaudeBackend : public agent::Backend {
   // The mode last reported as ModeChanged, so that a change is reported once.
   std::string reportedMode_;
   bool reportedReady_ = false;
+  // Sent from the window's thread, found on the reader's.
+  std::mutex slashMutex_;
+  SlashAnchors slashAnchors_;
 
   // Where `claude auth login` runs: the session's folder, as for the session.
   std::wstring projectDir_;

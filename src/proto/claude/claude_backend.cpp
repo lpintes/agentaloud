@@ -108,6 +108,10 @@ bool ClaudeBackend::Start(const agent::StartOptions& options,
     for (const agent::Event& event : history) {
       if (const auto* changed = std::get_if<agent::ModelChanged>(&event)) {
         translator_.SeedModel(changed->model);
+      } else if (const auto* prompt = std::get_if<agent::UserPrompt>(&event)) {
+        // Its record is in the file a later /context is looked up in.
+        std::lock_guard<std::mutex> lock(slashMutex_);
+        slashAnchors_.Anchored({}, prompt->sourceId);
       }
     }
     if (callbacks_.onHistory) callbacks_.onHistory(std::move(history));
@@ -119,6 +123,10 @@ bool ClaudeBackend::Start(const agent::StartOptions& options,
         return OnPermission(request);
       },
       [this](const win::Process::Exit& exit) {
+        {
+          std::lock_guard<std::mutex> lock(slashMutex_);
+          slashAnchors_.Clear();
+        }
         if (!callbacks_.onEvents) return;
         callbacks_.onEvents({agent::SessionEnded{exit.codeKnown, exit.code,
                                                  exit.errorOutput}});
@@ -179,6 +187,27 @@ agent::FormAnswer ClaudeBackend::OnElicitation(
 
 void ClaudeBackend::OnRecord(const Event& event) {
   std::vector<agent::Event> batch = translator_.Translate(event.raw);
+  {
+    std::lock_guard<std::mutex> lock(slashMutex_);
+    for (const agent::Event& item : batch) {
+      if (const auto* anchored = std::get_if<agent::PromptAnchored>(&item)) {
+        slashAnchors_.Anchored(anchored->text, anchored->sourceId);
+      }
+    }
+    // A command the CLI ran itself has its record in the file by its
+    // result, and nowhere else.  Read only when one waits: the file of a
+    // long conversation is megabytes.
+    const std::string id = session_.sessionId();
+    std::vector<Json> records;
+    if (event.kind == EventKind::Result && slashAnchors_.waiting() &&
+        !id.empty() &&
+        ReadSessionRecords(SessionFilePath(projectDir_, Ascii(id), ConfigDir()),
+                           &records)) {
+      for (agent::PromptAnchored& anchored : slashAnchors_.Find(records)) {
+        batch.push_back(std::move(anchored));
+      }
+    }
+  }
   // Session has already decided, from the prompts it has seen echoed, whether
   // this result ends everything or only the turn before a queued prompt's.
   if (event.kind == EventKind::Result && session_.turnInFlight()) {
@@ -331,6 +360,11 @@ PermissionDecision ClaudeBackend::OnPermission(
 }
 
 bool ClaudeBackend::SendPrompt(const std::string& utf8Text) {
+  {
+    // Before it goes, so that its result cannot come first.
+    std::lock_guard<std::mutex> lock(slashMutex_);
+    slashAnchors_.Sent(utf8Text);
+  }
   return session_.SendPrompt(utf8Text);
 }
 
