@@ -160,6 +160,10 @@ S(kTranscriptEmpty, L"prepis je prázdny")
 S(kBookmarkSet, L"záložka {0}: {1}")
 S(kNothingNewSince, L"odvtedy nič nepribudlo")
 S(kBookmarkEmpty, L"záložka {0} je prázdna")
+S(kBookmarkSetUntilClose, L"záložka {0}, len do zatvorenia okna: {1}")
+S(kBookmarkGone, L"záložka {0}: označené miesto už v rozhovore nie je")
+S(kBookmarkLineChanged, L"záložka {0}: riadok sa odvtedy zmenil, ste na začiatku bloku: {1}")
+S(kBookmarksNotSaved, L"záložky sa nepodarilo uložiť do {0}")
 S(kSentDuringTurn, L"odoslané, ťah ešte beží")
 S(kSayInterruptedMore, L"prerušené, nasleduje ďalší prompt")
 S(kAgentNotRunning, L"agent už nebeží, prompt zostal v poli; novú session otvoríte Ctrl+N")
@@ -263,6 +267,8 @@ S(kKeysMoving,
   L"Ctrl+1 až Ctrl+9 — vráti kurzor na označený blok.\n"
   L"Ctrl+0 — späť tam, kde kurzor stál, kým naposledy niečo pribudlo.\n"
   L"Nultú záložku píše aplikácia sama, nastaviť sa nedá.\n"
+  L"Záložky 1 až 9 zostanú pri rozhovore a pri pokračovaní v ňom sú tam "
+  L"znova.\n"
   L"\n"
   L"Hľadanie, z oboch polí:\n"
   L"Ctrl+F — hľadá text v prepise. Veľkosť písmen nerozhoduje.\n"

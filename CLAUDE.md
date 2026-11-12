@@ -435,6 +435,14 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
     proces `Narrator.exe`. UIA sa inicializuje až pri prvej vete (chce
     viditeľné okno). `SayThen` cez prism: tón hneď. `WarnIfMute` len o DLL
     od NVDA.
+28. **Uložená záložka = druh bloku + `Block::sourceId`, nikdy `Block::id` ani
+    poradie** (`bookmarks\<backend>\<id rozhovoru>.txt` vedľa nastavení,
+    sloty 1–9). K bloku sa viaže až pri skoku (`model::Bind`); blok nie je
+    alebo riadok znie inak (`LineChanged`) → povie sa to. Kotvu berie
+    `SerializeBookmarks` z bloku pri zápise (prompt ju dostane až ozvenou,
+    `PromptAnchored`), panel zapisuje aj po dávke. Zmena id rozhovoru
+    (`/clear`) sloty vyprázdni (`FollowConversation`). Meno backendu do
+    cesty dáva `main.cpp`, nie panel.
 
 **NESÚLAD MAPY ROZSAHOV** v titulku session znamená, že dĺžka modelu
 nesedí s `EM_GETTEXTLENGTHEX` — neladí invariant 3, 4 alebo 8. Hľadaj znak,

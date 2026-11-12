@@ -40,6 +40,13 @@ bool ReadFileBytes(const std::wstring& path, std::string* out);
 bool WriteFileBytes(const std::wstring& path, const std::string& bytes,
                     std::wstring* error);
 
+// The folder and every missing one above it.  For a folder this program
+// owns the whole of, like bookmarks\<backend> under the settings: the one
+// level WriteFileBytes makes is not enough there, and the settings folder
+// itself may not be there yet on a first run.  The path must be absolute.
+// True when the folder is there afterwards, made now or before.
+bool CreateFolders(const std::wstring& path);
+
 }  // namespace win
 
 #endif

@@ -67,6 +67,10 @@ class MainWindow : public win::Window {
             NewSessionFactory factory, UpdateCheck checkForUpdates,
             std::wstring* failure);
 
+  // Where bookmarks are kept: each session gets <root>\<backendName>.  Before
+  // Open.  Empty keeps none past the window.
+  void SetBookmarksRoot(std::wstring root) { bookmarksRoot_ = std::move(root); }
+
   // For win::RunMdiMessageLoop.
   HACCEL accelerators() const { return accelerators_; }
 
@@ -117,6 +121,7 @@ class MainWindow : public win::Window {
   HACCEL accelerators_ = nullptr;
   NewSessionFactory factory_;
   UpdateCheck checkForUpdates_;
+  std::wstring bookmarksRoot_;
   // Below the client and outside it: one bar for all the sessions, showing
   // the active one.
   StatusBar status_;

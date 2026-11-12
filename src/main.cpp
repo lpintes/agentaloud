@@ -684,6 +684,14 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   };
   const std::string backendName =
       arguments.backend.empty() ? app::kDefaultBackend : arguments.backend;
+  // Beside the settings, so that a portable installation carries its marks
+  // along with them.  The settings folder may not be there yet; the pane
+  // makes it with the first mark it writes, and never the portable one,
+  // whose being there is what chose this path.
+  if (const size_t slash = settingsFile.find_last_of(L'\\');
+      slash != std::wstring::npos) {
+    window.SetBookmarksRoot(settingsFile.substr(0, slash) + L"\\bookmarks");
+  }
   if (!window.Open(instance, std::move(backend), backendName,
                    OptionsFrom(arguments), std::move(factory),
                    std::move(checkForUpdates), &failure)) {

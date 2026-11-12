@@ -824,6 +824,16 @@ void SessionPane::OnDrain() {
   if (backend_->effort() != effortShown_) RefreshModelField();
 
   if (model_.blocks().size() != blocksBefore) bookmarks_.Set(0, reading);
+
+  // A prompt marked before its echo got its anchor in this drain, or the
+  // conversation changed under the pane.  Either is still the consequence of
+  // a mark the reader made, so the file follows (claude-gui-lkk.7.12).  Said
+  // without interrupting: nobody pressed a key for this.
+  FollowConversation();
+  std::wstring file;
+  if (!SaveBookmarks(&file) && speech_.available()) {
+    speech_.Say(i18n::Format(Str::kBookmarksNotSaved, {file}), false);
+  }
 }
 
 void SessionPane::OnTurnStartedByAgent() {
@@ -1255,19 +1265,40 @@ void SessionPane::SetBookmark(size_t slot) {
     Announce(i18n::Text(Str::kTranscriptEmpty));
     return;
   }
+  // Before the mark goes in: a /clear since the last key empties the slots,
+  // and that must not take this mark with them.
+  FollowConversation();
   bookmarks_.Set(slot, mark);
+  // A prompt of this session has no anchor until the CLI echoes it, which
+  // may be after this key; the drain that brings the echo writes the file
+  // then.  Any other block without one never gets it -- SessionEnded,
+  // Interrupted -- and the reader is told that this mark ends with the window.
+  const std::optional<size_t> index = model_.IndexOfId(mark.blockId);
+  const bool echoComing =
+      index.has_value() &&
+      model_.blocks()[*index].kind == model::BlockKind::UserPrompt;
+  const bool kept = !bookmarkFolder_.empty() && backend_ &&
+                    backend_->capabilities().resume &&
+                    (model::CanPersist(model_, mark) || echoComing);
+  std::wstring file;
+  const bool saved = SaveBookmarks(&file);
   // The slot number and the line, in that order.  The number alone leaves the
   // reader wondering what they just marked; the line alone leaves them
   // wondering whether the key arrived.
-  Announce(i18n::Format(Str::kBookmarkSet,
-                        {std::to_wstring(slot),
-                         model_.LineAt(CaretOffset(transcript_))}));
+  std::wstring said = i18n::Format(
+      kept && saved ? Str::kBookmarkSet : Str::kBookmarkSetUntilClose,
+      {std::to_wstring(slot), model_.LineAt(CaretOffset(transcript_))});
+  if (!saved) {
+    said += L"; " + i18n::Format(Str::kBookmarksNotSaved, {file});
+  }
+  Announce(said);
 }
 
 void SessionPane::GoToBookmark(size_t slot) {
-  const model::Mark& mark = bookmarks_.Get(slot);
-  const std::optional<size_t> offset = model::OffsetOf(model_, mark);
-  if (!offset.has_value()) {
+  if (slot >= model::Bookmarks::kSlots) return;
+  FollowConversation();
+  model::Mark mark = bookmarks_.Get(slot);
+  if (!mark.set) {
     // Slot 0 is empty until something arrives while you are reading, which is
     // the only situation it is for -- so it says something different.
     Announce(slot == 0 ? std::wstring(i18n::Text(Str::kNothingNewSince))
@@ -1275,13 +1306,95 @@ void SessionPane::GoToBookmark(size_t slot) {
                                       {std::to_wstring(slot)}));
     return;
   }
+  // A mark read from disk names its block by anchor, and finds it only now.
+  // Kept bound, so that the next jump does not look again.  Not found is said
+  // as such: landing somewhere near would be a mark that quietly slid.
+  if (!model::Bind(model_, mark)) {
+    Announce(i18n::Format(Str::kBookmarkGone, {std::to_wstring(slot)}));
+    return;
+  }
+  bookmarks_.Set(slot, mark);
   // Expanded the way a search expands its hit, and through Apply for the same
   // reason (invariant 3).  The line said is the marked one, and the heading
   // above it says the block is open to anyone who reads up.
   if (const std::optional<size_t> index = model::BlockToExpand(model_, mark)) {
     Apply(model_.SetCollapsed(*index, false));
   }
-  GoToOffset(*model::OffsetOf(model_, mark));
+  const std::optional<size_t> offset = model::OffsetOf(model_, mark);
+  if (!offset.has_value()) {
+    Announce(i18n::Format(Str::kBookmarkGone, {std::to_wstring(slot)}));
+    return;
+  }
+  // The block is there but reads differently where the mark was: the start
+  // of the block is the one place still known to be right, and the reader is
+  // told why the caret is there and not on their line.
+  if (model::LineChanged(model_, mark, *offset)) {
+    const size_t start = model_.blocks()[*model_.IndexOfId(mark.blockId)].start;
+    PutCaret(transcript_, start);
+    Announce(i18n::Format(Str::kBookmarkLineChanged,
+                          {std::to_wstring(slot), model_.LineAt(start)}));
+    return;
+  }
+  GoToOffset(*offset);
+}
+
+std::wstring SessionPane::BookmarkFile() const {
+  if (bookmarkFolder_.empty() || !backend_ ||
+      !backend_->capabilities().resume || bookmarksOf_.empty()) {
+    return {};
+  }
+  // The id becomes a file name.  Both CLIs make theirs of letters, digits and
+  // dashes; anything else is refused rather than escaped, so that no id can
+  // reach outside the folder.
+  for (const char c : bookmarksOf_) {
+    const bool plain = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                       (c >= '0' && c <= '9') || c == '-' || c == '_';
+    if (!plain) return {};
+  }
+  return bookmarkFolder_ + L"\\" + model::Utf16FromUtf8(bookmarksOf_) +
+         L".txt";
+}
+
+void SessionPane::FollowConversation() {
+  if (!backend_) return;
+  const std::string id = backend_->conversationId();
+  if (id == bookmarksOf_) return;
+  if (!bookmarksOf_.empty()) {
+    for (size_t slot = 1; slot < model::Bookmarks::kSlots; ++slot) {
+      bookmarks_.Set(slot, {});
+    }
+  }
+  bookmarksOf_ = id;
+  bookmarksSaved_.clear();
+  const std::wstring file = BookmarkFile();
+  std::string bytes;
+  if (file.empty() || !win::ReadFileBytes(file, &bytes)) return;
+  // Into the empty slots only: a mark made before the id was known (Codex,
+  // before thread/start) is newer than anything the file can hold.
+  const model::Bookmarks read = model::ParseBookmarks(bytes);
+  for (size_t slot = 1; slot < model::Bookmarks::kSlots; ++slot) {
+    if (read.Get(slot).set && !bookmarks_.Get(slot).set) {
+      bookmarks_.Set(slot, read.Get(slot));
+    }
+  }
+  bookmarksSaved_ = bytes;
+}
+
+bool SessionPane::SaveBookmarks(std::wstring* file) {
+  const std::wstring path = BookmarkFile();
+  if (path.empty()) return true;
+  const std::string text = model::SerializeBookmarks(bookmarks_, model_);
+  if (text == bookmarksSaved_) return true;
+  // Taken as written even when it fails: otherwise every drain after it
+  // would try again and say so again.  The next change of a mark tries anew.
+  bookmarksSaved_ = text;
+  std::wstring error;
+  if (!win::CreateFolders(bookmarkFolder_) ||
+      !win::WriteFileBytes(path, text, &error)) {
+    *file = path;
+    return false;
+  }
+  return true;
 }
 
 void SessionPane::GoToOffset(size_t offset) {

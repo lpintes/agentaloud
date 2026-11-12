@@ -92,6 +92,7 @@ bool SessionWindow::Open(HWND mdiClient, HINSTANCE instance, StatusBar* bar,
   // WM_MDIACTIVATE came while the child was being made, before there was a
   // pane to tell.  A child just made is the active one.
   Activated(true);
+  pane_->SetBookmarkFolder(bookmarkFolder_);
   if (!pane_->Start(std::move(backend), options, failure)) {
     pane_.reset();
     SendMessageW(mdiClient, WM_MDIDESTROY, reinterpret_cast<WPARAM>(hwnd_), 0);

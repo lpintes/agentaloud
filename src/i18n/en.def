@@ -158,6 +158,10 @@ S(kTranscriptEmpty, L"the transcript is empty")
 S(kBookmarkSet, L"bookmark {0}: {1}")
 S(kNothingNewSince, L"nothing new since")
 S(kBookmarkEmpty, L"bookmark {0} is empty")
+S(kBookmarkSetUntilClose, L"bookmark {0}, only until the window closes: {1}")
+S(kBookmarkGone, L"bookmark {0}: the marked place is no longer in the conversation")
+S(kBookmarkLineChanged, L"bookmark {0}: the line has changed since, you are at the start of the block: {1}")
+S(kBookmarksNotSaved, L"could not save the bookmarks to {0}")
 S(kSentDuringTurn, L"sent, the turn is still running")
 S(kSayInterruptedMore, L"interrupted, the next prompt follows")
 S(kAgentNotRunning, L"the agent is no longer running, the prompt stays in the field; Ctrl+N opens a new session")
@@ -262,6 +266,8 @@ S(kKeysMoving,
   L"Ctrl+1 to Ctrl+9 — returns the cursor to the marked block.\n"
   L"Ctrl+0 — back to where the cursor was when something last arrived.\n"
   L"Bookmark zero is written by the application, it cannot be set.\n"
+  L"Bookmarks 1 to 9 stay with the conversation and are there again when it "
+  L"is resumed.\n"
   L"\n"
   L"Searching, from either field:\n"
   L"Ctrl+F — finds text in the transcript. Case does not matter.\n"

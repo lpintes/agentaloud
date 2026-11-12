@@ -48,6 +48,10 @@ class SessionWindow : public win::Window {
   // the dialog Nová session matches open conversations by it.
   const std::string& backendName() const { return backendName_; }
   void SetBackendName(const std::string& name) { backendName_ = name; }
+  // SessionPane::SetBookmarkFolder, handed on before the backend starts.
+  void SetBookmarkFolder(const std::wstring& folder) {
+    bookmarkFolder_ = folder;
+  }
   // agent::Backend::conversationId; empty once shut down or until known.
   std::string conversationId() const;
   // Which of the sessions in its folder this is (app::SessionOrdinals): into
@@ -72,6 +76,7 @@ class SessionWindow : public win::Window {
   std::wstring folderKey_;
   std::wstring project_;
   std::string backendName_;
+  std::wstring bookmarkFolder_;
   Closed closed_;
   std::unique_ptr<SessionPane> pane_;
 };

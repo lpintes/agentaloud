@@ -6,6 +6,7 @@
 #include "app_name.h"
 #include "i18n/i18n.h"
 #include "model/background.h"
+#include "model/utf.h"
 #include "session_names.h"
 #include "ui/about_dialog.h"
 
@@ -151,6 +152,13 @@ bool MainWindow::OpenSession(std::unique_ptr<agent::Backend> backend,
   sessions_.push_back(std::make_unique<SessionWindow>());
   SessionWindow* session = sessions_.back().get();
   session->SetBackendName(backendName);
+  // The backend's name is main.cpp's, a plain word ("claude", "codex"), and
+  // goes into the path without being read: the frame still does not know
+  // which CLI it is.
+  if (!bookmarksRoot_.empty() && !backendName.empty()) {
+    session->SetBookmarkFolder(bookmarksRoot_ + L"\\" +
+                               model::Utf16FromUtf8(backendName));
+  }
   if (!session->Open(
           client_, instance_, &status_, std::move(backend), options,
           [this] { PostMessageW(hwnd_, kMsgReap, 0, 0); }, failure)) {

@@ -96,4 +96,10 @@ bool WriteFileBytes(const std::wstring& path, const std::string& bytes,
   return true;
 }
 
+bool CreateFolders(const std::wstring& path) {
+  const int result = SHCreateDirectoryExW(nullptr, path.c_str(), nullptr);
+  return result == ERROR_SUCCESS || result == ERROR_ALREADY_EXISTS ||
+         result == ERROR_FILE_EXISTS;
+}
+
 }  // namespace win

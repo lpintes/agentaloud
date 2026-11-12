@@ -226,6 +226,14 @@ class SessionPane {
   // the application writes it.
   void SetBookmark(size_t slot);
   void GoToBookmark(size_t slot);
+  // Where slots 1..9 outlive the window (claude-gui-lkk.7.12): one file per
+  // conversation, named by its id, in this folder.  The host says which,
+  // before Start -- a history handed over inside Start reads them -- because
+  // the folder carries the backend's name and the pane does not know which
+  // CLI it talks to.  Empty: marks last until the window closes.
+  void SetBookmarkFolder(std::wstring folder) {
+    bookmarkFolder_ = std::move(folder);
+  }
 
   const std::wstring& statusLine() const { return status_; }
   bool busy() const { return busy_; }
@@ -325,6 +333,16 @@ class SessionPane {
   void ShowName();
   // Puts the caret at an offset and says the line it landed on.
   void GoToOffset(size_t offset);
+  // The file of bookmarksOf_'s marks; empty when they are not kept -- no
+  // folder, a backend that cannot resume, or no id yet.
+  std::wstring BookmarkFile() const;
+  // Takes the backend's conversation id over.  A new id after a known one is
+  // a new conversation, which starts without marks; the old one keeps its
+  // file.  Then reads the file of the id, into the slots still empty.
+  void FollowConversation();
+  // Writes the file when what it would hold has changed.  True when nothing
+  // had to be written or it was; false with *file naming what failed.
+  bool SaveBookmarks(std::wstring* file);
   // Says that the turn is over.  The answer itself was already read as it
   // arrived, so this only marks the end.
   void SignalTurnEnd();
@@ -369,6 +387,14 @@ class SessionPane {
   bool active_ = true;
   model::Transcript model_;
   model::Bookmarks bookmarks_;
+  std::wstring bookmarkFolder_;
+  // The conversation slots 1..9 belong to.  It changes under a running pane
+  // -- /clear makes a new one, Codex says its id only after thread/start --
+  // and FollowConversation notices it at the next chance it gets.
+  std::string bookmarksOf_;
+  // What the file holds, as read or last written, so that a drain which
+  // changed nothing about the marks writes nothing.
+  std::string bookmarksSaved_;
   Speech speech_;
   // Where Send() last put the caret.  If it is still there when the next
   // prompt goes out, nobody has moved it and the caret is ours to move; if it

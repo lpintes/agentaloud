@@ -1711,6 +1711,41 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     NVDA v `Speech::Running` a odchytiť reč cez MCP screenreader.
     `loaded()` a `WarnIfMute` sa týkajú len DLL od NVDA.
 
+28. **Uložená záložka pomenúva blok kotvou, nie `Block::id` ani poradím**
+    (claude-gui-lkk.7.12). Sloty 1 až 9 sú v
+    `bookmarks\<backend>\<id rozhovoru>.txt` vedľa nastavení (`%APPDATA%`
+    alebo prenosné `config\`). Riadok nesie druh bloku (slovom, nie číslom
+    enumu), `Block::sourceId`, vzdialenosť v bloku, formu (zbalený či nie)
+    a odtlačok riadku (`model::LineFingerprint`). `Block::id` je počítadlo
+    a prehratá história robí bloky v inom poradí než živý beh. Codex vracia
+    itemy v poradí dokončenia, nie začatia. Kotva je preto len id od CLI:
+    Claude `uuid` záznamu (`message.id` zdieľajú všetky bloky jednej
+    odpovede), Codex id itemu, nástroje id volania. Overené sondami
+    `tools/probe_anchor_*.py`, ktoré ukázali, že kotvy prežijú `--resume`
+    aj `thread/resume`.
+
+    K bloku sa záložka z disku priviaže až pri skoku (`model::Bind`). Keď
+    blok nie je, povie sa to, nič sa neháda. Keď riadok znie inak
+    (`LineChanged`), kurzor ide na začiatok bloku a povie sa prečo. Živý
+    prompt dostane kotvu až ozvenou CLI (`agent::PromptAnchored`), ktorá
+    môže prísť po Ctrl+Shift+číslici. `SerializeBookmarks` preto berie kotvu
+    z bloku v čase zápisu a panel zapisuje aj na konci každej dávky, keď sa
+    obsah súboru zmenil (`SessionPane::SaveBookmarks`). Zlyhanie zápisu sa
+    povie raz za zmenu.
+
+    Kľúčom je id rozhovoru, ktoré sa mení pod bežiacim panelom: `/clear` dá
+    nové a Codex povie svoje až po `thread/start`.
+    `SessionPane::FollowConversation` pri zmene zo známeho id sloty
+    vyprázdni (starý súbor zostane) a súbor nového id načíta len do
+    prázdnych slotov. Slot 0 a „kde som skončil" sa neukladajú (rozhodnutie
+    používateľa 12. 11. 2026). Len pri `Capabilities::resume`. Meno backendu
+    do cesty dáva `main.cpp` cez `MainWindow::SetBookmarksRoot`, panel ho
+    nečíta. Overené naostro 12. 11. 2026. Claude (haiku): zápis, `--resume`
+    a skok, prázdny slot, neexistujúca kotva aj zmenený odtlačok. Codex
+    (gpt-6-luna): zápis, `--resume` a skok, `/clear` → sloty prázdne, súbor
+    starého vlákna zostal. Lokálny slash príkaz Claudu ozvenu nemá, takže
+    záložka na ňom sa ohlási ako uložená, ale do súboru nepríde.
+
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa
 rozídu, titulok tej session sa zmení na **„<cesta> — NESÚLAD MAPY ROZSAHOV"**
