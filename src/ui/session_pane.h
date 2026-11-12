@@ -19,6 +19,8 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
+#include <array>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -333,15 +335,20 @@ class SessionPane {
   void ShowName();
   // Puts the caret at an offset and says the line it landed on.
   void GoToOffset(size_t offset);
-  // The file of bookmarksOf_'s marks; empty when they are not kept -- no
-  // folder, a backend that cannot resume, or no id yet.
-  std::wstring BookmarkFile() const;
-  // Takes the backend's conversation id over.  A new id after a known one is
-  // a new conversation, which starts without marks; the old one keeps its
-  // file.  Then reads the file of the id, into the slots still empty.
+  // The file of one conversation's marks; empty when they are not kept -- no
+  // folder, a backend that cannot resume, or no id.
+  std::wstring BookmarkFile(const std::string& conversation) const;
+  // Takes the backend's conversation id over, files every block that got an
+  // anchor since under it, and reads the file of an id seen for the first
+  // time into the slots still empty.  Nothing is cleared: after /clear the
+  // old conversation is still on screen and its marks still lead there.
   void FollowConversation();
-  // Writes the file when what it would hold has changed.  True when nothing
-  // had to be written or it was; false with *file naming what failed.
+  // The conversation a slot's mark belongs to: its block's, or for a mark
+  // read from disk and not bound since, its file's.  Empty: not known yet.
+  std::string ConversationOf(size_t slot) const;
+  // Writes every file whose content would change -- also the one a slot
+  // has just moved away from.  True when nothing had to be written or all
+  // of it was; false with *file naming what failed.
   bool SaveBookmarks(std::wstring* file);
   // Says that the turn is over.  The answer itself was already read as it
   // arrived, so this only marks the end.
@@ -388,13 +395,20 @@ class SessionPane {
   model::Transcript model_;
   model::Bookmarks bookmarks_;
   std::wstring bookmarkFolder_;
-  // The conversation slots 1..9 belong to.  It changes under a running pane
-  // -- /clear makes a new one, Codex says its id only after thread/start --
-  // and FollowConversation notices it at the next chance it gets.
-  std::string bookmarksOf_;
-  // What the file holds, as read or last written, so that a drain which
-  // changed nothing about the marks writes nothing.
-  std::string bookmarksSaved_;
+  // The backend's conversation as FollowConversation last saw it.  It changes
+  // under a running pane -- /clear makes a new one, Codex says its id only
+  // after thread/start.
+  std::string conversation_;
+  // Block::id -> the conversation it was in when it got its anchor.  When,
+  // and not when it was made: the prompt "/clear" is made in the old one,
+  // and the CLI files it at the start of the new one.
+  std::map<size_t, std::string> blockConversation_;
+  // For a mark read from disk until it is bound: the file it came from.
+  std::array<std::string, model::Bookmarks::kSlots> slotConversation_;
+  // Per conversation, what its file holds as read or last written, so that a
+  // drain which changed nothing about the marks writes nothing.  Also the
+  // list of files this pane has a say in.
+  std::map<std::string, std::string> bookmarksSaved_;
   Speech speech_;
   // Where Send() last put the caret.  If it is still there when the next
   // prompt goes out, nobody has moved it and the caret is ours to move; if it

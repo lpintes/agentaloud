@@ -477,6 +477,17 @@ Json MakeError(const std::string& requestId, const std::string& message);
 // folded in, after it and a new system/init when queued.  So one still pending
 // at a result is waiting for the next turn (tools/probe_midturn.notes.md,
 // Claude 2.1.302).
+// Which conversation the process is in, followed record by record.  *id is
+// the one known, *resetFrom the one /clear left until a record names another.
+// After conversation_reset the id is taken from a later record, and not the
+// next one: system/background_tasks_changed follows the reset still carrying
+// the old id, and taking that kept the old id for good (CLI 2.1.322,
+// tools/probe_local_echo.py).  Nor the reset's own new_conversation_id,
+// which is not the id the CLI then files the conversation under.  Free, so
+// that the test can walk the measured order of records.
+void TrackSessionId(const std::string& recordId, bool reset, std::string* id,
+                    std::string* resetFrom);
+
 class PendingPrompts {
  public:
   // A slash command is not counted: one the CLI runs itself (/clear,

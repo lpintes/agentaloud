@@ -1734,10 +1734,23 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     povie raz za zmenu.
 
     Kľúčom je id rozhovoru, ktoré sa mení pod bežiacim panelom: `/clear` dá
-    nové a Codex povie svoje až po `thread/start`.
-    `SessionPane::FollowConversation` pri zmene zo známeho id sloty
-    vyprázdni (starý súbor zostane) a súbor nového id načíta len do
-    prázdnych slotov. Slot 0 a „kde som skončil" sa neukladajú (rozhodnutie
+    nové a Codex povie svoje až po `thread/start`. Záložka preto patrí
+    rozhovoru, v ktorom jej blok dostal kotvu (`blockConversation_`, plní
+    `SessionPane::FollowConversation`), a ide do jeho súboru. Kedy blok
+    dostal kotvu, nie kedy vznikol: prompt „/clear" vznikne v starom
+    rozhovore a CLI ho zapíše na začiatok nového. `/clear` sloty nemaže,
+    starý text je v okne ďalej a jeho záložky tam vedú. Slot prestavený do
+    iného rozhovoru prepíše starý súbor bez seba. Súbor id, ktoré panel
+    vidí prvý raz, sa načíta len do prázdnych slotov. Pôvodne `/clear` sloty
+    mazal, podľa návrhu beadu. Používateľ (12. 11. 2026): v jednom okne
+    s viacerými `/clear` chce záložky na všetkých častiach práce.
+
+    Id po `/clear` berie `proto::TrackSessionId`: hneď za
+    `conversation_reset` príde `system/background_tasks_changed` ešte so
+    starým `session_id` a prevzatie prvého id za resetom nechalo staré id
+    navždy (aj F2, kopírované id a „už otvorený"). `new_conversation_id`
+    resetu nie je id, pod ktorým CLI rozhovor zapíše. Odmerané
+    `tools/probe_local_echo.py` (CLI 2.1.322). Slot 0 a „kde som skončil" sa neukladajú (rozhodnutie
     používateľa 12. 11. 2026). Len pri `Capabilities::resume`. Meno backendu
     do cesty dáva `main.cpp` cez `MainWindow::SetBookmarksRoot`, panel ho
     nečíta. Overené naostro 12. 11. 2026. Claude (haiku): zápis, `--resume`

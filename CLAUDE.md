@@ -440,9 +440,12 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
     sloty 1–9). K bloku sa viaže až pri skoku (`model::Bind`); blok nie je
     alebo riadok znie inak (`LineChanged`) → povie sa to. Kotvu berie
     `SerializeBookmarks` z bloku pri zápise (prompt ju dostane až ozvenou,
-    `PromptAnchored`), panel zapisuje aj po dávke. Zmena id rozhovoru
-    (`/clear`) sloty vyprázdni (`FollowConversation`). Meno backendu do
-    cesty dáva `main.cpp`, nie panel.
+    `PromptAnchored`), panel zapisuje aj po dávke. Záložka patrí rozhovoru,
+    v ktorom jej blok dostal kotvu (`blockConversation_`), a ide do jeho
+    súboru; `/clear` sloty nemaže. Po `conversation_reset` príde ešte
+    záznam so starým `session_id` — nové id len to, ktoré sa líši
+    (`proto::TrackSessionId`). Meno backendu do cesty dáva `main.cpp`, nie
+    panel.
 
 **NESÚLAD MAPY ROZSAHOV** v titulku session znamená, že dĺžka modelu
 nesedí s `EM_GETTEXTLENGTHEX` — neladí invariant 3, 4 alebo 8. Hľadaj znak,

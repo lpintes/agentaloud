@@ -221,6 +221,8 @@ class Session {
   PendingPrompts pending_;
   // Under mutex_: written by the reader thread, read by whoever asks.
   std::string sessionId_;
+  // Under mutex_: the id /clear left, until a record names another one.
+  std::string resetFrom_;
   InitializeInfo handshake_;
   std::string effort_;
   // The commands in the newest list of background tasks: what StopAllTasks

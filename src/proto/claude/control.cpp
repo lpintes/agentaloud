@@ -534,6 +534,21 @@ Json MakeError(const std::string& requestId, const std::string& message) {
                                 {"error", message}}}};
 }
 
+void TrackSessionId(const std::string& recordId, bool reset, std::string* id,
+                    std::string* resetFrom) {
+  // Normally a no-op: Start already knows the id, because it chose it.  Also
+  // what is left for the run where CoCreateGuid failed and the session was
+  // launched without --session-id after all.
+  if (id->empty() && !recordId.empty() && recordId != *resetFrom) {
+    *id = recordId;
+    resetFrom->clear();
+  }
+  if (reset) {
+    *resetFrom = *id;
+    id->clear();
+  }
+}
+
 void PendingPrompts::Sent(const std::string& utf8Text) {
   const size_t first = utf8Text.find_first_not_of(" \t\r\n");
   if (first != std::string::npos && utf8Text[first] != '/') ++count_;

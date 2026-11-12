@@ -3137,6 +3137,34 @@ void TestClearResetsContext() {
   if (!context.empty()) CHECK_EQ(context[0].tokens, 0LL);
 }
 
+void TestClearTakesNewSessionId() {
+  TEST("session: po /clear plati id noveho rozhovoru, nie stare");
+  // Poradie odmerane 12. 11. 2026 (CLI 2.1.322, tools/probe_local_echo.py):
+  // conversation_reset a za nim background_tasks_changed este so STARYM id,
+  // az potom hook a system/init s novym.  new_conversation_id resetu nie je
+  // id, pod ktorym CLI rozhovor zapise.
+  std::string id = "old";
+  std::string resetFrom;
+  proto::TrackSessionId("old", false, &id, &resetFrom);   // system/init
+  CHECK(id == "old");
+  proto::TrackSessionId("old", true, &id, &resetFrom);    // conversation_reset
+  CHECK(id.empty());
+  proto::TrackSessionId("old", false, &id, &resetFrom);   // background_tasks
+  CHECK(id.empty());
+  proto::TrackSessionId("", false, &id, &resetFrom);      // bez session_id
+  CHECK(id.empty());
+  proto::TrackSessionId("new", false, &id, &resetFrom);   // hook_started
+  CHECK(id == "new");
+  proto::TrackSessionId("new", false, &id, &resetFrom);   // system/init
+  CHECK(id == "new");
+  // Druhy /clear: stare id je uz "new".
+  proto::TrackSessionId("new", true, &id, &resetFrom);
+  proto::TrackSessionId("new", false, &id, &resetFrom);
+  CHECK(id.empty());
+  proto::TrackSessionId("third", false, &id, &resetFrom);
+  CHECK(id == "third");
+}
+
 void TestNewlinesAreOneCharacter() {
   TEST("transcript: kazdy zlom riadku je prave jeden znak");
   // RichEdit pocita odstavcovy zlom ako jeden znak.  Keby text s "\r\n"
@@ -7047,6 +7075,7 @@ int main(int argc, char** argv) {
   TestUsageParsing();
   TestContextTokensParsing();
   TestClearResetsContext();
+  TestClearTakesNewSessionId();
   TestNewlinesAreOneCharacter();
   TestAnsiEscapesAreStripped();
   TestToolPathsAreShortened();
