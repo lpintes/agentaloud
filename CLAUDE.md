@@ -515,7 +515,11 @@ Krok je hotový až keď sa dá bezpečne skončiť — teda keď by nová sessi
 s jediným slovom „pokračuj" nestratila nič podstatné. Pred ohlásením hotového
 kroku:
 
-1. **Zostav a spusti** — nestačí, že sa to preložilo.
+1. **Zostav a spusti** — nestačí, že sa to preložilo. Zmena, ktorú vidno
+   v bežiacej appke, sa skúša **naostro na každom backende** (dnes Claude aj
+   Codex), nie len na tom, kvôli ktorému vznikla: aj kód, ktorý vyzerá
+   spoločný, ide cez dva adaptéry. Postup je v `tools/CLAUDE.md`. Backend,
+   na ktorom sa skúšať nedalo, sa povie a zapíše do beadu, nemlčí sa o ňom.
 2. **`bd update <id> --notes`** — čo sa zistilo, aké sú overené tvary dát,
    a **každá odchýlka od pôvodného návrhu aj s dôvodom.** Odchýlku zapíš aj do
    `--design` epicu, nech tam nezostane nepravda.
@@ -534,6 +538,13 @@ kroku:
    Bashový heredoc na to nie je — toto prostredie mu žerie spätné lomky (viď
    Conventions). Uzatváracie `'@` musí stáť na začiatku riadku, inak to
    PowerShell neprečíta.
+7. **Navrhni vydanie**, keď commit uzatvára novú funkciu alebo opravu, ktorá
+   má zmysel pre používateľov, a od poslednej značky nie je nič rozpracované.
+   Uveď počet commitov od značky (`git describe --tags`) a jednou-dvoma
+   vetami, čo vydanie používateľom prinesie. Len navrhni: `./release` sa
+   spúšťa až na výslovný pokyn, lebo vydanie hneď stiahne updater
+   (invariant 23). Interné zmeny (sondy, dokumentácia, refaktor) vydanie
+   nevyvolávajú.
 
 Bod 2 a 3 sú tie, ktoré sa vynechávajú, a sú to práve tie, ktoré rozhodujú
 o tom, či sa dá pokračovať zajtra.
