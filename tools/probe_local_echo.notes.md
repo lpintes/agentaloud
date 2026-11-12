@@ -34,5 +34,8 @@ Measured 2026-11-12, Claude CLI 2.1.322, `--model haiku`,
 - `TranslateHistory` drops every slash command record through
   `HumanPromptText`, so a resumed transcript shows none of them.
 
+Arguments (corpus 2026-11-12): `<command-args>` after the name, empty when
+none; a skill writes message, name, args on separate lines.
+
 Not measured: whether a local command's disk record is written before its
-`result`; arguments (`<command-args>`).
+`result`.

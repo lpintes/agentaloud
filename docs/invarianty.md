@@ -1075,6 +1075,16 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     pri Esc, lebo odpoveď useknutá uprostred sa inak neskôr číta ako odpoveď,
     ktorá skončila sama.
 
+    Slash príkaz, ktorý napísal čitateľ, prompt **je**, hoci ho
+    `HumanPromptText` vynechá (zoznam rozhovorov ho nechce: „/clear" je na
+    začiatku každého súboru, ktorý `/clear` začal). `TranslateHistory` z neho
+    robí `UserPrompt` cez `proto::SlashCommandText` s uuid záznamu, aby sa
+    k nemu vrátila záložka (invariant 28) a aby obnovený prepis ukázal, na čo
+    odpoveď nasleduje (claude-gui-lkk.7.15). Okrem `/model`: F5 mení model
+    cez `set_model` a CLI ho zapíše ako `/model` presne ako napísaný
+    (`tools/probe_set_model.notes.md`), takže by obnovený prepis tvrdil, že
+    ho čitateľ napísal.
+
     A **nie každý prompt je `user` záznam.** Prompt poslaný počas ťahu, ktorý
     CLI vstrebe do bežiaceho ťahu (invariant 1), dostane model ako
     system-reminder pri ďalšom výsledku nástroja a na disku po ňom zostane len
@@ -1756,8 +1766,20 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     nečíta. Overené naostro 12. 11. 2026. Claude (haiku): zápis, `--resume`
     a skok, prázdny slot, neexistujúca kotva aj zmenený odtlačok. Codex
     (gpt-6-luna): zápis, `--resume` a skok, `/clear` → sloty prázdne, súbor
-    starého vlákna zostal. Lokálny slash príkaz Claudu ozvenu nemá, takže
-    záložka na ňom sa ohlási ako uložená, ale do súboru nepríde.
+    starého vlákna zostal.
+
+    Slash príkazy Claudu (claude-gui-lkk.7.15, `tools/probe_local_echo.notes.md`):
+    skill sa ozve ako záznam `<command-name>`, ktorý `HumanPromptText`
+    zahodí; kotvu z neho berie `proto::SlashCommandText` („/meno argumenty",
+    oba poradia tagov). `/clear` sa neozve, ale `conversation_reset` nesie
+    `user_message_uuid`, a to je uuid jeho záznamu na začiatku nového súboru
+    — translátor z neho pošle `PromptAnchored{"/clear"}`. Do súboru nového
+    rozhovoru ide sám: `TrackSessionId` po resete id vyprázdni
+    a `FollowConversation` pri prázdnom id bloky nepriradí. Overené naostro
+    (haiku): záložka na „/clear" v súbore nového rozhovoru, `--resume`,
+    Ctrl+1 na ňu skočí. Ostatné lokálne príkazy (`/context`) v streame nič
+    s uuid nemajú; záložka na nich sa ohlási ako uložená, ale do súboru
+    nepríde (otvorené).
 
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa

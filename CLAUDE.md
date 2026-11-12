@@ -361,7 +361,8 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
     `ReadSessionRecords` (len `user`/`assistant`, bez sidechainov; vstrebaný
     prompt počas ťahu je len `attachment` `queued_command` → `user`) →
     `TranslateHistory` → `model::RestoreHistory` po jednej udalosti. `user`
-    záznam nie je vždy prompt (`HumanPromptText`, overuje aj typ). Kurzor
+    záznam nie je vždy prompt (`HumanPromptText`, overuje aj typ); slash
+    príkaz áno (`SlashCommandText`, s uuid), okrem `/model` (F5). Kurzor
     a `anchor_` po prehratí na konci; vkladá sa jednou úpravou.
 19. **Klávesa, ktorú F1 nevymenúva, neexistuje.** Nový kláves nie je hotový,
     kým nie je v `kKeys…` každého `src/i18n/<jazyk>.def`. Čo sa medzi
@@ -444,8 +445,10 @@ jeho plné znenie.** Nový invariant alebo zmenu píš do oboch súborov.
     v ktorom jej blok dostal kotvu (`blockConversation_`), a ide do jeho
     súboru; `/clear` sloty nemaže. Po `conversation_reset` príde ešte
     záznam so starým `session_id` — nové id len to, ktoré sa líši
-    (`proto::TrackSessionId`). Meno backendu do cesty dáva `main.cpp`, nie
-    panel.
+    (`proto::TrackSessionId`). Slash príkaz Claudu: skill kotví ozvena cez
+    `SlashCommandText`, `/clear` uuid `user_message_uuid` z
+    `conversation_reset`; ostatné lokálne príkazy kotvu nemajú. Meno
+    backendu do cesty dáva `main.cpp`, nie panel.
 
 **NESÚLAD MAPY ROZSAHOV** v titulku session znamená, že dĺžka modelu
 nesedí s `EM_GETTEXTLENGTHEX` — neladí invariant 3, 4 alebo 8. Hľadaj znak,

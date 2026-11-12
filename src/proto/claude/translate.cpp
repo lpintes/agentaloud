@@ -470,7 +470,10 @@ std::vector<agent::Event> Translator::Translate(const Json& record) {
       // is not one is a prompt the pane never wrote, and nothing to anchor.
       if (auto replay = event.raw.find("isReplay");
           replay != event.raw.end() && *replay == true) {
+        // A skill echoes too, as a slash command record; the block says
+        // what the reader typed, and so does SlashCommandText.
         std::string prompt = HumanPromptText(event.raw);
+        if (prompt.empty()) prompt = SlashCommandText(event.raw);
         const std::string uuid = StringField(event.raw, "uuid");
         if (!prompt.empty() && !uuid.empty()) {
           events.push_back(agent::PromptAnchored{std::move(prompt), uuid});
@@ -603,6 +606,15 @@ std::vector<agent::Event> Translator::Translate(const Json& record) {
       // /clear makes none, so the old conversation's size would stay until the
       // next answer.  Zero is "not known", which is the truth until then.
       events.push_back(agent::ContextUsed{0, 0});
+      // /clear is never echoed, but the reset names the record that files
+      // it at the head of the new conversation (tools/probe_local_echo
+      // .notes.md).  Without the anchor a mark on "/clear" ends with the
+      // window.  The text is the bare command: the pane's block holds what
+      // was typed, and a /clear with words after it is not worth a guess.
+      if (const std::string uuid = StringField(event.raw, "user_message_uuid");
+          !uuid.empty()) {
+        events.push_back(agent::PromptAnchored{"/clear", uuid});
+      }
       break;
     case EventKind::Unknown:
       events.push_back(agent::Unrecognised{
@@ -684,6 +696,19 @@ std::vector<agent::Event> TranslateRecord(const Json& record) {
   return Translator().Translate(record);
 }
 
+namespace {
+
+// F5 changes the model with set_model, and the CLI files that as a /model
+// command just like one typed (tools/probe_set_model.notes.md); nothing on
+// disk tells the two apart.  The live transcript never showed the first, and
+// a resumed one must not say the reader typed it.  A typed /model is lost
+// with it, which costs a line: the model bar says the same.
+bool IsModelCommand(const std::string& command) {
+  return command == "/model" || command.rfind("/model ", 0) == 0;
+}
+
+}  // namespace
+
 std::vector<agent::Event> TranslateHistory(const std::vector<Json>& records,
                                            Translator* live) {
   std::vector<agent::Event> events;
@@ -701,6 +726,12 @@ std::vector<agent::Event> TranslateHistory(const std::vector<Json>& records,
     } else if (std::string prompt = HumanPromptText(record); !prompt.empty()) {
       events.push_back(
           agent::UserPrompt{std::move(prompt), StringField(record, "uuid")});
+    } else if (std::string command = SlashCommandText(record);
+               !command.empty() && !IsModelCommand(command)) {
+      // As the live transcript showed it when it was typed, and with the
+      // uuid a mark on it was saved under.
+      events.push_back(
+          agent::UserPrompt{std::move(command), StringField(record, "uuid")});
     }
     // Everything the live path makes of the same record.  A record that was a
     // prompt has no tool_result in it, so this adds nothing twice.

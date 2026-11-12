@@ -4585,11 +4585,10 @@ void TestHistoryRestore() {
       // Periodicka sprava CLI o kontexte: isMeta, teda nie prompt.
       "{\"type\":\"user\",\"isMeta\":true,"
       "\"message\":{\"content\":\"## Context Usage\"}}\n"
-      // Vypis slash prikazu: otvara sa znackou, teda tiez nie prompt.
-      "{\"type\":\"user\",\"message\":{\"content\":[{\"type\":\"text\","
-      "\"text\":\"<command-name>/bd</command-name>\"}]}}\n"
       // set_model z F5 je na disku lokalny /model, tri `user` zaznamy
-      // (tools/probe_set_model.notes.md); ziadny z nich nie je prompt.
+      // (tools/probe_set_model.notes.md); ziadny z nich nie je prompt --
+      // ani /model, hoci iny slash prikaz uz prompt je (TestPromptAnchor):
+      // citatel ho nenapisal, stlacil F5.
       "{\"type\":\"user\",\"message\":{\"content\":"
       "\"<local-command-caveat>The command below was run directly in "
       "Claude Code</local-command-caveat>\"}}\n"
@@ -4639,7 +4638,7 @@ void TestHistoryRestore() {
 
   std::vector<proto::Json> records;
   CHECK(proto::ReadSessionRecords(file.wstring(), &records));
-  CHECK_EQ(records.size(), size_t{12});
+  CHECK_EQ(records.size(), size_t{11});
 
   model::Transcript transcript;
   const model::HistoryCounts counts =
@@ -6947,6 +6946,84 @@ void TestPromptAnchor(const std::string& dir) {
                       "message": {"role": "user", "content":
                       "<local-command-stdout>Set model to `haiku`</local-command-stdout>"}})")
               .empty());
+
+    // Skill sa ozve ako zaznam slash prikazu; kotva nesie to, co citatel
+    // napisal (tools/probe_local_echo.notes.md).
+    const auto skill = anchors(
+        R"({"type": "user", "isReplay": true, "uuid": "u5",
+            "message": {"role": "user", "content":
+            "<command-message>probe-gamma</command-message>\n<command-name>/probe-gamma</command-name>\n<command-args>raz  dva</command-args>"}})");
+    CHECK_EQ(skill.size(), size_t{1});
+    if (skill.size() == 1) {
+      CHECK_EQ(skill[0].text, std::string("/probe-gamma raz  dva"));
+      CHECK_EQ(skill[0].sourceId, std::string("u5"));
+    }
+    // /clear sa neozve, ale reset nesie uuid jeho zaznamu na zaciatku
+    // noveho rozhovoru.
+    const auto cleared = anchors(
+        R"({"type": "conversation_reset", "trigger": "clear",
+            "new_conversation_id": "x", "user_message_uuid": "u6",
+            "session_id": "s1"})");
+    CHECK_EQ(cleared.size(), size_t{1});
+    if (cleared.size() == 1) {
+      CHECK_EQ(cleared[0].text, std::string("/clear"));
+      CHECK_EQ(cleared[0].sourceId, std::string("u6"));
+    }
+    CHECK(anchors(R"({"type": "conversation_reset", "trigger": "clear"})")
+              .empty());
+  }
+
+  // Tvar slash prikazu na disku: oba poradia tagov, argumenty len ked su,
+  // isMeta a prompt, ktory o tagu len hovori, nie su prikaz.
+  {
+    auto slash = [](const char* content, bool meta = false) {
+      proto::Json record = {{"type", "user"},
+                            {"message", {{"role", "user"},
+                                         {"content", content}}}};
+      if (meta) record["isMeta"] = true;
+      return proto::SlashCommandText(record);
+    };
+    CHECK_EQ(slash("<command-name>/clear</command-name>\n            "
+                   "<command-message>clear</command-message>\n            "
+                   "<command-args></command-args>"),
+             std::string("/clear"));
+    CHECK_EQ(slash("<command-name>/model</command-name>\n            "
+                   "<command-message>model</command-message>\n            "
+                   "<command-args> opus </command-args>"),
+             std::string("/model opus"));
+    CHECK_EQ(slash("<command-message>init</command-message>\n"
+                   "<command-name>/init</command-name>"),
+             std::string("/init"));
+    CHECK(slash("<command-name>/clear</command-name>", true).empty());
+    CHECK(slash("co robi <command-name>/clear</command-name>?").empty());
+    CHECK(slash("<local-command-caveat>x</local-command-caveat>").empty());
+    CHECK(proto::SlashCommandText(proto::Json::parse(
+              R"({"type": "assistant", "message": {"content":
+                  "<command-name>/clear</command-name>"}})"))
+              .empty());
+
+    // Obnovena historia ukaze slash prikaz ako prompt s uuid zaznamu, aby
+    // sa k nemu vratila zalozka.  Zoznam rozhovorov ho dalej nevidi.
+    std::vector<proto::Json> records = {
+        proto::Json::parse(
+            R"({"type": "user", "isMeta": true, "uuid": "m1", "message":
+                {"role": "user", "content":
+                "<local-command-caveat>Caveat</local-command-caveat>"}})"),
+        proto::Json::parse(
+            R"({"type": "user", "uuid": "c1", "message": {"role": "user",
+                "content": "<command-name>/clear</command-name>\n<command-message>clear</command-message>\n<command-args></command-args>"}})"),
+        proto::Json::parse(
+            R"({"type": "user", "uuid": "p1", "message": {"role": "user",
+                "content": "ahoj"}})")};
+    const auto prompts =
+        EventsOf<agent::UserPrompt>(proto::TranslateHistory(records, nullptr));
+    CHECK_EQ(prompts.size(), size_t{2});
+    if (prompts.size() == 2) {
+      CHECK_EQ(prompts[0].text, std::string("/clear"));
+      CHECK_EQ(prompts[0].sourceId, std::string("c1"));
+      CHECK_EQ(prompts[1].text, std::string("ahoj"));
+    }
+    CHECK(proto::HumanPromptText(records[1]).empty());
   }
 
   // Codex: kotvou je id itemu userMessage, ten isty v historii (overene,

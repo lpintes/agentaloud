@@ -179,6 +179,46 @@ std::string HumanPromptText(const Json& record) {
 
 namespace {
 
+// What sits between <tag> and </tag>, or false when the tag is not there.
+bool TagText(const std::string& text, std::string_view tag, std::string* out) {
+  const std::string open = "<" + std::string(tag) + ">";
+  const std::string close = "</" + std::string(tag) + ">";
+  const size_t begin = text.find(open);
+  if (begin == std::string::npos) return false;
+  const size_t from = begin + open.size();
+  const size_t end = text.find(close, from);
+  if (end == std::string::npos) return false;
+  *out = text.substr(from, end - from);
+  return true;
+}
+
+}  // namespace
+
+std::string SlashCommandText(const Json& record) {
+  if (record.value("isMeta", false)) return {};
+  const std::string text = UserText(record);
+  const size_t first = FirstWord(text);
+  if (first == std::string::npos) return {};
+  // Only a record that IS the command.  The name tag is quoted elsewhere too
+  // -- a prompt that talks about it, a skill's own text -- and a prompt that
+  // happens to mention one is still that prompt.
+  if (text.compare(first, 14, "<command-name>") != 0 &&
+      text.compare(first, 17, "<command-message>") != 0) {
+    return {};
+  }
+  std::string name;
+  if (!TagText(text, "command-name", &name) || name.empty()) return {};
+  std::string args;
+  TagText(text, "command-args", &args);
+  const size_t from = args.find_first_not_of(" \t\r\n");
+  if (from == std::string::npos) return name;
+  args.erase(0, from);
+  args.erase(args.find_last_not_of(" \t\r\n") + 1);
+  return name + " " + args;
+}
+
+namespace {
+
 // A prompt sent during a turn that the CLI folded into that same turn is never
 // filed as a `user` record: the model got it as a system-reminder beside the
 // next tool result, and the file keeps only this attachment, at that very

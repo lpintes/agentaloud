@@ -117,6 +117,21 @@ bool ReadSessionRecords(const std::wstring& path, std::vector<Json>* out);
 // "<local-command-stdout>", "<local-command-caveat>") or the isMeta flag.
 std::string HumanPromptText(const Json& record);
 
+// The slash command this `user` record files, as the reader typed it --
+// "/model opus" -- or empty when it files none.
+//
+// HumanPromptText leaves these out on purpose, and the session list still
+// wants that: "/clear" heads every file a /clear began, and a list of them
+// would name no conversation.  The transcript wants the opposite.  The reader
+// did type the command, a mark set on it needs the record's uuid to come back
+// (claude-gui-lkk.7.15), and a resumed transcript without it reads as if the
+// answer after it came from nowhere.
+//
+// The CLI writes the tags in two orders, name first for a command it runs
+// itself and message first for a skill, and args only when there are some
+// (tools/probe_local_echo.notes.md, the corpus 2026-11-12).
+std::string SlashCommandText(const Json& record);
+
 // Is this the CLI's own mark that a turn was cut short -- "[Request
 // interrupted by user]", with or without "for tool use" on the end?
 //
