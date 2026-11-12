@@ -108,6 +108,14 @@ struct Block {
   // (agent::ToolCallStarted::within); a result has its call's.  That call's
   // result is placed behind every such block.
   std::string within;
+  // What a bookmark saved across a restart is anchored to: the block's own
+  // record, by an id the CLI keeps in the history (agent::AssistantText::
+  // sourceId), and the call's id for a ToolUse and a ToolResult -- which is
+  // why the kind belongs to the anchor too, Codex gives the two one id.  The
+  // id, never the place: a replayed history orders blocks differently from
+  // the live run.  Empty for a block of our own making, and for a live prompt
+  // until agent::PromptAnchored.
+  std::string sourceId;
 
   // Offsets into Transcript::Text(), maintained by Transcript.  length always
   // includes the block's trailing newline, so the blocks tile the buffer with
@@ -265,6 +273,7 @@ class Transcript {
 
  private:
   Edit AppendBlocks(std::vector<Block> blocks);
+  void AnchorPrompt(const agent::PromptAnchored& anchored);
   // `at` is the index to insert before; past the end means append.
   Edit InsertBlocks(size_t at, std::vector<Block> blocks);
   // Where a result for this tool_use_id belongs: right behind the call, or

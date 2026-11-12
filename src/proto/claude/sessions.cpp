@@ -210,6 +210,13 @@ bool AbsorbedPrompt(const Json& record, Json* out) {
   if (const auto time = record.find("timestamp"); time != record.end()) {
     (*out)["timestamp"] = *time;
   }
+  // The uuid the prompt's echo had live, and so the one its bookmark is
+  // anchored to; the attachment's own uuid is a fresh one
+  // (tools/probe_anchor_claude.notes.md).
+  if (const auto source = attachment->find("source_uuid");
+      source != attachment->end() && source->is_string()) {
+    (*out)["uuid"] = *source;
+  }
   return true;
 }
 

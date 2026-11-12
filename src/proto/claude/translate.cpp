@@ -388,6 +388,9 @@ std::vector<agent::Event> Translator::Translate(const Json& record) {
       // conversation's and in among them (tools/probe_subagents.notes.md);
       // parent_tool_use_id is the one thing that tells them apart.
       const std::string by = Author(event.raw);
+      // Each record carries one content block, so its uuid names the block
+      // and nothing else (tools/probe_anchor_claude.notes.md).
+      const std::string uuid = StringField(event.raw, "uuid");
       for (const Json& item : *content) {
         if (!item.is_object()) continue;
         const std::string type = StringField(item, "type");
@@ -399,12 +402,12 @@ std::vector<agent::Event> Translator::Translate(const Json& record) {
         if (type == "thinking") {
           std::string text = StringField(item, "thinking");
           if (!text.empty()) {
-            events.push_back(agent::Thinking{std::move(text), by});
+            events.push_back(agent::Thinking{std::move(text), by, uuid});
           }
         } else if (type == "text") {
           std::string text = StringField(item, "text");
           if (!text.empty()) {
-            events.push_back(agent::AssistantText{std::move(text), by});
+            events.push_back(agent::AssistantText{std::move(text), by, uuid});
           }
         } else if (type == "tool_use") {
           auto input = item.find("input");
@@ -460,6 +463,19 @@ std::vector<agent::Event> Translator::Translate(const Json& record) {
       // are sent, and the CLI's synthetic nudges ("your previous response had
       // no visible output") are machinery the user did not write and should
       // not read.
+      // The echo of a prompt of ours names the record it will be in the
+      // history -- the user record, or for a prompt taken into a running turn
+      // the queued_command attachment's source_uuid
+      // (tools/probe_anchor_claude.notes.md).  Only the echo: a record that
+      // is not one is a prompt the pane never wrote, and nothing to anchor.
+      if (auto replay = event.raw.find("isReplay");
+          replay != event.raw.end() && *replay == true) {
+        std::string prompt = HumanPromptText(event.raw);
+        const std::string uuid = StringField(event.raw, "uuid");
+        if (!prompt.empty() && !uuid.empty()) {
+          events.push_back(agent::PromptAnchored{std::move(prompt), uuid});
+        }
+      }
       const Json* content = Content(event.raw);
       if (content == nullptr) break;
       for (const Json& item : *content) {
@@ -683,7 +699,8 @@ std::vector<agent::Event> TranslateHistory(const std::vector<Json>& records,
       // one that ended by itself: it just stops.
       events.push_back(agent::Interrupted{});
     } else if (std::string prompt = HumanPromptText(record); !prompt.empty()) {
-      events.push_back(agent::UserPrompt{std::move(prompt)});
+      events.push_back(
+          agent::UserPrompt{std::move(prompt), StringField(record, "uuid")});
     }
     // Everything the live path makes of the same record.  A record that was a
     // prompt has no tool_result in it, so this adds nothing twice.

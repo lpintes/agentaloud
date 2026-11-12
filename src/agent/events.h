@@ -148,9 +148,17 @@ struct LimitWindow {
 // (claude-gui-b8n.3).  A tool result carries none: it is filed behind its
 // call and is the call's.  The `= {}` lets every place that makes one of
 // these for the agent itself leave `by` out without -Wmissing-field-initializers.
+//
+// `sourceId` names the one record the block is made of, the same live and
+// replayed from history after a restart, which is what a saved bookmark is
+// anchored to (claude-gui-lkk.7.12): Claude's record uuid, Codex's item id.
+// Not the message id -- Claude gives one to every block of a response.  Empty
+// when the CLI gives nothing stable; the block then cannot be bookmarked for
+// good.  A tool call needs none: its id is already that (ToolCall::id).
 struct AssistantText {
   std::string text;
   std::string by = {};
+  std::string sourceId = {};
 };
 
 // Text of the model's reasoning, when there is any.  Claude no longer sends
@@ -159,6 +167,7 @@ struct AssistantText {
 struct Thinking {
   std::string text;
   std::string by = {};
+  std::string sourceId = {};
 };
 
 // A sign that a turn is busy thinking, with nothing to show.  What "premýšľam"
@@ -210,8 +219,22 @@ struct QuestionByPrompt {
 
 // Only in a replayed history.  A live prompt goes into the transcript the
 // moment it is sent, and a live interruption is marked by the pane itself.
-struct UserPrompt { std::string text; };
+// `sourceId` as on AssistantText.
+struct UserPrompt {
+  std::string text;
+  std::string sourceId = {};
+};
 struct Interrupted {};
+
+// The id a live prompt will have in the history, which the CLI says only
+// after the prompt was sent and its block made: Claude when it echoes the
+// prompt (--replay-user-messages), Codex in the prompt's userMessage item.
+// The text says which prompt -- a slash command the CLI runs itself is never
+// echoed, so the oldest prompt without an id is not always the one meant.
+struct PromptAnchored {
+  std::string text;
+  std::string sourceId;
+};
 
 // The project directory, which tool paths are shortened against.
 struct WorkingDirectory { std::string path; };
@@ -381,7 +404,8 @@ struct Unrecognised { std::string type; };
 using Event = std::variant<AssistantText, Thinking, ThinkingTick,
                            ToolCallStarted, ToolCallFinished, ToolCallChanged,
                            ToolDenied,
-                           QuestionByPrompt, UserPrompt, Interrupted, WorkingDirectory,
+                           QuestionByPrompt, UserPrompt, PromptAnchored,
+                           Interrupted, WorkingDirectory,
                            ModelChanged, ModeChanged, ContextUsed,
                            UsageChanged, RateLimitChanged,
                            RateLimitUnavailable, Ready, TurnStarted,

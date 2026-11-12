@@ -294,12 +294,16 @@ bool TranslateMessageItem(const Json& item, std::vector<agent::Event>* out,
     // "final_answer" the answer; heard in the order they came, they are what
     // the terminal shows (invariant 6).
     std::string text = StringField(item, "text");
-    if (!text.empty()) out->push_back(agent::AssistantText{std::move(text)});
+    if (!text.empty()) {
+      out->push_back(agent::AssistantText{std::move(text), {}, StringField(item, "id")});
+    }
     return true;
   }
   if (type == "reasoning") {
     std::string text = ReasoningText(item);
-    if (!text.empty()) out->push_back(agent::Thinking{std::move(text)});
+    if (!text.empty()) {
+      out->push_back(agent::Thinking{std::move(text), {}, StringField(item, "id")});
+    }
     return true;
   }
   if (type == "userMessage") return true;  // the pane wrote it when sending
@@ -1135,6 +1139,15 @@ std::vector<agent::Event> Translator::Translate(const Json& message) {
         deniedByReviewer_.erase(denied);
       }
       events.push_back(agent::ToolCallFinished{std::move(result)});
+    } else if (StringField(item, "type") == "userMessage") {
+      // A prompt of ours, a steer as well, under the id it keeps in the
+      // history (tools/probe_anchor_codex.notes.md).  A subagent's is the
+      // task its parent gave it, which the pane never wrote.
+      std::string text = UserText(item);
+      const std::string id = StringField(item, "id");
+      if (!foreign && !text.empty() && !id.empty()) {
+        events.push_back(agent::PromptAnchored{std::move(text), id});
+      }
     } else if (!TranslateMessageItem(item, &events, true)) {
       events.push_back(
           agent::Unrecognised{"item/" + StringField(item, "type")});
@@ -1255,7 +1268,10 @@ std::vector<agent::Event> TranslateHistory(const Json& resumeResult) {
       for (const Json& item : items) {
         if (StringField(item, "type") == "userMessage") {
           std::string text = UserText(item);
-          if (!text.empty()) events.push_back(agent::UserPrompt{std::move(text)});
+          if (!text.empty()) {
+            events.push_back(
+                agent::UserPrompt{std::move(text), StringField(item, "id")});
+          }
         } else if (IsToolItem(item)) {
           events.push_back(agent::ToolCallStarted{ToolCallFromItem(item)});
           // A call that was still running when the turn was cut off has no

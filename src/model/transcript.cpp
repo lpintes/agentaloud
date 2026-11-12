@@ -811,6 +811,30 @@ Edit Transcript::AppendInterrupted() {
   return AppendBlocks({MakeInterrupted()});
 }
 
+void Transcript::AnchorPrompt(const agent::PromptAnchored& anchored) {
+  if (anchored.sourceId.empty()) return;
+  // The CLI takes prompts up in the order they were sent, so the one meant is
+  // the oldest of those after the last prompt that has an id.  Not the oldest
+  // in the whole transcript: a prompt that never got one -- the process died
+  // before it was taken up -- would otherwise take the id of a later prompt
+  // of the same text, and a bookmark on it would come back somewhere else.
+  size_t from = blocks_.size();
+  while (from > 0) {
+    const Block& block = blocks_[from - 1];
+    if (block.kind == BlockKind::UserPrompt && !block.sourceId.empty()) break;
+    --from;
+  }
+  const std::wstring body = MakeUserPrompt(Utf16FromUtf8(anchored.text)).body;
+  for (size_t i = from; i < blocks_.size(); ++i) {
+    Block& block = blocks_[i];
+    if (block.kind == BlockKind::UserPrompt && block.sourceId.empty() &&
+        block.body == body) {
+      block.sourceId = anchored.sourceId;
+      return;
+    }
+  }
+}
+
 void Transcript::NoteUnknown(const std::string& type) {
   ++unknownCount_;
   for (const std::string& seen : unknownTypes_) {
@@ -834,16 +858,19 @@ std::vector<Edit> Transcript::Append(const std::vector<agent::Event>& events) {
       if (wide.empty()) continue;
       made.push_back(MakeAssistantText(UnlinkProjectPaths(wide, projectRoot_)));
       made.back().speaker = Widen(text->by);
+      made.back().sourceId = text->sourceId;
     } else if (const auto* thinking = std::get_if<agent::Thinking>(&event)) {
       const std::wstring wide = Widen(thinking->text);
       if (wide.empty()) continue;
       made.push_back(MakeThinking(wide));
       made.back().speaker = Widen(thinking->by);
+      made.back().sourceId = thinking->sourceId;
     } else if (const auto* started =
                    std::get_if<agent::ToolCallStarted>(&event)) {
       made.push_back(MakeToolUse(started->call, projectRoot_));
       made.back().speaker = Widen(started->by);
       made.back().within = started->within;
+      made.back().sourceId = started->call.id;
     } else if (const auto* finished =
                    std::get_if<agent::ToolCallFinished>(&event)) {
       // The call is looked up among the blocks already placed.  A batch that
@@ -862,6 +889,7 @@ std::vector<Edit> Transcript::Append(const std::vector<agent::Event>& events) {
       made.push_back(MakeToolResult(finished->result, call));
       made.back().speaker = std::move(speaker);
       made.back().within = std::move(within);
+      made.back().sourceId = finished->result.callId;
     } else if (const auto* change =
                    std::get_if<agent::ToolCallChanged>(&event)) {
       // After everything of this batch is placed, so that a call made in the
@@ -879,6 +907,11 @@ std::vector<Edit> Transcript::Append(const std::vector<agent::Event>& events) {
       made.push_back(std::move(block));
     } else if (const auto* prompt = std::get_if<agent::UserPrompt>(&event)) {
       made.push_back(MakeUserPrompt(Utf16FromUtf8(prompt->text)));
+      made.back().sourceId = prompt->sourceId;
+    } else if (const auto* anchored =
+                   std::get_if<agent::PromptAnchored>(&event)) {
+      // Changes no text, so it makes no edit.
+      AnchorPrompt(*anchored);
     } else if (std::holds_alternative<agent::Interrupted>(event)) {
       made.push_back(MakeInterrupted());
     } else if (const auto* ended = std::get_if<agent::SessionEnded>(&event)) {

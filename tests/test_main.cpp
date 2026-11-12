@@ -124,6 +124,34 @@ std::map<model::BlockKind, size_t> CountKinds(const model::Transcript& t) {
   return counts;
 }
 
+// Kazdy blok, ktory vznikol zo zaznamu CLI, ma kotvu pre trvalu zalozku
+// (claude-gui-lkk.7.12), a dvojica druh + kotva urcuje prave jeden blok.
+// Druh patri do kluca, lebo Codex da volaniu aj vysledku to iste id.
+// Vracia pocet blokov s kotvou, aby test vedel, ze nekontroloval prazdno.
+size_t CheckAnchors(const model::Transcript& t, const char* file, int line) {
+  std::set<std::pair<model::BlockKind, std::string>> seen;
+  for (const model::Block& block : t.blocks()) {
+    switch (block.kind) {
+      case model::BlockKind::UserPrompt:
+      case model::BlockKind::AssistantText:
+      case model::BlockKind::Thinking:
+      case model::BlockKind::ToolUse:
+      case model::BlockKind::ToolResult:
+        break;
+      default:
+        continue;
+    }
+    if (block.sourceId.empty()) {
+      Fail(file, line, "blok bez kotvy: " + model::Utf8FromUtf16(block.summary));
+      continue;
+    }
+    if (!seen.insert({block.kind, block.sourceId}).second) {
+      Fail(file, line, "kotva dvakrat: " + block.sourceId);
+    }
+  }
+  return seen.size();
+}
+
 // Prehra cely zaznam a po KAZDOM zazname skontroluje invarianty -- rozbita
 // mapa rozsahov sa tak pripne na konkretnu udalost, nie na koniec suboru.
 bool Replay(const std::vector<proto::Json>& records, model::Transcript* into,
@@ -4451,10 +4479,11 @@ void TestHistoryRestore() {
       "{\"type\":\"user\",\"message\":{\"content\":"
       "\"<local-command-stdout>Set model to `haiku (claude-haiku-5-5)`"
       "</local-command-stdout>\"}}\n"
-      "{\"type\":\"user\",\"message\":{\"content\":\"co robi tento subor\"}}\n"
-      "{\"type\":\"assistant\",\"message\":{\"content\":[{"
+      "{\"type\":\"user\",\"uuid\":\"p1\","
+      "\"message\":{\"content\":\"co robi tento subor\"}}\n"
+      "{\"type\":\"assistant\",\"uuid\":\"a1\",\"message\":{\"content\":[{"
       "\"type\":\"thinking\",\"thinking\":\"treba sa pozriet\"}]}}\n"
-      "{\"type\":\"assistant\",\"message\":{\"content\":[{"
+      "{\"type\":\"assistant\",\"uuid\":\"a2\",\"message\":{\"content\":[{"
       "\"type\":\"text\",\"text\":\"Pozriem sa.\"}]}}\n"
       "{\"type\":\"assistant\",\"message\":{\"content\":[{"
       "\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"Bash\","
@@ -4465,7 +4494,10 @@ void TestHistoryRestore() {
       // Prompt poslany pocas tahu, ktory CLI vstrebalo do beziaceho tahu:
       // na disku nema user zaznam, len tuto prilohu (claude-gui-lkk.83).
       // Zo stdin chodi bez origin, z terminalu s origin human.
-      "{\"type\":\"attachment\",\"attachment\":{\"type\":\"queued_command\","
+      // Kotva je source_uuid, uuid ozveny -- vlastny uuid prilohy je novy
+      // (tools/probe_anchor_claude.notes.md).
+      "{\"type\":\"attachment\",\"uuid\":\"att\","
+      "\"attachment\":{\"type\":\"queued_command\",\"source_uuid\":\"p2\","
       "\"prompt\":[{\"type\":\"text\",\"text\":\"a este datum\"}],"
       "\"commandMode\":\"prompt\"}}\n"
       // Ta ista priloha, ale hlasenie subagenta a ulohy na pozadi: ani jedno
@@ -4515,6 +4547,15 @@ void TestHistoryRestore() {
   CHECK_EQ(blocks[5].body, std::wstring(L"a este datum"));
   CHECK(blocks[6].kind == model::BlockKind::Interrupted);
   CHECK_EQ(blocks[0].body, std::wstring(L"co robi tento subor"));
+  // Kotvy trvalych zaloziek: uuid zaznamu, id volania, a pri vstrebanom
+  // prompte uuid ozveny.  Znacka prerusenia je nasa a kotvu nema.
+  CHECK_EQ(blocks[0].sourceId, std::string("p1"));
+  CHECK_EQ(blocks[1].sourceId, std::string("a1"));
+  CHECK_EQ(blocks[2].sourceId, std::string("a2"));
+  CHECK_EQ(blocks[3].sourceId, std::string("toolu_1"));
+  CHECK_EQ(blocks[4].sourceId, std::string("toolu_1"));
+  CHECK_EQ(blocks[5].sourceId, std::string("p2"));
+  CHECK(blocks[6].sourceId.empty());
 
   // Subor bez jedineho zaznamu, z ktoreho by bol blok, nie je historia:
   // prazdny prepis potom nie je obnovena session, len prazdna.
@@ -4829,6 +4870,8 @@ void TestFixtureDisk(const std::string& dir) {
   }
   CHECK(!used.empty());
   CHECK_EQ(used, resulted);
+  // Kazdy blok z disku ma kotvu -- uuid zaznamu, id volania.
+  CHECK(CheckAnchors(transcript, __FILE__, __LINE__) > 0);
 
   // Prvy prompt je prvy z TURNS a je to text, ktory napisal clovek -- nie
   // strojopis, ktory CLI zapisuje do tych istych zaznamov.
@@ -6733,6 +6776,84 @@ void TestCodexFixtureNoAuth(const std::string& dir) {
             .state == agent::LimitState::Exhausted);
 }
 
+void TestPromptAnchor(const std::string& dir) {
+  TEST("kotva promptu: ziva prichadza az po odoslani a patri spravnemu bloku");
+  // Model: slash prikaz, ktory CLI vykona samo, sa neozve -- kotva preto
+  // nejde najstarsiemu promptu bez nej, ale tomu s rovnakym textom.
+  {
+    model::Transcript transcript;
+    transcript.AppendUserPrompt(L"/clear");
+    transcript.AppendUserPrompt(L"prvy\r\nriadok");
+    transcript.Append({agent::PromptAnchored{"prvy\nriadok", "u1"}});
+    CHECK(transcript.blocks()[0].sourceId.empty());
+    CHECK_EQ(transcript.blocks()[1].sourceId, std::string("u1"));
+    // Prompt, ktory sa neozval nikdy (proces skoncil), nesmie dostat kotvu
+    // neskorsieho s tym istym textom: ten by po obnoveni ukazal inam.
+    transcript.AppendUserPrompt(L"znova");
+    transcript.AppendUserPrompt(L"iny");
+    transcript.Append({agent::PromptAnchored{"iny", "u2"}});
+    transcript.AppendUserPrompt(L"znova");
+    transcript.Append({agent::PromptAnchored{"znova", "u3"}});
+    CHECK(transcript.blocks()[2].sourceId.empty());
+    CHECK_EQ(transcript.blocks()[3].sourceId, std::string("u2"));
+    CHECK_EQ(transcript.blocks()[4].sourceId, std::string("u3"));
+    // Kotva bez promptu nespravi nic a nic nepokazi.
+    CHECK(transcript.Append({agent::PromptAnchored{"nikde", "u4"}}).empty());
+    std::string problem;
+    CHECK(transcript.CheckInvariants(&problem));
+  }
+
+  // Claude: kotvu nesie ozvena (--replay-user-messages), nie iny user
+  // zaznam; ozvena set_model nie je prompt.  Tvary z
+  // tools/probe_midturn.notes.md a tools/probe_set_model.notes.md.
+  {
+    auto anchors = [](const char* json) {
+      return EventsOf<agent::PromptAnchored>(
+          proto::TranslateRecord(proto::Json::parse(json)));
+    };
+    const auto echoed = anchors(
+        R"({"type": "user", "isReplay": true, "uuid": "u1",
+            "message": {"role": "user",
+                        "content": [{"type": "text", "text": "dva"}]}})");
+    CHECK_EQ(echoed.size(), size_t{1});
+    if (echoed.size() == 1) {
+      CHECK_EQ(echoed[0].text, std::string("dva"));
+      CHECK_EQ(echoed[0].sourceId, std::string("u1"));
+    }
+    CHECK(anchors(R"({"type": "user", "uuid": "u2", "message": {"role":
+                      "user", "content": "bez ozveny"}})")
+              .empty());
+    CHECK(anchors(R"({"type": "user", "isReplay": true, "uuid": "u3",
+                      "message": {"role": "user", "content":
+                      "<local-command-stdout>Set model to `haiku`</local-command-stdout>"}})")
+              .empty());
+  }
+
+  // Codex: kotvou je id itemu userMessage, ten isty v historii (overene,
+  // tools/probe_anchor_codex.notes.md).  Prompt sa najprv napise, ako to
+  // robi panel, a az potom prehra stream.
+  bool ok = false;
+  const auto messages = ReadJsonl(dir + "/codex-multi.jsonl", &ok);
+  std::string text;
+  std::string id;
+  for (const proto::Json& message : messages) {
+    if (message.value("method", std::string()) != "item/completed") continue;
+    const proto::Json& item = message["params"]["item"];
+    if (item.value("type", std::string()) != "userMessage") continue;
+    text = item["content"][0].value("text", std::string());
+    id = item.value("id", std::string());
+    break;
+  }
+  CHECK(!text.empty() && !id.empty());
+  CodexReplay replay;
+  replay.transcript.AppendUserPrompt(model::Utf16FromUtf8(text));
+  if (!ReplayCodex(dir + "/codex-multi.jsonl", &replay)) return;
+  CHECK(replay.transcript.blocks().front().kind ==
+        model::BlockKind::UserPrompt);
+  CHECK_EQ(replay.transcript.blocks().front().sourceId, id);
+  CHECK(CheckAnchors(replay.transcript, __FILE__, __LINE__) > 1);
+}
+
 void TestCodexFixtureResume(const std::string& dir) {
   TEST("codex fixtura resume: historia prichadza v tvare streamu");
   bool ok = false;
@@ -6767,6 +6888,8 @@ void TestCodexFixtureResume(const std::string& dir) {
   CHECK_EQ(kinds.at(model::BlockKind::ToolResult), size_t{2});
   CHECK_EQ(kinds.at(model::BlockKind::AssistantText), size_t{2});
   CheckCallsHaveResults(transcript);
+  // Kotvou je id itemu, prompt nevynimajuc.
+  CHECK(CheckAnchors(transcript, __FILE__, __LINE__) > 0);
   // Prompt je prvy blok, ako po obnoveni Claude.
   CHECK(transcript.blocks().front().kind == model::BlockKind::UserPrompt);
   // Cesty sa skracuju voci projektu, a ten sa vie z odpovede.
@@ -6897,6 +7020,7 @@ int main(int argc, char** argv) {
   TestCodexFixtureReasoning(fixtures);
   TestCodexFixtureNoAuth(fixtures);
   TestCodexFixtureResume(fixtures);
+  TestPromptAnchor(fixtures);
 
   if (const char* corpus = std::getenv("AGENTALOUD_CORPUS")) {
     SoakOverCorpus(corpus);
