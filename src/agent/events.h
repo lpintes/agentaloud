@@ -236,6 +236,14 @@ struct PromptAnchored {
   std::string sourceId;
 };
 
+// A live prompt that will never have an id in the history, because the
+// adapter did what it asked and the CLI never saw it: Codex's /clear.  Said
+// so that a bookmark on it is announced as lasting only until the window
+// closes, rather than as saved.  `text` as on PromptAnchored.
+struct PromptUnanchored {
+  std::string text;
+};
+
 // The project directory, which tool paths are shortened against.
 struct WorkingDirectory { std::string path; };
 
@@ -405,7 +413,7 @@ using Event = std::variant<AssistantText, Thinking, ThinkingTick,
                            ToolCallStarted, ToolCallFinished, ToolCallChanged,
                            ToolDenied,
                            QuestionByPrompt, UserPrompt, PromptAnchored,
-                           Interrupted, WorkingDirectory,
+                           PromptUnanchored, Interrupted, WorkingDirectory,
                            ModelChanged, ModeChanged, ContextUsed,
                            UsageChanged, RateLimitChanged,
                            RateLimitUnavailable, Ready, TurnStarted,

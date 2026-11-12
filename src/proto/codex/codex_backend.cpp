@@ -369,21 +369,26 @@ void CodexBackend::SteerAwaitingLocked() {
 }
 
 bool CodexBackend::SendPrompt(const std::string& utf8Text) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  if (threadId_.empty() || clearing_) {
-    turnInFlight_ = true;
-    queued_.push_back(utf8Text);
-    return true;
-  }
-  // The pane refuses /clear during a turn (clearOnlyWhenIdle).  One that
-  // gets here anyway -- a turn the agent began a moment before -- goes to
-  // the model as text, as it did before /clear was ours.
-  std::string name;
-  if (!turnInFlight_ && agent::ParseClearCommand(utf8Text, &name)) {
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (threadId_.empty() || clearing_) {
+      turnInFlight_ = true;
+      queued_.push_back(utf8Text);
+      return true;
+    }
+    // The pane refuses /clear during a turn (clearOnlyWhenIdle).  One that
+    // gets here anyway -- a turn the agent began a moment before -- goes to
+    // the model as text, as it did before /clear was ours.
+    std::string name;
+    if (turnInFlight_ || !agent::ParseClearCommand(utf8Text, &name)) {
+      PromptLocked(utf8Text);
+      return true;
+    }
     ClearLocked(name);
-    return true;
   }
-  PromptLocked(utf8Text);
+  // No thread records the /clear, so no item ever names it.  Emit takes the
+  // lock.
+  Emit({agent::PromptUnanchored{utf8Text}});
   return true;
 }
 

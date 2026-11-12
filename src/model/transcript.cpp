@@ -811,27 +811,37 @@ Edit Transcript::AppendInterrupted() {
   return AppendBlocks({MakeInterrupted()});
 }
 
-void Transcript::AnchorPrompt(const agent::PromptAnchored& anchored) {
-  if (anchored.sourceId.empty()) return;
+Block* Transcript::PromptAwaitingAnchor(const std::string& utf8Text) {
   // The CLI takes prompts up in the order they were sent, so the one meant is
-  // the oldest of those after the last prompt that has an id.  Not the oldest
-  // in the whole transcript: a prompt that never got one -- the process died
-  // before it was taken up -- would otherwise take the id of a later prompt
-  // of the same text, and a bookmark on it would come back somewhere else.
+  // the oldest of those after the last prompt that is settled -- has an id,
+  // or never will.  Not the oldest in the whole transcript: a prompt that
+  // never got one -- the process died before it was taken up -- would
+  // otherwise take the id of a later prompt of the same text, and a bookmark
+  // on it would come back somewhere else.
+  const auto settled = [](const Block& block) {
+    return !block.sourceId.empty() || block.neverAnchored;
+  };
   size_t from = blocks_.size();
   while (from > 0) {
     const Block& block = blocks_[from - 1];
-    if (block.kind == BlockKind::UserPrompt && !block.sourceId.empty()) break;
+    if (block.kind == BlockKind::UserPrompt && settled(block)) break;
     --from;
   }
-  const std::wstring body = MakeUserPrompt(Utf16FromUtf8(anchored.text)).body;
+  const std::wstring body = MakeUserPrompt(Utf16FromUtf8(utf8Text)).body;
   for (size_t i = from; i < blocks_.size(); ++i) {
     Block& block = blocks_[i];
-    if (block.kind == BlockKind::UserPrompt && block.sourceId.empty() &&
+    if (block.kind == BlockKind::UserPrompt && !settled(block) &&
         block.body == body) {
-      block.sourceId = anchored.sourceId;
-      return;
+      return &block;
     }
+  }
+  return nullptr;
+}
+
+void Transcript::AnchorPrompt(const agent::PromptAnchored& anchored) {
+  if (anchored.sourceId.empty()) return;
+  if (Block* block = PromptAwaitingAnchor(anchored.text)) {
+    block->sourceId = anchored.sourceId;
   }
 }
 
@@ -912,6 +922,11 @@ std::vector<Edit> Transcript::Append(const std::vector<agent::Event>& events) {
                    std::get_if<agent::PromptAnchored>(&event)) {
       // Changes no text, so it makes no edit.
       AnchorPrompt(*anchored);
+    } else if (const auto* unanchored =
+                   std::get_if<agent::PromptUnanchored>(&event)) {
+      if (Block* block = PromptAwaitingAnchor(unanchored->text)) {
+        block->neverAnchored = true;
+      }
     } else if (std::holds_alternative<agent::Interrupted>(event)) {
       made.push_back(MakeInterrupted());
     } else if (const auto* ended = std::get_if<agent::SessionEnded>(&event)) {

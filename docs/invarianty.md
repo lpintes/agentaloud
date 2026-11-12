@@ -1791,6 +1791,17 @@ Pravidlá, ktoré platia naprieč projektom. Každé z nich zlyháva **ticho**.
     koniec procesu ho zahodí. Súbor sa číta len vtedy, keď niečo čaká.
     Overené naostro (haiku): záložka na „ja: /context" má uuid jeho
     záznamu, po `--resume` na ňu Ctrl+1 skočí.
+  - **`/clear` Codexu** vykoná `CodexBackend` sám (`thread/start`), žiadne
+    vlákno ho nezapíše a kotvu nedostane nikdy. Adaptér to povie udalosťou
+    `agent::PromptUnanchored`, model blok označí `Block::neverAnchored`
+    a panel záložku na ňom ohlási „len do zatvorenia okna", nie ako uloženú.
+    Taký prompt je pre párovanie kotiev vybavený rovnako ako prompt s kotvou
+    (`Transcript::PromptAwaitingAnchor`), takže neskoršia kotva toho istého
+    textu ide neskoršiemu promptu. `/clear` z frontu (vlákno ešte nie je
+    otvorené) ide modelu ako text a kotvu dostane bežne. Overené naostro
+    (gpt-6-luna, 12. 11. 2026): Ctrl+Shift+1 na „ja: /clear" povie „len do
+    zatvorenia okna" a v súbore slot nie je; záložka na prompte pred ďalším
+    `/clear` zostane v súbore starého vlákna a Ctrl+2 na ňu skočí.
 
 Zhodu modelu s widgetom nedá overiť žiadny unit test, tak ju appka kontroluje
 za behu: po každej úprave porovná dĺžku bufferu s `EM_GETTEXTLENGTHEX`. Keď sa

@@ -1274,11 +1274,13 @@ void SessionPane::SetBookmark(size_t slot) {
   // A prompt of this session has no anchor until the CLI echoes it, which
   // may be after this key; the drain that brings the echo writes the file
   // then.  Any other block without one never gets it -- SessionEnded,
-  // Interrupted -- and the reader is told that this mark ends with the window.
+  // Interrupted, a prompt the adapter carried out itself -- and the reader is
+  // told that this mark ends with the window.
   const std::optional<size_t> index = model_.IndexOfId(mark.blockId);
   const bool echoComing =
       index.has_value() &&
-      model_.blocks()[*index].kind == model::BlockKind::UserPrompt;
+      model_.blocks()[*index].kind == model::BlockKind::UserPrompt &&
+      !model_.blocks()[*index].neverAnchored;
   const bool kept = !bookmarkFolder_.empty() && backend_ &&
                     backend_->capabilities().resume &&
                     (model::CanPersist(model_, mark) || echoComing);

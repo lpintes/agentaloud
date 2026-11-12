@@ -116,6 +116,9 @@ struct Block {
   // the live run.  Empty for a block of our own making, and for a live prompt
   // until agent::PromptAnchored.
   std::string sourceId;
+  // A live prompt the adapter said will never get a sourceId
+  // (agent::PromptUnanchored).
+  bool neverAnchored = false;
 
   // Offsets into Transcript::Text(), maintained by Transcript.  length always
   // includes the block's trailing newline, so the blocks tile the buffer with
@@ -273,6 +276,8 @@ class Transcript {
 
  private:
   Edit AppendBlocks(std::vector<Block> blocks);
+  // The live prompt of this text that the CLI takes up next, or null.
+  Block* PromptAwaitingAnchor(const std::string& utf8Text);
   void AnchorPrompt(const agent::PromptAnchored& anchored);
   // `at` is the index to insert before; past the end means append.
   Edit InsertBlocks(size_t at, std::vector<Block> blocks);

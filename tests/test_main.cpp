@@ -6922,6 +6922,25 @@ void TestPromptAnchor(const std::string& dir) {
     CHECK(transcript.CheckInvariants(&problem));
   }
 
+  // Prompt, ktory adapter vykonal sam (/clear Codexu), kotvu nedostane nikdy.
+  // Taky prompt je vybaveny ako prompt s kotvou: neskorsia kotva toho isteho
+  // textu patri neskorsiemu promptu, nie jemu.
+  {
+    model::Transcript transcript;
+    transcript.AppendUserPrompt(L"/clear");
+    CHECK(transcript.Append({agent::PromptUnanchored{"/clear"}}).empty());
+    CHECK(transcript.blocks()[0].neverAnchored);
+    transcript.AppendUserPrompt(L"/clear");
+    transcript.Append({agent::PromptAnchored{"/clear", "u1"}});
+    CHECK(transcript.blocks()[0].sourceId.empty());
+    CHECK(!transcript.blocks()[1].neverAnchored);
+    CHECK_EQ(transcript.blocks()[1].sourceId, std::string("u1"));
+    // Bez promptu nespravi nic.
+    transcript.Append({agent::PromptUnanchored{"nikde"}});
+    std::string problem;
+    CHECK(transcript.CheckInvariants(&problem));
+  }
+
   // Claude: kotvu nesie ozvena (--replay-user-messages), nie iny user
   // zaznam; ozvena set_model nie je prompt.  Tvary z
   // tools/probe_midturn.notes.md a tools/probe_set_model.notes.md.
