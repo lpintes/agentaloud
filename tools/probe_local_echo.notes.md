@@ -37,5 +37,8 @@ Measured 2026-11-12, Claude CLI 2.1.322, `--model haiku`,
 Arguments (corpus 2026-11-12): `<command-args>` after the name, empty when
 none; a skill writes message, name, args on separate lines.
 
-Not measured: whether a local command's disk record is written before its
-`result`.
+Disk before `result` (measured 2026-11-12, same CLI, one run): the probe
+reads the session files on the reader thread the moment the `result` line
+arrives, and `/clear`, `/context` and the skill each already have their
+`<command-name>` record there, with the uuid the later listing shows.  So a
+local command's anchor can be read from the file tail at its `result`.

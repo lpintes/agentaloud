@@ -8,7 +8,9 @@
 # /probe-gamma -- a skill written into <dir>/.claude/skills, so that the
 # model runs a command of our own making and nothing else.  Prints every
 # user/system record of the stream (uuid, flags, start of the content), then
-# the same of every session file of the folder, oldest first.  Raw stream in
+# the same of every session file of the folder, oldest first.  At each
+# result it also lists the slash command records already on disk (is the
+# record written before the result?).  Raw stream in
 # <dir>/raw.jsonl (outside the repository -- it carries paths of this
 # machine).
 #
@@ -71,6 +73,32 @@ def line(record):
         content_head(record))
 
 
+def session_folder(workdir):
+    mangled = "".join(c if c.isalnum() else "-" for c in workdir)
+    return os.path.join(os.path.expanduser("~"), ".claude", "projects",
+                        mangled)
+
+
+def commands_on_disk(workdir):
+    # "<file head>:<command> <uuid head>" for every slash command record.
+    found = []
+    for path in glob.glob(os.path.join(session_folder(workdir), "*.jsonl")):
+        with open(path, encoding="utf-8") as f:
+            for text in f:
+                try:
+                    record = json.loads(text)
+                except ValueError:
+                    continue
+                content = (record.get("message") or {}).get("content")
+                if isinstance(content, str) and "<command-name>" in content:
+                    name = content.split("<command-name>")[1]
+                    name = name.split("</command-name>")[0]
+                    found.append("%s:%s %s" % (
+                        os.path.basename(path)[:8], name,
+                        str(record.get("uuid", ""))[:8]))
+    return found
+
+
 def main():
     workdir = os.path.abspath(sys.argv[1])
     skills = os.path.join(workdir, ".claude", "skills", "probe-gamma")
@@ -81,6 +109,7 @@ def main():
     child = subprocess.Popen(ARGS, cwd=workdir, stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     results = []
+    snapshots = []
     records = []
     done = threading.Event()
 
@@ -104,6 +133,9 @@ def main():
                     continue
                 records.append(record)
                 if record.get("type") == "result":
+                    # Read before the step loop sees the result: is the
+                    # command's disk record there already?
+                    snapshots.append(commands_on_disk(workdir))
                     results.append(record)
         done.set()
 
@@ -118,6 +150,8 @@ def main():
         while len(results) == before and time.time() < deadline:
             time.sleep(0.2)
         print("-- sent %r, result %s" % (step, len(results) > before))
+        if len(results) > before:
+            print("   on disk at its result: %s" % snapshots[before])
     child.stdin.close()
     done.wait(30)
 
