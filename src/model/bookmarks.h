@@ -16,13 +16,27 @@
 // is the situation this whole feature exists for: you were somewhere in the
 // text, an answer came in, and in a terminal there is no way back.
 
+//
+// Slots 1..9 also outlive the window (claude-gui-lkk.7.12), and there Block::id
+// is no use: it is a counter, and a replayed history makes its blocks in a
+// different order from the live run.  What a saved mark names instead is the
+// block's anchor -- its kind and Block::sourceId, an id the CLI keeps in the
+// history -- and it is bound back to a Block::id the first time it is jumped
+// to.  The line it sat on goes along as a fingerprint, so that a block which
+// reads differently now is said to, rather than landed in quietly.
+
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
+#include <string>
 
 #include "model/transcript.h"
 
 namespace model {
+
+// The blockId of a mark read from disk, before Bind has found its block.
+inline constexpr size_t kUnbound = static_cast<size_t>(-1);
 
 struct Mark {
   bool set = false;
@@ -33,6 +47,12 @@ struct Mark {
   // reads differently (the expanded one carries a heading), so a distance
   // means something only in the form it was taken in.
   bool collapsed = false;
+  // The anchor, as it was when the mark was made or read.  Serialize asks the
+  // block again rather than trusting this: a live prompt gets its anchor only
+  // when the CLI echoes it, after the mark may have been made.
+  BlockKind kind = BlockKind::AssistantText;
+  std::string sourceId;
+  uint64_t line = 0;  // LineFingerprint of the marked line
 };
 
 class Bookmarks {
@@ -65,6 +85,37 @@ std::optional<size_t> OffsetOf(const Transcript& transcript, const Mark& mark);
 // into would put hundreds of lines under them for nothing.
 std::optional<size_t> BlockToExpand(const Transcript& transcript,
                                     const Mark& mark);
+
+// Finds the block a mark read from disk names, and gives the mark its id.
+// True when the mark is bound now or was already; false when no block carries
+// its anchor -- a conversation compacted or rewritten since, or a kind the
+// history does not keep.  Nothing is guessed from the order of blocks.
+bool Bind(const Transcript& transcript, Mark& mark);
+
+// Whether the line at offset is no longer the one the mark was made on.  Only
+// when the mark's form matches the block's: in the other form OffsetOf lands
+// on the start of the block by design, and that line was never the marked one.
+// A mark of this session reads its own line back, so it changes only when the
+// block was rewritten (a plan reworked, agent::ToolCallChanged).
+bool LineChanged(const Transcript& transcript, const Mark& mark,
+                 size_t offset);
+
+uint64_t LineFingerprint(const std::wstring& line);
+
+// The file of one conversation's bookmarks, one line per slot:
+//   <slot> <kind> <offset> <collapsed 0|1> <fingerprint hex> <sourceId>
+// Slot 0 is not written, and neither is a mark whose block has no anchor; a
+// line that does not parse is skipped, the rest still count.  The kind is a
+// word, not the enum's number, so that reordering BlockKind does not move
+// every saved mark onto another kind.
+std::string SerializeBookmarks(const Bookmarks& bookmarks,
+                               const Transcript& transcript);
+Bookmarks ParseBookmarks(const std::string& text);
+
+// Whether SerializeBookmarks would write this mark now: its block has an
+// anchor.  A live prompt has none until the CLI echoes it, and a block of our
+// own making (SessionEnded, Interrupted) never does.
+bool CanPersist(const Transcript& transcript, const Mark& mark);
 
 }  // namespace model
 

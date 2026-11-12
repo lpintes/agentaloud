@@ -842,7 +842,10 @@ void TestBookmarksSurviveCollapsing() {
 
   // A ked sa blok pod znackou zbali tak, ze do neho uz nesiaha, znacka ostane
   // v nom -- pristat o blok dalej by bolo horsie nez pristat na zlom riadku.
-  const model::Mark deep = {true, transcript.blocks()[2].id, 10000};
+  model::Mark deep;
+  deep.set = true;
+  deep.blockId = transcript.blocks()[2].id;
+  deep.offset = 10000;
   const auto clamped = model::OffsetOf(transcript, deep);
   CHECK(clamped.has_value());
   CHECK_EQ(model::MarkAt(transcript, *clamped).blockId,
@@ -907,6 +910,95 @@ void TestBookmarkIntoCollapsedBlock() {
   transcript.SetCollapsed(1, false);
   CHECK(!model::BlockToExpand(transcript, onSummary).has_value());
   CHECK_EQ(*model::OffsetOf(transcript, onSummary), start);
+}
+
+void TestBookmarksPersist() {
+  TEST("bookmarks: zalozka prezije restart podla kotvy, nie podla poradia "
+       "(lkk.7.12)");
+  auto record = [](const char* uuid, const char* text) {
+    proto::Json json = proto::Json::parse(R"({"type": "assistant",
+        "message": {"content": [{"type": "text", "text": ""}]}})");
+    json["uuid"] = uuid;
+    json["message"]["content"][0]["text"] = text;
+    return proto::TranslateRecord(json);
+  };
+
+  // Zivy beh: prompt (kotva az ozvenou), odpoved a druha odpoved.
+  model::Transcript live;
+  live.AppendUserPrompt(L"otazka");
+  live.Append(record("a1", "prva odpoved\nriadok s nou"));
+  live.Append(record("a2", "druha odpoved"));
+  const size_t inside = live.Text().find(L"riadok s nou");
+  model::Bookmarks marks;
+  marks.Set(3, model::MarkAt(live, inside));
+  marks.Set(4, model::MarkAt(live, live.blocks()[0].start));
+  marks.Set(0, model::MarkAt(live, inside));
+  // Prompt bez ozveny sa ulozit neda; slot 0 sa neuklada nikdy.
+  CHECK(model::CanPersist(live, marks.Get(3)));
+  CHECK(!model::CanPersist(live, marks.Get(4)));
+  std::string saved = model::SerializeBookmarks(marks, live);
+  // Jediny riadok, a je to slot 3.
+  CHECK(saved.rfind("3 text ", 0) == 0);
+  CHECK_EQ(saved.find('\n'), saved.size() - 1);
+  // Ozvena pride po znacke: zapis si kotvu vypyta od bloku, nie zo znacky.
+  live.Append({agent::PromptAnchored{"otazka", "u1"}});
+  CHECK(model::CanPersist(live, marks.Get(4)));
+  saved = model::SerializeBookmarks(marks, live);
+  CHECK(saved.rfind("3 text ", 0) == 0);
+  CHECK(saved.find("\n4 prompt 0 ") != std::string::npos);
+
+  // Obnovena historia: iny blok navyse na zaciatku, ine Block::id, rovnake
+  // kotvy.  Subor upraveny v Notepade ma \r\n a cudzie riadky.
+  model::Transcript restored;
+  restored.Append(record("a0", "starsi tah"));
+  restored.AppendUserPrompt(L"otazka");
+  restored.Append({agent::PromptAnchored{"otazka", "u1"}});
+  restored.Append(record("a1", "prva odpoved\nriadok s nou"));
+  std::string edited;
+  for (const char c : saved) {
+    if (c == '\n') edited += '\r';
+    edited += c;
+  }
+  edited += "nezmysel\n5 text 1 0 0123 a1\n6 tool-use x 0 0123456789abcdef t\n"
+            "0 text 0 0 0123456789abcdef a1\n7 nic 0 0 0123456789abcdef a1\n";
+  model::Bookmarks read = model::ParseBookmarks(edited);
+  for (size_t slot = 5; slot < model::Bookmarks::kSlots; ++slot) {
+    CHECK(!read.Get(slot).set);
+  }
+  CHECK(!read.Get(0).set);
+  model::Mark three = read.Get(3);
+  CHECK(three.set);
+  CHECK_EQ(three.blockId, model::kUnbound);
+  // Pred Bind nema znacka kam skocit -- nikdy podla starych cisel blokov.
+  CHECK(!model::OffsetOf(restored, three).has_value());
+  CHECK(model::Bind(restored, three));
+  CHECK_EQ(three.blockId, restored.blocks()[2].id);
+  const auto back = model::OffsetOf(restored, three);
+  CHECK(back.has_value());
+  CHECK_EQ(restored.LineAt(*back), std::wstring(L"riadok s nou"));
+  CHECK(!model::LineChanged(restored, three, *back));
+  model::Mark four = read.Get(4);
+  CHECK(model::Bind(restored, four));
+  CHECK_EQ(four.blockId, restored.blocks()[1].id);
+  // Precitana a nedohladana znacka sa zapise znova taka, aka prisla.
+  CHECK_EQ(model::SerializeBookmarks(read, model::Transcript()), saved);
+
+  // Blok s tou istou kotvou, ale inym textom: riadok nesedi a povie sa to.
+  model::Transcript rewritten;
+  rewritten.Append(record("a1", "prva odpoved\nuplne iny riadok"));
+  model::Mark changed = read.Get(3);
+  CHECK(model::Bind(rewritten, changed));
+  const auto moved = model::OffsetOf(rewritten, changed);
+  CHECK(moved.has_value());
+  CHECK(model::LineChanged(rewritten, changed, *moved));
+
+  // Kotva, ktoru nenesie ziadny blok (ina kotva, iny druh), sa nedohlada.
+  model::Transcript other;
+  other.Append(record("a9", "prva odpoved\nriadok s nou"));
+  model::Mark lost = read.Get(3);
+  CHECK(!model::Bind(other, lost));
+  lost.kind = model::BlockKind::Thinking;
+  CHECK(!model::Bind(restored, lost));
 }
 
 void TestFindSearchesCollapsedBlocks() {
@@ -6924,6 +7016,7 @@ int main(int argc, char** argv) {
   TestToolResultsSitBehindTheirCall();
   TestBookmarksSurviveCollapsing();
   TestBookmarkIntoCollapsedBlock();
+  TestBookmarksPersist();
   TestFindSearchesCollapsedBlocks();
   TestNextLinkSkipsFoldedText();
   TestLinksInText();
