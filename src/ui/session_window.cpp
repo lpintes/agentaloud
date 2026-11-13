@@ -117,6 +117,16 @@ void SessionWindow::Activated(bool active) {
   if (!pane_) return;
   pane_->SetActive(active);
   pane_->SetStatusBar(active ? bar_ : nullptr);
+  // The frame's own text, not the child's: DefFrameProc appends the
+  // maximized child's title in brackets, giving "AgentAloud - project -
+  // [path]", while the window menu keeps naming sessions by path alone.
+  // Only on gaining it -- the next child's activation overwrites it, and the
+  // frame takes its bare name back when the last session is reaped.
+  if (active) {
+    const HWND frame = GetParent(GetParent(hwnd_));
+    const std::wstring title = std::wstring(L"" APP_NAME L" - ") + folder_;
+    SetWindowTextW(frame, title.c_str());
+  }
 }
 
 LRESULT SessionWindow::Default(UINT message, WPARAM wParam,

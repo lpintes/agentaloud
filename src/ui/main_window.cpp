@@ -311,6 +311,8 @@ void MainWindow::Reap() {
   for (int field = 0; field < StatusBar::kFieldCount; ++field) {
     status_.Set(static_cast<StatusBar::Field>(field), L"");
   }
+  // Nor should the title name a project that is no longer open.
+  SetWindowTextW(hwnd_, L"" APP_NAME);
 }
 
 void MainWindow::Announce(const std::wstring& text) {
