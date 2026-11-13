@@ -90,6 +90,11 @@ struct Block {
   bool collapsible = true;
   std::wstring summary;  // the single line shown when collapsed, no newline
   std::wstring body;     // the whole thing, may be many lines, no newline
+  // A ToolUse as a saved file has it, heading included, no newline: the
+  // summary and the body say the command or the path twice, which on screen
+  // is a folded line and its unfolding, and in a file a line read twice.
+  // Empty on every other kind.
+  std::wstring fileText;
   std::string toolUseId; // ties ToolUse to its ToolResult; empty otherwise
   // Which tool this is.  Set on a ToolUse from the call, and on a ToolResult
   // copied off the call it is filed behind -- a result names only the call's
@@ -237,10 +242,13 @@ class Transcript {
   // where the first line ends.
   std::wstring ExpandedText(size_t index) const;
 
-  // Every block as it reads expanded, in order -- what Ctrl+S writes to a
-  // file.  Expanded because collapsing is a state of reading, not of the
-  // content: a file with a summary where the tool's output was would quietly
-  // be missing the part that was folded away.
+  // Every block whole, in order -- what Ctrl+S writes to a file.  Whole
+  // because collapsing is a state of reading, not of the content: a file with
+  // a summary where the tool's output was would quietly be missing the part
+  // that was folded away.  But not the screen's expanded form either: no
+  // "rozbalené", a call's heading not repeated by its arguments, an output
+  // under the bare word "výstup:", an empty line before a prompt and an
+  // answer (FileText).
   std::wstring FullText() const;
 
   // Ctrl+F and F3.  Searches the blocks, not the buffer: a collapsed block
@@ -291,6 +299,8 @@ class Transcript {
   // the result is rendered as any tool's would be.
   const Block* CallFor(const std::string& toolUseId) const;
   std::wstring Render(const Block& block) const;
+  // One block as FullText writes it.
+  std::wstring FileText(const Block& block) const;
   // Writes the block at `index` again, after its summary, body or state
   // changed, and moves every block after it.
   Edit Rerender(size_t index);

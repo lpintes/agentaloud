@@ -352,19 +352,52 @@ void TestFullTextForFile() {
       {"type": "text", "text": "odpoved"}
     ]}
   })")));
+  transcript.Append(proto::TranslateRecord(proto::Json::parse(R"({
+    "type": "assistant",
+    "message": {"content": [
+      {"type": "tool_use", "id": "toolu_sh", "name": "Bash",
+       "input": {"command": "ls -l", "description": "List files"}},
+      {"type": "tool_use", "id": "toolu_rd", "name": "Read",
+       "input": {"file_path": "C:\\p\\a.txt", "offset": 3}},
+      {"type": "tool_use", "id": "toolu_ed", "name": "Edit",
+       "input": {"file_path": "C:\\p\\a.txt", "old_string": "x",
+                 "new_string": "y"}}
+    ]}
+  })")));
+  transcript.Append(proto::TranslateRecord(proto::Json::parse(R"({
+    "type": "user",
+    "message": {"content": [
+      {"type": "tool_result", "tool_use_id": "toolu_sh",
+       "content": "a.txt\nb.txt"},
+      {"type": "tool_result", "tool_use_id": "toolu_rd",
+       "content": "3\tprvy\n4\tdruhy"},
+      {"type": "tool_result", "tool_use_id": "toolu_ed", "content": "ok"}
+    ]}
+  })")));
+  transcript.Append(proto::TranslateRecord(proto::Json::parse(R"({
+    "type": "assistant",
+    "message": {"content": [{"type": "text", "text": "koniec"}]}
+  })")));
   CHECK(transcript.blocks()[1].collapsed);
   const std::wstring visible = transcript.Text();
 
-  std::wstring expected;
-  for (size_t index = 0; index < transcript.blocks().size(); ++index) {
-    expected += transcript.ExpandedText(index);
-  }
+  // Ziadne "rozbalene", nadpis volania ma cely prikaz ci cestu a pole s tou
+  // istou hodnotou sa pod nim neopakuje, vystup pod holym "vystup:" a pred
+  // promptom a odpovedou prazdny riadok.  Vystup Read zostava cely.
   const std::wstring full = transcript.FullText();
-  CHECK_EQ(full, expected);
-  CHECK(full.find(L"na dvoch riadkoch") != std::wstring::npos);
+  CHECK_EQ(full,
+           std::wstring(L"ja: prvy prompt\n"
+                        L"premýšľanie:\nrozmyslam\nna dvoch riadkoch\n"
+                        L"\nagent: odpoved\n"
+                        L"Bash: ls -l\ndescription: List files\n"
+                        L"výstup:\na.txt\nb.txt\n"
+                        L"Read: C:\\p\\a.txt\noffset: 3\n"
+                        L"výstup:\n3\tprvy\n4\tdruhy\n"
+                        L"Edit: C:\\p\\a.txt\npôvodné:\nx\nnové:\ny\n"
+                        L"zapísané\n"
+                        L"\nagent: koniec\n"));
+  CHECK(full.find(L"rozbalené") == std::wstring::npos);
   CHECK(visible.find(L"na dvoch riadkoch") == std::wstring::npos);
-  CHECK(full.starts_with(L"ja: prvy prompt\n"));
-  CHECK(full.ends_with(L"odpoved\n"));
   CHECK_EQ(transcript.Text(), visible);
   CHECK(transcript.blocks()[1].collapsed);
 

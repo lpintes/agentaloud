@@ -423,6 +423,45 @@ std::wstring RenderToolCall(const agent::ToolCall& call) {
 
 namespace {
 
+// A call as Ctrl+S writes it: one heading and then only what the heading did
+// not say.  The screen has the summary and, expanded, the body below it -- the
+// command cut short in the heading and whole in a field right under it, the
+// path in the heading and again as "súbor:".  On screen the summary is what is
+// heard while arrowing past a folded block; in a file nothing is folded and
+// the second copy is only a line to read twice.
+std::wstring FileCallText(const agent::ToolCall& call,
+                          const std::wstring& root) {
+  const std::wstring name = Widen(call.name);
+  const bool oneLine = !call.primary.empty() &&
+                       call.primary.find('\n') == std::string::npos;
+  const std::wstring heading =
+      oneLine ? name + L": " + PrimaryText(call, root) : name;
+  std::wstring body = RenderToolCall(call);
+
+  if (call.primaryIsPath) {
+    const std::wstring file =
+        i18n::Format(Str::kFileLine, {Widen(call.primary)}) + L'\n';
+    if (body.starts_with(file)) body.erase(0, file.size());
+  }
+  // The field dump with the field the heading already has left out.  Only
+  // the dump, and only a field that is the heading word for word: the
+  // questions, the plan and an edit are not fields, and a primary the adapter
+  // put together from several fields is not any one of them.
+  if (oneLine && body == RenderFields(call.fields)) {
+    std::vector<agent::ToolField> rest;
+    for (const agent::ToolField& field : call.fields) {
+      if (field.value != call.primary) rest.push_back(field);
+    }
+    if (rest.size() < call.fields.size()) body = RenderFields(rest);
+  }
+  if (call.kind == agent::ToolKind::Question ||
+      call.kind == agent::ToolKind::Plan) {
+    // Their primary is the first question or nothing; the body has it all.
+    if (!body.empty()) return name + L'\n' + body;
+  }
+  return body.empty() ? heading : heading + L'\n' + body;
+}
+
 // The size of what a call is about to do, said in the summary so that it does
 // not have to be unfolded to be judged.  "Edit: transcript.cpp" and "Edit:
 // transcript.cpp, 3 riadky na 40 riadkov" are two different pieces of news.
@@ -467,6 +506,7 @@ Block MakeToolUse(const agent::ToolCall& call, const std::wstring& root) {
   block.toolName = Widen(call.name);
   block.toolKind = call.kind;
   block.body = RenderToolCall(call);
+  block.fileText = FileCallText(call, root);
   // A call without arguments is its name alone, not "name:" and a pause.
   const std::wstring primary = OneLine(PrimaryText(call, root), kSummaryLimit);
   block.summary =
@@ -1040,6 +1080,8 @@ Edit Transcript::ReplaceToolCall(const agent::ToolCall& call) {
       continue;
     }
     const Block fresh = MakeToolUse(call, projectRoot_);
+    // Not on the screen, but what Ctrl+S writes has to be the new call too.
+    block.fileText = fresh.fileText;
     if (fresh.body == block.body && fresh.summary == block.summary) return {};
     // The id, the speaker and whether the reader has it open stay: it is the
     // same call, said again.
@@ -1129,10 +1171,40 @@ std::wstring Transcript::ExpandedText(size_t index) const {
   return Render(open);
 }
 
+std::wstring Transcript::FileText(const Block& block) const {
+  const std::wstring prefix = SpeakerPrefix(block);
+  if (block.kind == BlockKind::ToolUse && !block.fileText.empty()) {
+    return prefix + block.fileText + L'\n';
+  }
+  // A word and a colon, no count and no "rozbalené": the heading is there
+  // only to mark where the call's arguments end and its output begins, which
+  // read line by line would otherwise run together.
+  if ((block.kind == BlockKind::ToolResult ||
+       block.kind == BlockKind::Thinking) &&
+      block.collapsible) {
+    const Str label = block.kind == BlockKind::Thinking ? Str::kKindThinking
+                      : block.isError                   ? Str::kError
+                                                        : Str::kOutput;
+    return prefix + i18n::Text(label) + L":\n" + block.body + L'\n';
+  }
+  Block open = block;
+  open.collapsed = false;
+  if (IsMechanism(open.kind) && open.collapsible) {
+    return prefix + open.summary + L'\n' + open.body + L'\n';
+  }
+  return Render(open);
+}
+
 std::wstring Transcript::FullText() const {
   std::wstring text;
-  for (size_t index = 0; index < blocks_.size(); ++index) {
-    text += ExpandedText(index);
+  for (const Block& block : blocks_) {
+    // A turn starts at a prompt and an answer is what the reader looks for
+    // between the tools; an empty line in front of each lets the eye find
+    // them and costs NVDA one "prázdny" per turn.
+    const bool content = block.kind == BlockKind::UserPrompt ||
+                         block.kind == BlockKind::AssistantText;
+    if (content && !text.empty()) text += L'\n';
+    text += FileText(block);
   }
   return text;
 }
