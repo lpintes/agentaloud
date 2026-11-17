@@ -152,6 +152,9 @@ struct SearchHit {
   bool wrapped = false;  // went past the end (or the start) to get here
 };
 
+// A level-one markdown heading, in front of "you: " and "<agent>: ".
+inline constexpr wchar_t kHeadingMark[] = L"# ";
+
 class Transcript {
  public:
   // Added when the prompt is sent, not when the stream echoes it back: the
@@ -166,6 +169,12 @@ class Transcript {
   // when blocks are already there.
   bool SetAgentName(const std::wstring& name);
 
+  // Whether a prompt and an answer start with kHeadingMark, which makes the
+  // speaker's line a markdown heading for a reader's markdown navigation
+  // (`heading-marks`).  Set once, before the first block, for the reason
+  // SetAgentName is; false and nothing changed when blocks are already there.
+  bool SetHeadingMarks(bool on);
+
   // Where the agent keeps its sign-in -- agent::Capabilities::configHome.
   // Named in the SignInRequired and SessionEnded blocks made after this; the
   // default names nothing.
@@ -178,6 +187,12 @@ class Transcript {
   // announces, so a copy of the body stays free of it and the two never say a
   // different name for the same speaker.
   std::wstring SpeakerPrefix(const Block& block) const;
+
+  // SpeakerPrefix with kHeadingMark in front of a prompt and an answer when
+  // SetHeadingMarks says so -- what the transcript and the saved file write.
+  // Speech announcing a block keeps SpeakerPrefix: it says who speaks, not a
+  // line of the transcript.
+  std::wstring LinePrefix(const Block& block) const;
 
   // A one-line mark where a turn was cut short.  Written by us rather than
   // read off the stream: the CLI does put a user record saying "[Request
@@ -322,6 +337,7 @@ class Transcript {
   // Neutral until the pane names the agent: model/ does not know which CLI
   // runs, and the tests that do not care get a word that names none.
   std::wstring agentName_ = L"agent";
+  bool headingMarks_ = false;
   agent::ConfigHome configHome_;
 };
 

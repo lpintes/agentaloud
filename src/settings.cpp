@@ -212,6 +212,8 @@ bool Settings::CheckUpdates() const { return Get(kCheckUpdatesKey) != "0"; }
 
 bool Settings::Sounds() const { return Get(kSoundsKey) != "0"; }
 
+bool Settings::HeadingMarks() const { return Get(kHeadingMarksKey) != "0"; }
+
 void Settings::Check(const std::map<std::string, agent::Capabilities>& backends,
                      FolderKeyFn folderKey) {
   std::vector<std::string> names;
@@ -248,7 +250,8 @@ void Settings::Check(const std::map<std::string, agent::Capabilities>& backends,
       }
       continue;
     }
-    if (key == kCheckUpdatesKey || key == kSoundsKey) {
+    if (key == kCheckUpdatesKey || key == kSoundsKey ||
+        key == kHeadingMarksKey) {
       if (!empty && entry.value != "0" && entry.value != "1") {
         Complain(entry.line, i18n::Format(i18n::Str::kSettingsOnOff,
                                           {Wide(key), Wide(entry.value)}));

@@ -120,6 +120,7 @@ codex.executable=codex\codex-x86_64-pc-windows-msvc.exe
 codex.env.CODEX_HOME=E:\codex
 check-updates=0
 sounds=0
+heading-marks=0
 language=en
 ```
 
@@ -130,6 +131,10 @@ language=en
   `CODEX_HOME` or `CLAUDE_CONFIG_DIR` when its configuration is not in the
   user profile.
 - `sounds=0` turns the tones off.
+- `heading-marks=0` leaves out the `# ` that otherwise starts every prompt
+  and answer in the transcript and in a saved transcript. The mark makes them
+  markdown headings, so a screen reader's markdown navigation can jump
+  between them.
 
 The command line wins over the file. An unknown key or mode is refused at
 start-up with the line it is on, rather than silently ignored. AgentAloud

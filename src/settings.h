@@ -129,10 +129,15 @@ class Settings {
   // CheckUpdates is.
   bool Sounds() const;
 
+  // Whether a prompt and an answer start with "# ", a markdown heading for a
+  // screen reader's markdown navigation.  On unless the file says 0.
+  bool HeadingMarks() const;
+
   // Checks every key against what the backends are and what each of them can
   // do: `backend` must name one of them, `<backend>.permission-mode` must be
-  // one of that backend's modes, check-updates and sounds are 0 or 1,
-  // `<backend>.env.` is followed by a name, given once whatever its case, and
+  // one of that backend's modes, check-updates, sounds and heading-marks are
+  // 0 or 1, `<backend>.env.` is followed by a name, given once whatever its
+  // case, and
   // nothing else may be there.  Every
   // backend's lines are checked, not just the chosen one's -- a typo in the
   // codex lines would otherwise wait to be found the day codex is used.
@@ -196,6 +201,8 @@ inline constexpr char kLastUpdateCheckKey[] = "last-update-check";
 inline constexpr char kSkippedVersionKey[] = "skipped-version";
 // "0" turns our own tones off (claude-gui-lkk.75).
 inline constexpr char kSoundsKey[] = "sounds";
+// "0" leaves the "# " out in front of "you: " and "<agent>: ".
+inline constexpr char kHeadingMarksKey[] = "heading-marks";
 // The CLI and its environment, per backend (claude-gui-lkk.72):
 // codex.executable=bin\codex-x86_64-pc-windows-msvc.exe and
 // codex.env.CODEX_HOME=E:\codex.  For a portable installation, whose CLI is

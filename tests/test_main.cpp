@@ -2073,6 +2073,12 @@ void TestSettingsWrite() {
   app::Settings soundsOff = app::Settings::Parse("sounds=off\n");
   soundsOff.Check(backends);
   CHECK(soundsOff.error().find(L"sounds") != std::wstring::npos);
+  // Nadpisy markdownu: predvolene zapnute, ten isty vypinac.
+  CHECK(app::Settings::Parse("").HeadingMarks());
+  CHECK(!app::Settings::Parse("heading-marks=0\n").HeadingMarks());
+  app::Settings marksOff = app::Settings::Parse("heading-marks=nie\n");
+  marksOff.Check(backends);
+  CHECK(marksOff.error().find(L"heading-marks") != std::wstring::npos);
   CHECK(soundsOff.error().find(L"off") != std::wstring::npos);
 
   // Jazyk: sk, en alebo prazdny riadok-sablona; nic ine.
@@ -3827,6 +3833,41 @@ void TestSpeakerPrefix() {
   codex.Append({agent::AssistantText{"ahoj"}});
   CHECK_EQ(codex.Text(), std::wstring(L"codex: ahoj\n"));
   CHECK_EQ(codex.SpeakerPrefix(codex.blocks()[0]), std::wstring(L"codex: "));
+}
+
+void TestHeadingMarks() {
+  TEST("transcript: prompt a odpoved su nadpisy markdownu");
+  // "# " pred hovoriacim, aby sa po nich dalo skakat navigaciou citaca
+  // v markdowne.  Len prompt a odpoved, nie mechanika; aj v ulozenom subore.
+  model::Transcript transcript;
+  CHECK(transcript.SetAgentName(L"codex"));
+  CHECK(transcript.SetHeadingMarks(true));
+  transcript.AppendUserPrompt(L"otazka");
+  CHECK(!transcript.SetHeadingMarks(false));
+  transcript.Append({agent::AssistantText{"odpoved"}});
+  agent::ToolCall call;
+  call.id = "call_1";
+  call.name = "Read";
+  call.primary = "a.txt";
+  transcript.Append({agent::ToolCallStarted{call}});
+  CHECK_EQ(transcript.Text().substr(0, 6), std::wstring(L"# ja: "));
+  const model::Block& answer = transcript.blocks()[1];
+  CHECK_EQ(transcript.Text().substr(answer.start, 9),
+           std::wstring(L"# codex: "));
+  const model::Block& tool = transcript.blocks()[2];
+  CHECK(transcript.Text().substr(tool.start, 2) != std::wstring(L"# "));
+  // Rec hovori, kto hovori; znak nadpisu je vec zobrazenia.
+  CHECK_EQ(transcript.SpeakerPrefix(answer), std::wstring(L"codex: "));
+  CHECK(transcript.FullText().find(L"# ja: otazka\n\n# codex: odpoved\n") ==
+        0);
+  // Zalozka ulozena bez znaku (alebo s nim) sedi aj po prepnuti nastavenia.
+  CHECK_EQ(model::LineFingerprint(L"# ja: otazka"),
+           model::LineFingerprint(L"ja: otazka"));
+  CHECK(model::LineFingerprint(L"ja: otazka") !=
+        model::LineFingerprint(L"ja: ina"));
+  std::string problem;
+  transcript.SetCollapsed(1, true);
+  CHECK(transcript.CheckInvariants(&problem));
 }
 
 void TestSubagentSpeaker() {
@@ -7279,6 +7320,7 @@ int main(int argc, char** argv) {
   TestFailedToolResultReadsLikeAnError();
   TestEmptyBlocksAreDropped();
   TestSpeakerPrefix();
+  TestHeadingMarks();
   TestSubagentSpeaker();
   TestSubagentNumberingAfterResume();
   TestPermissionFromSubagentNamed();

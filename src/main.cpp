@@ -28,6 +28,7 @@
 #include "ui/main_window.h"
 #include "ui/new_session_dialog.h"
 #include "ui/resource.h"
+#include "ui/session_pane.h"
 #include "ui/signals.h"
 #include "win/console.h"
 #include "win/dialog.h"
@@ -477,6 +478,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
                            : settings.ForProject(Expand(arguments.project),
                                                  win::FolderKey));
     ui::signals::SetEnabled(settings.Sounds());
+    ui::SetHeadingMarks(settings.HeadingMarks());
   }
   app::CheckBackend(&arguments, kBackends);
   // --executable is the CLI of the backend this start chose, whoever chose it;

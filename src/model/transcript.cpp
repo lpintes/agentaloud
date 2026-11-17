@@ -611,9 +611,21 @@ std::wstring Transcript::SpeakerPrefix(const Block& block) const {
   }
 }
 
+std::wstring Transcript::LinePrefix(const Block& block) const {
+  const bool heading = headingMarks_ && (block.kind == BlockKind::UserPrompt ||
+                                         block.kind == BlockKind::AssistantText);
+  return heading ? kHeadingMark + SpeakerPrefix(block) : SpeakerPrefix(block);
+}
+
 bool Transcript::SetAgentName(const std::wstring& name) {
   if (!blocks_.empty()) return false;
   agentName_ = name;
+  return true;
+}
+
+bool Transcript::SetHeadingMarks(bool on) {
+  if (!blocks_.empty()) return false;
+  headingMarks_ = on;
   return true;
 }
 
@@ -651,7 +663,7 @@ const wchar_t* KindLabel(BlockKind kind) {
 }
 
 std::wstring Transcript::Render(const Block& block) const {
-  const std::wstring prefix = SpeakerPrefix(block);
+  const std::wstring prefix = LinePrefix(block);
   if (block.collapsed) return prefix + block.summary + L'\n';
   // An expanded mechanism block keeps its heading.  Without it there is no
   // way to tell, reading line by line, where a tool's output starts, where it
@@ -1172,7 +1184,7 @@ std::wstring Transcript::ExpandedText(size_t index) const {
 }
 
 std::wstring Transcript::FileText(const Block& block) const {
-  const std::wstring prefix = SpeakerPrefix(block);
+  const std::wstring prefix = LinePrefix(block);
   if (block.kind == BlockKind::ToolUse && !block.fileText.empty()) {
     return prefix + block.fileText + L'\n';
   }

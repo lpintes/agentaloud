@@ -39,6 +39,11 @@ namespace ui {
 class SignInDialog;
 class TasksDialog;
 
+// From the settings, once at start-up (`heading-marks`): whether the
+// transcripts of the sessions started after this mark a prompt and an answer
+// as markdown headings (model::Transcript::SetHeadingMarks).
+void SetHeadingMarks(bool on);
+
 // Events have arrived; drain the queue.  Posted, not sent: the reader thread
 // must not wait for the screen.
 constexpr UINT kMsgDrain = WM_APP + 1;

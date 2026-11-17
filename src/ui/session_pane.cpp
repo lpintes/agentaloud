@@ -37,6 +37,8 @@ using i18n::Str;
 
 namespace {
 
+bool gHeadingMarks = true;
+
 constexpr int kIdTranscriptLabel = 1001;
 constexpr int kIdTranscript = 1002;
 constexpr int kIdPromptLabel = 1003;
@@ -285,6 +287,8 @@ std::wstring StartFailureText(const agent::StartFailure& failure) {
 
 }  // namespace
 
+void SetHeadingMarks(bool on) { gHeadingMarks = on; }
+
 bool SessionPane::Create(HWND host, HINSTANCE instance) {
   host_ = host;
 
@@ -490,6 +494,7 @@ bool SessionPane::Start(std::unique_ptr<agent::Backend> backend,
   // is part of every answer's rendered text.
   model_.SetAgentName(
       model::Utf16FromUtf8(backend_->capabilities().agentName));
+  model_.SetHeadingMarks(gHeadingMarks);
   model_.SetConfigHome(backend_->capabilities().configHome);
   // The folder name in the bar, the whole path in the title.  The bar is read
   // out in one breath along with three other fields, and a path of eight

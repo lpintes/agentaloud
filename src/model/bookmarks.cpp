@@ -76,8 +76,13 @@ uint64_t LineFingerprint(const std::wstring& line) {
   // FNV-1a over the UTF-16 units, the form the transcript holds.  Not for
   // secrecy, for a short line in a file a reader may open: equal or not is
   // all it has to tell.
+  // Without a leading heading mark: `heading-marks` turned on or off, or a
+  // bookmark saved before the mark existed, must not make every mark on a
+  // prompt or an answer report its line as changed.
+  const std::wstring mark = kHeadingMark;
+  const size_t from = line.compare(0, mark.size(), mark) == 0 ? mark.size() : 0;
   uint64_t hash = 14695981039346656037ull;
-  for (const wchar_t unit : line) {
+  for (const wchar_t unit : line.substr(from)) {
     hash ^= static_cast<uint16_t>(unit);
     hash *= 1099511628211ull;
   }
